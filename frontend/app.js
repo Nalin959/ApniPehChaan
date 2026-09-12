@@ -591,7 +591,7 @@ function createExposureCard(data) {
             actionsHtml += `<a href="${escapeHtml(optOutUrl)}" target="_blank" rel="noopener noreferrer" class="exposure-action-btn danger" style="margin-left:8px;">Opt-Out Link ↗</a>`;
         }
     } else {
-        actionsHtml = `<button class="exposure-action-btn" data-act="notice" data-company-name="${escapeHtml(data.companyName || '')}" data-company-email="${escapeHtml(data.companyEmail || '')}">Generate Legal Notice</button>`;
+        actionsHtml = `<button class="exposure-action-btn" data-act="notice" data-exposure-id="${escapeHtml(data.exposureId || '')}" data-company-name="${escapeHtml(data.companyName || '')}" data-company-email="${escapeHtml(data.companyEmail || '')}">Generate Legal Notice</button>`;
         if (optOutUrl) {
             actionsHtml += `<a href="${escapeHtml(optOutUrl)}" target="_blank" rel="noopener noreferrer" class="exposure-action-btn danger">Opt-Out Link ↗</a>`;
         }
@@ -623,7 +623,7 @@ function wireExposureCard(card) {
     });
     card.querySelectorAll('button[data-act="notice"]').forEach(btn => {
         btn.addEventListener('click', () =>
-            generateNoticeForExposure(btn.dataset.companyName || '', btn.dataset.companyEmail || ''));
+            generateNoticeForExposure(btn.dataset.companyName || '', btn.dataset.companyEmail || '', btn.dataset.exposureId || ''));
     });
 }
 
@@ -756,26 +756,226 @@ async function generateNotice() {
     }
 }
 
-function generateNoticeForExposure(companyName, companyEmail) {
-    navigateTo('legal');
-    document.getElementById('legal-company').value = companyName || '';
-    document.getElementById('legal-company-email').value = companyEmail || '';
-    if (state.scanResults) {
-        const piiSummary = buildPIISummary();
-        document.getElementById('legal-pii-summary').value = piiSummary;
+const KNOWN_FIDUCIARIES = {
+    "iimjobs": {
+        company_name: "Info Edge (India) Limited (IIMjobs)",
+        dpo_email: "grievance@iimjobs.com",
+        address: "B-8, Sector 132, Noida, Uttar Pradesh 201301, India",
+        self_serve_url: "https://www.iimjobs.com/settings",
+        jurisdiction: "dpdp"
+    },
+    "zomato": {
+        company_name: "Zomato Limited",
+        dpo_email: "grievance@zomato.com",
+        address: "Ground Floor, 12A, 94 Meghdoot, Nehru Place, New Delhi 110019, India",
+        self_serve_url: "https://www.zomato.com/privacy",
+        jurisdiction: "dpdp"
+    },
+    "yatra": {
+        company_name: "Yatra Online Limited",
+        dpo_email: "grievance@yatra.com",
+        address: "Gulf Adiba, 4th Floor, Plot No. 272, Phase II, Udyog Vihar, Gurugram, Haryana 122008, India",
+        self_serve_url: "https://www.yatra.com/",
+        jurisdiction: "dpdp"
+    },
+    "linkedin": {
+        company_name: "LinkedIn Ireland UC / LinkedIn India Pvt Ltd",
+        dpo_email: "linkedin_dpo@linkedin.com",
+        address: "Tower A, Global Technology Park, Outer Ring Road, Bengaluru 560103, Karnataka, India",
+        self_serve_url: "https://www.linkedin.com/psettings/account-management/close-account",
+        jurisdiction: "dpdp"
+    },
+    "canva": {
+        company_name: "Canva Pty Ltd",
+        dpo_email: "privacy@canva.com",
+        address: "110 Kippax St, Surry Hills NSW 2010, Australia",
+        self_serve_url: "https://www.canva.com/settings/your-account",
+        jurisdiction: "gdpr"
+    },
+    "bigbasket": {
+        company_name: "Supermarket Grocery Supplies Pvt. Ltd. (BigBasket / Tata Enterprise)",
+        dpo_email: "grievance@bigbasket.com",
+        address: "2nd Floor, Fairway Business Park, Challaghatta Village, Domlur, Bengaluru 560071, Karnataka, India",
+        self_serve_url: "https://www.bigbasket.com/",
+        jurisdiction: "dpdp"
+    },
+    "naukri": {
+        company_name: "Info Edge (India) Limited (Naukri.com)",
+        dpo_email: "grievance@naukri.com",
+        address: "B-8, Sector 132, Noida, Uttar Pradesh 201301, India",
+        self_serve_url: "https://www.naukri.com/",
+        jurisdiction: "dpdp"
+    },
+    "jeevansathi": {
+        company_name: "Info Edge (India) Limited (Jeevansathi)",
+        dpo_email: "grievance@jeevansathi.com",
+        address: "B-8, Sector 132, Noida, Uttar Pradesh 201301, India",
+        self_serve_url: "https://www.jeevansathi.com/",
+        jurisdiction: "dpdp"
+    },
+    "shaadi": {
+        company_name: "People Interactive (India) Private Limited (Shaadi.com)",
+        dpo_email: "grievanceofficer@peopleinteractive.in",
+        address: "Ground Floor, Film Centre, 68 Tardeo Road, Mumbai 400034, Maharashtra, India",
+        self_serve_url: "https://www.shaadi.com/",
+        jurisdiction: "dpdp"
+    },
+    "bharatmatrimony": {
+        company_name: "Matrimony.com Limited (BharatMatrimony)",
+        dpo_email: "grievanceofficer@matrimony.com",
+        address: "No.94, TVH Beliciaa Towers, MRC Nagar, Chennai 600028, Tamil Nadu, India",
+        self_serve_url: "https://www.bharatmatrimony.com/",
+        jurisdiction: "dpdp"
+    },
+    "dominos": {
+        company_name: "Jubilant FoodWorks Limited (Domino's Pizza India)",
+        dpo_email: "grievance@jublfood.com",
+        address: "Plot 1A, Sector 16A, Noida 201301, Uttar Pradesh, India",
+        self_serve_url: "https://pizzaonline.dominos.co.in/",
+        jurisdiction: "dpdp"
+    },
+    "airindia": {
+        company_name: "Air India Limited (Tata Group)",
+        dpo_email: "grievance@airindia.com",
+        address: "Airlines House, 113 Gurudwara Rakabganj Road, New Delhi 110001, India",
+        self_serve_url: "https://www.airindia.com/",
+        jurisdiction: "dpdp"
+    },
+    "upstox": {
+        company_name: "RKSV Securities India Private Limited (Upstox)",
+        dpo_email: "grievance@upstox.com",
+        address: "807, New Delhi House, Barakhamba Road, Connaught Place, New Delhi 110001, India",
+        self_serve_url: "https://upstox.com/",
+        jurisdiction: "dpdp"
+    },
+    "apollo247": {
+        company_name: "Apollo Hospitals Enterprise Limited (Apollo 24|7)",
+        dpo_email: "grievance@apollo247.com",
+        address: "19 Bishop Gardens, Raja Annamalaipuram, Chennai 600028, Tamil Nadu, India",
+        self_serve_url: "https://www.apollo247.com/",
+        jurisdiction: "dpdp"
+    },
+    "adobe": {
+        company_name: "Adobe Systems India Pvt. Ltd.",
+        dpo_email: "dpo@adobe.com",
+        address: "Adobe Towers, Sector 132, Expressway, Noida 201305, Uttar Pradesh, India",
+        self_serve_url: "https://account.adobe.com/privacy",
+        jurisdiction: "dpdp"
+    },
+    "dropbox": {
+        company_name: "Dropbox, Inc.",
+        dpo_email: "privacy@dropbox.com",
+        address: "1800 Owens Street, San Francisco, CA 94158, USA",
+        self_serve_url: "https://www.dropbox.com/account/delete",
+        jurisdiction: "ccpa"
+    },
+    "truecaller": {
+        company_name: "Truecaller AB / True Software Scandinavia",
+        dpo_email: "dpo@truecaller.com",
+        address: "Mäster Samuelsgatan 56, 111 21 Stockholm, Sweden",
+        self_serve_url: "https://www.truecaller.com/unlisting",
+        jurisdiction: "dpdp"
+    },
+    "gravatar": {
+        company_name: "Automattic Inc. (Gravatar)",
+        dpo_email: "privacypolicy@automattic.com",
+        address: "60 29th Street #343, San Francisco, CA 94110, USA",
+        self_serve_url: "https://en.gravatar.com/profiles/edit",
+        jurisdiction: "ccpa"
+    },
+    "github": {
+        company_name: "GitHub, Inc. (Microsoft)",
+        dpo_email: "privacy@github.com",
+        address: "88 Colin P Kelly Jr St, San Francisco, CA 94107, USA",
+        self_serve_url: "https://github.com/settings/admin",
+        jurisdiction: "ccpa"
     }
+};
+
+function getFiduciaryContact(nameOrId) {
+    if (!nameOrId) return {};
+    const clean = nameOrId.toLowerCase().replace(/[^a-z0-9]/g, '');
+    for (const [key, spec] of Object.entries(KNOWN_FIDUCIARIES)) {
+        if (clean.includes(key) || key.includes(clean)) return Object.assign({}, spec);
+    }
+    if (window.__indianSources?.length) {
+        const found = window.__indianSources.find(s => {
+            const sc = (s.name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+            return sc.includes(clean) || clean.includes(sc);
+        });
+        if (found) {
+            return {
+                company_name: found.operator || found.name,
+                dpo_email: found.privacy_email || `grievance@${clean}.in`,
+                address: found.address || `${found.name} Corporate Office, India`,
+                self_serve_url: found.removal_url || found.website || '',
+                jurisdiction: found.jurisdiction || 'dpdp'
+            };
+        }
+    }
+    return {
+        company_name: `${nameOrId} Data Fiduciary`,
+        dpo_email: `privacy@${clean}.com`,
+        address: `Corporate Grievance Office, ${nameOrId} Registered Headquarters`,
+        self_serve_url: `https://${clean}.com/privacy`,
+        jurisdiction: 'dpdp'
+    };
+}
+
+function generateNoticeForExposure(companyName, companyEmail, exposureId) {
+    navigateTo('legal');
+    const contact = getFiduciaryContact(companyName);
+
+    const compEl = document.getElementById('legal-company');
+    if (compEl) compEl.value = contact.company_name || companyName || '';
+
+    const emailEl = document.getElementById('legal-company-email');
+    if (emailEl) emailEl.value = contact.dpo_email || companyEmail || '';
+
+    const addrEl = document.getElementById('legal-company-address');
+    if (addrEl) addrEl.value = contact.address || '';
+
+    if (contact.jurisdiction) {
+        const jurisEl = document.getElementById('legal-jurisdiction');
+        if (jurisEl) jurisEl.value = contact.jurisdiction;
+    }
+
+    const piiSummary = buildComprehensivePIISummary(companyName, exposureId);
+    const piiEl = document.getElementById('legal-pii-summary');
+    if (piiEl) piiEl.value = piiSummary;
+}
+
+function buildComprehensivePIISummary(companyName, exposureId) {
+    const parts = [];
+    const prof = typeof agProfile === 'function' ? agProfile() : {};
+    if (prof.name) parts.push(`• Data Principal: ${prof.name}`);
+    if (prof.email) parts.push(`• Primary Email: ${prof.email}`);
+    if (prof.phone) parts.push(`• Registered Mobile: ${prof.phone}`);
+    if (prof.aadhaar) parts.push(`• National Identity Reference: Resident Identification Verified`);
+
+    const exposures = state.agentState?.exposures || [];
+    let targetExp = exposures.find(e => e.id === exposureId);
+    if (!targetExp && companyName) {
+        const cClean = companyName.toLowerCase();
+        targetExp = exposures.find(e => (e.source_name || '').toLowerCase().includes(cClean));
+    }
+
+    if (targetExp && targetExp.data_found?.length) {
+        parts.push(`• Compromised / Processed Categories in ${targetExp.source_name}:`);
+        targetExp.data_found.forEach(df => parts.push(`  - ${df}`));
+    } else if (state.scanResults?.risk_assessment?.breakdown?.entity_counts) {
+        for (const [type, count] of Object.entries(state.scanResults.risk_assessment.breakdown.entity_counts)) {
+            parts.push(`  - ${type}: ${count} instance(s) detected`);
+        }
+    } else {
+        parts.push(`• Processed Categories: Account profile, contact records, and stored authentication metadata.`);
+    }
+    parts.push(`\nStatutory grounds: Personal data is no longer necessary for the original processing purpose and/or consent is explicitly withdrawn under Section 12 of DPDP Act 2023.`);
+    return parts.join('\n');
 }
 
 function buildPIISummary() {
-    if (!state.scanResults) return '';
-    const parts = [];
-    const risk = state.scanResults.risk_assessment;
-    if (risk?.breakdown?.entity_counts) {
-        for (const [type, count] of Object.entries(risk.breakdown.entity_counts)) {
-            parts.push(`${type}: ${count} instance(s) detected`);
-        }
-    }
-    return parts.join('\n') || 'Personal data detected in your systems.';
+    return buildComprehensivePIISummary('', '');
 }
 
 function renderNoticePreview(data) {
@@ -1100,7 +1300,16 @@ function traceClear() {
 }
 
 function traceAdd(agent, message, status) {
+    if (!message) return;
+    if (message.length > 350) {
+        const summaryCard = agEl('agent-summary');
+        if (summaryCard && !summaryCard.textContent) {
+            summaryCard.textContent = message;
+        }
+        return;
+    }
     const box = agEl('agent-trace');
+    if (!box) return;
     const empty = box.querySelector('.trace-empty');
     if (empty) empty.remove();
     const row = document.createElement('div');
@@ -1118,14 +1327,10 @@ function traceAdd(agent, message, status) {
 }
 
 function traceReasoning(text) {
-    const box = agEl('agent-trace');
-    const empty = box.querySelector('.trace-empty');
-    if (empty) empty.remove();
-    const d = document.createElement('div');
-    d.className = 'trace-reasoning';
-    d.textContent = text;
-    box.appendChild(d);
-    box.scrollTop = box.scrollHeight;
+    const summaryCard = agEl('agent-summary');
+    if (summaryCard) {
+        summaryCard.textContent = text;
+    }
 }
 
 async function agentInit() {
@@ -1497,6 +1702,7 @@ function renderAgentExposures(st) {
         }
 
         let domain = d.url ? d.url.replace(/^https?:\/\//, '').split('/')[0] : (d.website || exp.source_name);
+        const contact = getFiduciaryContact(exp.source_name);
         const card = createExposureCard({
             exposureId: exp.id,
             title: isCand ? `${exp.source_name} (@${exp.record_id})` : exp.source_name,
@@ -1511,15 +1717,16 @@ function renderAgentExposures(st) {
             description: exp.source_type === 'breach' ? (d.description || '') : '',
             category: exp.source_type === 'breach' && d.industry ? `Industry: ${d.industry}` : '',
             type: typeBadge,
-            companyName: exp.source_name,
-            companyEmail: d.privacy_email || '',
+            companyName: contact.company_name || exp.source_name,
+            companyEmail: d.privacy_email || contact.dpo_email || '',
             removalDifficulty: d.removal_difficulty || (exp.status === 'removed' ? 'Removed' : (isCand ? 'Requires Attribution' : 'Standard')),
-            optOutUrl: d.url || d.removal_url || d.opt_out_url || '',
+            optOutUrl: d.url || d.removal_url || d.opt_out_url || contact.self_serve_url || '',
             profileUrl: d.url || '',
             noNotice: isNotServable,
             isCandidate: isCand,
             isIndian: !!(
                 d.is_indian ||
+                contact.jurisdiction === 'dpdp' ||
                 (domain && (domain.endsWith('.in') || domain.includes('.in/'))) ||
                 (window.__indianSources?.some(s => (s.name || '').toLowerCase() === (exp.source_name || '').toLowerCase()))
             ),

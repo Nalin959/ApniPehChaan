@@ -1389,6 +1389,98 @@ def test_verification():
              normalise_phone("+91 98765 43210") == "9876543210")
 
 
+def test_fiduciary_and_threat_surface():
+    """Fiduciary directory resolution, breached entity legal rights under DPDP s.12, and threat surface mapping."""
+    section("15. Fiduciary Directory & Threat Surface Intelligence")
+
+    from backend.agent.fiduciary_directory import get_fiduciary_contact, is_darkweb_dump
+    from backend.agent.memory import Memory
+    from backend.agent.tools import build_tools, ToolContext
+    import tempfile
+
+    # 1. Directory resolution
+    ij = get_fiduciary_contact("IIMjobs")
+    test("IIMjobs resolves to Info Edge", "Info Edge" in ij.get("company_name", ""))
+    test("IIMjobs resolves Grievance email", ij.get("dpo_email") == "grievance@iimjobs.com")
+    test("IIMjobs has self-serve settings URL", "settings" in ij.get("self_serve_url", ""))
+
+    zm = get_fiduciary_contact("Zomato")
+    test("Zomato resolves Grievance email", zm.get("dpo_email") == "grievance@zomato.com")
+    test("Zomato has self-serve privacy URL", "privacy" in zm.get("self_serve_url", ""))
+
+    li = get_fiduciary_contact("LinkedIn")
+    test("LinkedIn resolves DPO email", li.get("dpo_email") == "linkedin_dpo@linkedin.com")
+
+    # 2. Dark-web dump classification
+    test("Collection #1 is classified as dark-web dump", is_darkweb_dump("Collection #1") is True)
+    test("Naz.API is classified as dark-web dump", is_darkweb_dump("Naz.API") is True)
+    test("Zomato is NOT classified as dark-web dump", is_darkweb_dump("Zomato") is False)
+    test("IIMjobs is NOT classified as dark-web dump", is_darkweb_dump("IIMjobs") is False)
+
+    # 3. Legal assessment on breached operating company vs darkweb dump
+    with tempfile.TemporaryDirectory() as d:
+        from backend.mock_brokers.network import BrokerNetwork
+        mem = Memory(os.path.join(d, "mem.db"))
+        net = BrokerNetwork()
+        uid = "usr_fiduciary_test"
+        ctx = ToolContext(memory=mem, network=net, user_id=uid, run_id="run_1",
+                          profile={"name": "Test User", "email": "test@example.com", "phone": "9811223344", "country": "IN"},
+                          emit=lambda *a, **k: None)
+        tools = build_tools(ctx)
+
+        # Record an operating company breach
+        e1_id, _ = mem.record_exposure(uid, "run_1", {
+            "source_name": "IIMjobs", "source_type": "breach", "source_id": "breach:iimjobs",
+            "data_found": ["Email addresses", "Passwords", "Resumes"], "severity": "high"
+        })
+        # Record a dark web paste dump
+        e2_id, _ = mem.record_exposure(uid, "run_1", {
+            "source_name": "Collection #1", "source_type": "breach", "source_id": "breach:collection1",
+            "data_found": ["Email addresses", "Passwords"], "severity": "critical"
+        })
+
+        b1 = tools["determine_legal_basis"](e1_id)
+        test("Operating company breach has erasure_available=True", b1["erasure_available"] is True)
+        test("Operating company breach cites DPDP Act 2023 s.12", "DPDP" in b1["statute"])
+        test("Operating company breach action is request_erasure", b1["recommended_action"] == "request_erasure")
+
+        b2 = tools["determine_legal_basis"](e2_id)
+        test("Dark web dump has erasure_available=False", b2["erasure_available"] is False)
+        test("Dark web dump recommends secure_accounts", b2["recommended_action"] == "secure_accounts")
+
+        # Playbook resolution for operating company breach
+        p1 = tools["plan_removal"](e1_id)
+        test("IIMjobs provides self_serve playbook", p1["method"] == "self_serve")
+        test("IIMjobs playbook contains direct URL", "iimjobs.com" in p1["url"])
+
+        # Statutory notice drafting for operating company
+        draft = tools["draft_erasure_request"](e1_id)
+        test("Statutory notice can be drafted for operating company breach", "request_id" in draft)
+        test("Statutory notice names Info Edge", "info edge" in draft.get("request_text", "").lower() or "iimjobs" in draft.get("broker", "").lower())
+
+        # Refusal to draft for dark web dump
+        draft2 = tools["draft_erasure_request"](e2_id)
+        test("Statutory notice refused for dark web dump", "error" in draft2)
+
+        # Threat surface correlation
+        ts = tools["analyze_threat_surface"]()
+        test("Threat surface analysis identifies attack vectors", len(ts["threat_vectors"]) >= 1)
+        test("Credential stuffing vector detected", any(v["vector"] == "Credential Stuffing & Account Takeover" for v in ts["threat_vectors"]))
+        test("Overall surface grade is computed", ts["overall_surface_grade"] in ("ELEVATED", "MODERATE", "CRITICAL"))
+
+        # Total tool count verification
+        test("Agent tool suite registers exactly 22 verified tools", len(tools) == 22)
+
+        # Deterministic discovery integration with threat surface
+        from backend.agent.orchestrator import _run_deterministic_discovery
+        # Mock network-bound discovery tools to ensure test isolation and sub-second execution
+        fast_tools = dict(tools)
+        fast_tools["search_open_web"] = lambda: {"confirmed": [], "search_degraded": False, "pages_fetched": 0}
+        fast_tools["browse_indian_registry"] = lambda: {"total_scanned": 0, "categories": {}}
+        d_summary = _run_deterministic_discovery(ctx, fast_tools)
+        test("Deterministic discovery includes threat surface intelligence", "Threat surface analysis" in d_summary)
+        test("Deterministic discovery captures attack vectors in summary", "attack vector" in d_summary)
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Main
@@ -1415,6 +1507,7 @@ if __name__ == "__main__":
     test_open_web_search()
     test_free_intel()
     test_site_roster()
+    test_fiduciary_and_threat_surface()
 
     elapsed = time.time() - start
 

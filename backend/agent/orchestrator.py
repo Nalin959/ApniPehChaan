@@ -140,7 +140,10 @@ def _run_llm(ctx: ToolContext, tools: dict, goal: str, stream: EventStream) -> s
                             "ts": utcnow(), "text": block.thinking})
             elif block.type == "text" and block.text.strip():
                 final_text = block.text
-                ctx.emit("orchestrator", "reasoning", block.text.strip())
+                stream.put({"type": "agent_reasoning", "run_id": ctx.run_id,
+                            "ts": utcnow(), "text": block.text.strip()})
+    if final_text:
+        ctx.emit("orchestrator", "plan", "Executive Summary and Legal Assessment generated.")
     return final_text
 
 
@@ -185,7 +188,7 @@ def _run_deterministic_discovery(ctx: ToolContext, tools: dict) -> str:
     reason = ("no planner key configured" if not llm_available()
               else "the LLM planner was unavailable")
     ctx.emit("orchestrator", "plan",
-             f"Planning with the deterministic pipeline ({reason}) — same 20 tools.")
+             f"Planning with the deterministic pipeline ({reason}) — same 22 tools.")
 
     g = _run_mandatory_discovery(ctx, tools)
     breaches, idmatch = g["breaches"], g["identifiers"]
@@ -201,6 +204,12 @@ def _run_deterministic_discovery(ctx: ToolContext, tools: dict) -> str:
                    for d in declared.get("declared", [])]
     actionable += [{"exposure_id": r["exposure_id"], "name": r["broker"]}
                    for r in brokers.get("removable_records", [])]
+    for b in breaches.get("verified_exposures", []):
+        eid = b.get("exposure_id") or b.get("id")
+        if eid and not any(x["exposure_id"] == eid for x in actionable):
+            actionable.append({"exposure_id": eid, "name": b.get("source", "")})
+
+    threat_matrix = tools["analyze_threat_surface"]()
 
     # Choose the cheapest effective removal route for each. A statutory notice
     # is the escalation, not the default — most services have a delete button,
@@ -258,6 +267,8 @@ def _run_deterministic_discovery(ctx: ToolContext, tools: dict) -> str:
            if drafted else "No statutory notice was necessary. ")
         + (f"{len(refused)} source(s) cannot be erased at all. " if refused else "")
         + "Breach records cannot be un-published — rotate those credentials and enable 2FA."
+        + (f" Threat surface analysis identified {len(threat_matrix['threat_vectors'])} attack vector(s) (Grade: {threat_matrix['overall_surface_grade']})."
+           if threat_matrix.get("threat_vectors") else "")
     )
     ctx.emit("orchestrator", "summary", summary)
     return summary
@@ -393,7 +404,7 @@ def run_discovery(profile: dict, stream: EventStream) -> RunResult:
             # Dispatch is absent from this set, so the agent cannot send anything
             # even if it decides it wants to.
             JUDGEMENT_TOOLS = ("determine_legal_basis", "plan_removal",
-                               "draft_erasure_request")
+                               "draft_erasure_request", "analyze_threat_surface")
             phase_tools = {k: v for k, v in tools.items() if k in JUDGEMENT_TOOLS}
 
             # Query all active actionable exposures recorded for this user across all tools

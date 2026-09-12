@@ -923,10 +923,30 @@ def build_tools(ctx: ToolContext) -> dict[str, Callable]:
         # playbook to contradict it, blocks removal.
         if pb:
             method = pb["method"]
-        elif basis.get("erasure_available"):
-            method = "statutory_notice"
         else:
-            method = "not_removable"
+            from backend.agent.fiduciary_directory import get_fiduciary_contact
+            fiduciary = get_fiduciary_contact(exp["source_name"])
+            if fiduciary and fiduciary.get("self_serve_url"):
+                pb = {
+                    "id": exp["source_name"].lower(),
+                    "service": fiduciary.get("company_name", exp["source_name"]),
+                    "method": "self_serve",
+                    "url": fiduciary["self_serve_url"],
+                    "effort_minutes": 5,
+                    "steps": [
+                        f"Visit {fiduciary['self_serve_url']}.",
+                        "Navigate to Account Settings → Privacy / Security.",
+                        "Request account deactivation or personal data deletion.",
+                        f"If unresponsive, escalate with a statutory notice to {fiduciary.get('dpo_email', 'the Grievance Officer')}."
+                    ],
+                    "escalation": f"Escalate under DPDP s.12/s.13 notice to Grievance Officer ({fiduciary.get('dpo_email')}).",
+                    "legal_class": fiduciary.get("legal_class", "dpdp_erasure"),
+                }
+                method = "self_serve"
+            elif basis.get("erasure_available"):
+                method = "statutory_notice"
+            else:
+                method = "not_removable"
 
         plan = {
             "exposure_id": exposure_id,
@@ -1150,13 +1170,15 @@ def build_tools(ctx: ToolContext) -> dict[str, Callable]:
                  tool_name="determine_legal_basis")
 
         # Resolve the controller. Sandbox records live in BROKERS; user-declared
-        # accounts resolve against the Indian registry. Missing this second path
-        # meant a declared "Indian Kanoon" was treated as an ordinary broker and
-        # got an erasure notice drafted against a court record.
+        # accounts resolve against the Indian registry. Operating companies from
+        # breaches or profile lookups resolve against the Fiduciary Directory.
         spec = BROKERS.get(exp["source_id"], {}) or {}
-        if not spec and exp["source_id"].startswith("declared:"):
-            spec = find_source(exp["source_id"].split(":", 1)[1]) or \
-                   find_source(exp["source_name"]) or {}
+        if not spec:
+            sid_part = exp["source_id"].split(":", 1)[1] if ":" in exp["source_id"] else exp["source_id"]
+            spec = find_source(sid_part) or find_source(exp["source_name"]) or {}
+        if not spec:
+            from backend.agent.fiduciary_directory import get_fiduciary_contact
+            spec = get_fiduciary_contact(exp["source_name"]) or {}
 
         user_country = (ctx.profile.get("country") or "IN").upper()
         controller_country = spec.get("country", user_country)
@@ -1222,12 +1244,24 @@ def build_tools(ctx: ToolContext) -> dict[str, Callable]:
             confidence = 0.90
 
         elif exp["source_type"] == "breach":
-            removable = False
-            action = "secure_accounts"
-            basis = ("Historical breach record. Erasure is not available against a breach "
-                     "corpus — the data is already replicated beyond any single controller. "
-                     "The effective remedies are credential rotation and monitoring.")
-            confidence = 0.80
+            from backend.agent.fiduciary_directory import is_darkweb_dump
+            if is_darkweb_dump(exp["source_name"]) or is_darkweb_dump(exp["source_id"]):
+                removable = False
+                action = "secure_accounts"
+                basis = ("Historical un-attributed breach dump. Erasure cannot be directed to an "
+                         "identifiable corporate controller. The effective remedies are credential "
+                         "rotation and active dark-web monitoring.")
+                confidence = 0.80
+            else:
+                removable = True
+                action = "request_erasure"
+                cname = spec.get("company_name") or exp["source_name"]
+                basis = (f"Operating Data Fiduciary ({cname}). While historical leaked copies on "
+                         "third-party dark web archives cannot be un-published, you hold a statutory right "
+                         "under DPDP Act 2023 s.12 (and GDPR Art. 17) to require the operating fiduciary to "
+                         "close your account and completely erase personal data from active and backup systems, "
+                         "accompanied by credential rotation.")
+                confidence = 0.92
 
         else:
             removable = False
@@ -1273,8 +1307,13 @@ def build_tools(ctx: ToolContext) -> dict[str, Callable]:
         exp = ctx.memory.get_exposure(exposure_id)
         if not exp:
             return {"error": f"No exposure {exposure_id}"}
-        if exp["source_type"] != "data_broker":
+
+        from backend.agent.fiduciary_directory import is_darkweb_dump, get_fiduciary_contact
+        if exp["source_type"] not in ("data_broker", "breach", "public_profile", "declared"):
             return {"error": "Erasure notices are only servable on an identified controller.",
+                    "exposure_id": exposure_id}
+        if exp["source_type"] == "breach" and (is_darkweb_dump(exp["source_name"]) or is_darkweb_dump(exp["source_id"])):
+            return {"error": "Breach dump has no identifiable corporate controller to serve.",
                     "exposure_id": exposure_id}
 
         # Re-scanning must not mint a duplicate notice for the same record.
@@ -1295,9 +1334,12 @@ def build_tools(ctx: ToolContext) -> dict[str, Callable]:
             }
 
         spec = BROKERS.get(exp["source_id"], {}) or {}
-        if not spec and exp["source_id"].startswith("declared:"):
-            spec = find_source(exp["source_id"].split(":", 1)[1]) or \
-                   find_source(exp["source_name"]) or {}
+        if not spec:
+            sid_part = exp["source_id"].split(":", 1)[1] if ":" in exp["source_id"] else exp["source_id"]
+            spec = find_source(sid_part) or find_source(exp["source_name"]) or {}
+        if not spec:
+            spec = get_fiduciary_contact(exp["source_name"]) or {}
+
         legal_class = spec.get("legal_class", "")
         if legal_class in NON_SERVABLE_CLASSES:
             basis = determine_legal_basis(exposure_id)
@@ -1326,8 +1368,8 @@ def build_tools(ctx: ToolContext) -> dict[str, Callable]:
             user_email=ctx.profile.get("email", ""),
             user_phone=ctx.profile.get("phone", ""),
             additional_ids="",
-            company_name=spec.get("name", exp["source_name"]),
-            company_address=spec.get("privacy_url", ""),
+            company_name=spec.get("company_name") or spec.get("operator") or spec.get("name", exp["source_name"]),
+            company_address=spec.get("address") or spec.get("privacy_url", "Corporate Grievance Office"),
             detected_pii_summary=pii_summary,
         )
         if gen.get("status") != "generated":
@@ -1564,6 +1606,62 @@ def build_tools(ctx: ToolContext) -> dict[str, Callable]:
                 "coverage_note": res.get("coverage_note", ""),
                 "method": res.get("method", "")}
 
+    def analyze_threat_surface() -> dict:
+        """Perform cross-exposure correlation to map multi-vector attack surfaces:
+        credential stuffing risk, spear-phishing exposure, and SIM swap vulnerability.
+        Generates an actionable Sovereign Privacy defense hardening matrix."""
+        exposures = ctx.memory.get_exposures(ctx.user_id)
+        p = ctx.profile
+
+        breaches = [e for e in exposures if e.get("source_type") == "breach"]
+        passwords_leaked = [e for e in breaches if any("password" in str(d).lower() for d in e.get("data_found", []))]
+        resumes_leaked = [e for e in exposures if any(k in str(d).lower() for d in e.get("data_found", [])
+                                                      for k in ("salary", "employer", "resume", "cv", "job"))]
+        contact_leaked = [e for e in exposures if any(k in str(d).lower() for d in e.get("data_found", [])
+                                                      for k in ("phone", "mobile", "address"))]
+
+        vectors = []
+        if passwords_leaked:
+            vectors.append({
+                "vector": "Credential Stuffing & Account Takeover",
+                "severity": "critical" if len(passwords_leaked) >= 2 else "high",
+                "affected_sources": [b["source_name"] for b in passwords_leaked],
+                "threat_model": (f"Plaintext or hashed credentials exposed across {len(passwords_leaked)} service(s). "
+                                 "Automated botnets use these to attempt credential stuffing across email providers, "
+                                 "banking portals, and cloud services."),
+                "mitigation": "Immediately rotate passwords on all services. Enable hardware/TOTP MFA (avoid SMS 2FA)."
+            })
+        if resumes_leaked:
+            vectors.append({
+                "vector": "Spear Phishing & Career/Recruitment Fraud",
+                "severity": "high",
+                "affected_sources": [b["source_name"] for b in resumes_leaked],
+                "threat_model": "Employment history, current employer, salary brackets, and work history exposed. "
+                                "Adversaries can craft high-credibility spear-phishing emails or fake recruiter offers.",
+                "mitigation": "Exercise statutory right to erasure under DPDP s.12 to delete inactive recruitment profiles."
+            })
+        if contact_leaked and p.get("phone"):
+            vectors.append({
+                "vector": "SIM Swap & Targeted Vishing / OTP Interception",
+                "severity": "high",
+                "affected_sources": [b["source_name"] for b in contact_leaked],
+                "threat_model": "Mobile number and associated identity details exposed. Enables social engineering "
+                                "against telecom operators for SIM duplication or vishing.",
+                "mitigation": "Set telecom account PIN/passcode. Move critical 2FA from SMS to authenticator apps."
+            })
+
+        result = {
+            "user_id": ctx.user_id,
+            "total_analyzed_exposures": len(exposures),
+            "threat_vectors": vectors,
+            "overall_surface_grade": "ELEVATED" if len(vectors) >= 2 else ("MODERATE" if vectors else "MINIMAL"),
+            "defense_actions_recommended": len(vectors) + 1,
+        }
+        ctx.emit("risk", "score",
+                 f"Threat Surface Analysis: {len(vectors)} attack vector(s) identified (Grade: {result['overall_surface_grade']}).",
+                 tool_name="analyze_threat_surface", tool_output=result)
+        return result
+
     return {
         "build_identity_profile": build_identity_profile,
         "recall_prior_activity": recall_prior_activity,
@@ -1586,6 +1684,7 @@ def build_tools(ctx: ToolContext) -> dict[str, Callable]:
         "check_request_status": check_request_status,
         "verify_removal": verify_removal,
         "escalate_to_regulator": escalate_to_regulator,
+        "analyze_threat_surface": analyze_threat_surface,
     }
 
 

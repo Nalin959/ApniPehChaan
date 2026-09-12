@@ -409,5 +409,5 @@ def run(ctx, tools: dict, system: str, goal: str, stream, max_steps: int = 25) -
              f"Planner finished: {total_in:,} input + {total_out:,} output tokens "
              f"across {len(called_tools)} distinct tool(s).")
     if final_text:
-        ctx.emit("orchestrator", "reasoning", final_text)
+        ctx.emit("orchestrator", "plan", "Executive Summary and Legal Assessment generated.")
     return final_text

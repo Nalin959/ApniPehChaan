@@ -9,7 +9,7 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100%2B-009688.svg)](https://fastapi.tiangolo.com/)
 [![DPDP Act 2023](https://img.shields.io/badge/Compliance-India%20DPDP%202023-orange.svg)](https://www.meity.gov.in/)
 [![GDPR Art 17](https://img.shields.io/badge/Compliance-EU%20GDPR%20Art%2017-blue.svg)](https://gdpr.eu/)
-[![Tests](https://img.shields.io/badge/Tests-306%2F306%20Passed-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/Tests-332%2F332%20Passed-brightgreen.svg)]()
 [![Cost](https://img.shields.io/badge/Paid%20APIs-none%20required-success.svg)]()
 
 ---
@@ -59,11 +59,11 @@ chmod +x run_demo.sh
 
 ### Manual
 ```bash
-python3 -m venv .venv && source .venv/bin/activate
+python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-python data/download_datasets.py      # only needed once
-python test_system.py                 # 306 tests
-uvicorn backend.app:app --host 0.0.0.0 --port 8000
+python data/download_datasets.py      # builds data/ from authoritative public sources
+python test_system.py                 # 332 tests
+python -m uvicorn backend.app:app --reload --port 8000
 ```
 
 ### Keys: what needs one, and what does not
@@ -99,7 +99,7 @@ environment variable always wins over the file.
 
 ## 🤖 The agent
 
-Twenty-one capabilities are exposed as tools over one registry
+Twenty-two capabilities are exposed as tools over one registry
 (`backend/agent/tools.py :: build_tools`):
 
 | Tool | What the agent uses it for |
@@ -118,6 +118,7 @@ Twenty-one capabilities are exposed as tools over one registry
 | `search_paste_dumps` | Find attributable leak-dump entries |
 | `detect_pii_in_text` | Run the Verhoeff/Luhn-validated PII recogniser |
 | `assess_exposure_risk` | Compute the Privacy Risk Score |
+| `analyze_threat_surface` | Cross-correlate multi-breach data into credential stuffing, spear-phishing, and SIM-swap attack vectors |
 | `determine_legal_basis` | Decide jurisdiction, statute, and whether erasure is even available |
 | `plan_removal` | Choose the cheapest effective removal route |
 | `draft_erasure_request` | Compile the statutory notice |
@@ -563,12 +564,12 @@ The consequence that matters: re-scanning after a removal detects a record that 
 ```
 
 ```
-ALL 306 TESTS PASSED in 0.95s
+ALL 332 TESTS PASSED in 0.88s
 ```
 
 (Wall time varies by a few tenths of a second; the count is the part that matters.)
 
-14 sections. The largest are the ones that guard the honesty rules, which is deliberate:
+15 sections. The largest are the ones that guard the honesty rules, which is deliberate:
 
 | Section | Tests | What it enforces |
 |---|---|---|
@@ -576,6 +577,7 @@ ALL 306 TESTS PASSED in 0.95s
 | 14. Free breach intelligence | 49 | XposedOrNot & Hudson Rock record endpoints, severity scores, and state what they do **not** prove |
 | 12. Open-web search | 46 | Exact-phrase search, candidate demotion, phone boundary isolation, zero false positives |
 | 3. Identity resolver | 29 | Name-part collisions, alias derivations, phone/email normalisation |
+| 15. Fiduciary Directory & Threat Surface Intelligence | 26 | Operating fiduciary DPDP s.12 rights, Grievance Officer lookup, 22-tool registry, and attack surface correlation |
 | 2. PII recognizer | 24 | Verhoeff/Luhn validation, phone prefixing, false-positive protection on timestamps/cards |
 | 10. Attribution | 24 | No stranger's account is flagged as yours, scoped-handle non-transferability |
 | 13. Discovery site roster | 22 | Kaggle and Replit stay excluded *with a recorded reason*; every searched site has a playbook |
