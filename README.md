@@ -9,7 +9,7 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100%2B-009688.svg)](https://fastapi.tiangolo.com/)
 [![DPDP Act 2023](https://img.shields.io/badge/Compliance-India%20DPDP%202023-orange.svg)](https://www.meity.gov.in/)
 [![GDPR Art 17](https://img.shields.io/badge/Compliance-EU%20GDPR%20Art%2017-blue.svg)](https://gdpr.eu/)
-[![Tests](https://img.shields.io/badge/Tests-260%2F260%20Passed-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/Tests-306%2F306%20Passed-brightgreen.svg)]()
 [![Cost](https://img.shields.io/badge/Paid%20APIs-none%20required-success.svg)]()
 
 ---
@@ -62,7 +62,7 @@ chmod +x run_demo.sh
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 python data/download_datasets.py      # only needed once
-python test_system.py                 # 260 tests
+python test_system.py                 # 306 tests
 uvicorn backend.app:app --host 0.0.0.0 --port 8000
 ```
 
@@ -80,7 +80,8 @@ a model.
 | **Pwned Passwords** (k-anonymous) | — | **None.** Free, unauthenticated |
 | **Gravatar** profile lookup | — | **None** |
 | Account discovery, open-web search | — | **None** |
-| **LLM planner** | `GROQ_API_KEY` (or another below) | Optional — improves the demo |
+| **LLM planner** | `GEMINI_API_KEY` or `GROQ_API_KEY` (or another below) | Optional — autonomous multi-turn reasoning |
+| **Google Gemini (AI Studio)** | `GEMINI_API_KEY` | Optional — fast, generous free tier, handles thought signatures |
 | **HIBP** per-address lookup | `HIBP_API_KEY` | Optional (~$3.95/mo). Reported as `not_checked` without it |
 
 ```bash
@@ -129,6 +130,7 @@ Twenty-one capabilities are exposed as tools over one registry
 
 | Planner | When it runs | What it does |
 |---|---|---|
+| **Google Gemini** | `GEMINI_API_KEY` set | Gemini (`gemini-3.6-flash`, `gemini-2.5-flash`, `gemini-1.5-pro`) with autonomous multi-turn tool calling and thought signature preservation (`SOVEREIGN_PLANNER=gemini`) |
 | **Anthropic** | `ANTHROPIC_API_KEY` set | Claude (`claude-opus-5` by default, override with `SOVEREIGN_MODEL`) chooses each call and explains why |
 | **OpenAI-compatible** | any of `GROQ_API_KEY`, `CEREBRAS_API_KEY`, `GITHUB_TOKEN`, `MISTRAL_API_KEY`, `OPENROUTER_API_KEY`, `TOGETHER_API_KEY`, `OLLAMA_API_KEY` | One adapter covers all seven providers (`backend/agent/openai_compat_planner.py`) |
 | **Deterministic** | no key, or the LLM path errored | A fixed pipeline over the *identical* tools. The product works end to end; only the reasoning is canned |
@@ -561,7 +563,7 @@ The consequence that matters: re-scanning after a removal detects a record that 
 ```
 
 ```
-ALL 260 TESTS PASSED in 5.26s
+ALL 306 TESTS PASSED in 0.95s
 ```
 
 (Wall time varies by a few tenths of a second; the count is the part that matters.)
@@ -570,14 +572,20 @@ ALL 260 TESTS PASSED in 5.26s
 
 | Section | Tests | What it enforces |
 |---|---|---|
-| 9. Evidence policy | 47 | Anti-fabrication. Includes a test that fails if the old synthesised-breach code ever returns |
-| 12. Open-web search | 42 | A search result never becomes a finding on its own; the phone matcher never merges digit runs |
-| 3. Identity resolver | 26 | Including the `lstrip` and `date_of_birth` regressions |
-| 10. Attribution | 24 | No stranger's account is flagged as yours |
-| 2. PII recognizer | 22 | Including `+91` mobiles, cards and timestamps not being read as Aadhaar |
+| 9. Evidence policy | 54 | Anti-fabrication. Verifies exact endpoints, rates, error resilience, and synthetic quarantine |
+| 14. Free breach intelligence | 49 | XposedOrNot & Hudson Rock record endpoints, severity scores, and state what they do **not** prove |
+| 12. Open-web search | 46 | Exact-phrase search, candidate demotion, phone boundary isolation, zero false positives |
+| 3. Identity resolver | 29 | Name-part collisions, alias derivations, phone/email normalisation |
+| 2. PII recognizer | 24 | Verhoeff/Luhn validation, phone prefixing, false-positive protection on timestamps/cards |
+| 10. Attribution | 24 | No stranger's account is flagged as yours, scoped-handle non-transferability |
 | 13. Discovery site roster | 22 | Kaggle and Replit stay excluded *with a recorded reason*; every searched site has a playbook |
-| 14. Free breach intelligence | 19 | XposedOrNot and Hudson Rock record an endpoint and state what they do **not** prove |
-| 1, 4–8, 11 | 58 | Datasets, risk, notices, audit chain, tracker, scanners, identifier verification |
+| 1. Dataset Integrity | 13 | Corpus verification, broker rosters, and leak dump integrity |
+| 11. Identifier verification | 11 | Deliverability, MX check, dev-mode non-attribution, and verification codes |
+| 5. Legal Notice Generator | 10 | DPDP 2023 s.12/13, GDPR Art. 17, CCPA § 1798.105 statutory text formatting |
+| 6. Cryptographic Audit Trail | 7 | SHA-256 tamper-evident hash chaining and proof verification |
+| 7. Statutory Compliance Tracker | 7 | Deadline tracking, statutory clocks, and escalation triggers |
+| 4. Risk Calculator | 5 | Privacy risk scoring, threat surface quantification, and severity weighting |
+| 8. Scanner Modules | 5 | Scanner integration, error resilience, and output hygiene |
 
 ### On the PII benchmark number
 
