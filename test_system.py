@@ -1507,8 +1507,29 @@ def test_fiduciary_and_threat_surface():
         test("Credential stuffing vector detected", any(v["vector"] == "Credential Stuffing & Account Takeover" for v in ts["threat_vectors"]))
         test("Overall surface grade is computed", ts["overall_surface_grade"] in ("ELEVATED", "MODERATE", "CRITICAL"))
 
-        # Total tool count verification
-        test("Agent tool suite registers exactly 22 verified tools", len(tools) == 22)
+        # Tool suite coverage.
+        #
+        # Pinning an exact count breaks every time a capability is added, and it
+        # never said WHICH tools had to exist — the number could stay at 22 with
+        # the wrong 22. What matters is that each phase of the loop is covered,
+        # so the required names are asserted and the count is only a floor.
+        REQUIRED_TOOLS = {
+            # gather
+            "build_identity_profile", "recall_prior_activity", "verify_breach_exposure",
+            "discover_accounts", "search_open_web", "match_unique_identifiers",
+            # judge
+            "assess_exposure_risk", "determine_legal_basis", "plan_removal",
+            # act — every outward action, each of which must be approval-gated
+            "draft_erasure_request", "submit_erasure_request", "self_serve_removal",
+            # verify
+            "check_request_status", "verify_removal", "confirm_removal",
+            "escalate_to_regulator",
+        }
+        missing = sorted(REQUIRED_TOOLS - set(tools))
+        test("Every phase of the agent loop has its tools registered",
+             not missing, f"missing: {missing}")
+        test("Agent tool suite registers at least 22 tools",
+             len(tools) >= 22, f"got {len(tools)}")
 
         # Deterministic discovery integration with threat surface
         from backend.agent.orchestrator import _run_deterministic_discovery

@@ -1106,9 +1106,9 @@ def search_exposures(profile: dict, max_workers: int = 16,
     # its best pages looked at. And whatever the cap then leaves behind is
     # counted, named in the coverage note, and stops the scan calling itself
     # complete.
-    todo = _interleave_by_query(candidates)[:max_pages]
-    skipped = [c for c in candidates[len(todo):]] if max_pages < len(candidates) else []
-    skipped_n = max(0, len(candidates) - len(todo))
+    ordered = _interleave_by_query(candidates)
+    todo, skipped = ordered[:max_pages], ordered[max_pages:]
+    skipped_n = len(skipped)
 
     # 2. Go and read every page. The engine's claim is not evidence.
     def _one(item):
