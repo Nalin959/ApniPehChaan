@@ -423,7 +423,14 @@ class SupabaseMemory:
 
     def get_receipts(self, limit: int = 100) -> list[dict]:
         params = {"order": "seq.asc", "limit": str(limit), "select": "*"}
-        return self._request("GET", "audit_receipts", params=params) or []
+        rows = self._request("GET", "audit_receipts", params=params) or []
+        for r in rows:
+            if isinstance(r.get("details"), str):
+                try:
+                    r["details"] = json.loads(r["details"] or "{}")
+                except Exception:
+                    pass
+        return rows
 
     def append_receipt(self, receipt: dict):
         return self.record_receipt(receipt)

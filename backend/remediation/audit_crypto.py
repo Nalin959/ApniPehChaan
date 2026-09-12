@@ -55,15 +55,31 @@ class AuditReceipt:
         }
 
     def verify(self) -> bool:
-        """Verify the receipt's hash integrity."""
-        content = json.dumps({
-            "receipt_id": self.receipt_id,
-            "timestamp": self.timestamp,
-            "action": self.action,
-            "details": self.details,
-            "previous_hash": self.previous_hash,
-        }, sort_keys=True, default=str)
-        return hashlib.sha256(content.encode()).hexdigest() == self.hash
+        """Verify the receipt's hash integrity across Postgres timestamptz and ISO formats."""
+        details_val = self.details
+        if isinstance(details_val, str):
+            try:
+                details_val = json.loads(details_val)
+            except Exception:
+                pass
+
+        timestamps = [self.timestamp]
+        if self.timestamp.endswith("+00:00"):
+            timestamps.append(self.timestamp[:-6])
+        elif not self.timestamp.endswith("Z") and "+" not in self.timestamp:
+            timestamps.append(self.timestamp + "+00:00")
+
+        for ts in timestamps:
+            content = json.dumps({
+                "receipt_id": self.receipt_id,
+                "timestamp": ts,
+                "action": self.action,
+                "details": details_val,
+                "previous_hash": self.previous_hash,
+            }, sort_keys=True, default=str)
+            if hashlib.sha256(content.encode()).hexdigest() == self.hash:
+                return True
+        return False
 
 
 class AuditTrail:
