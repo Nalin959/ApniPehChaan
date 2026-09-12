@@ -66,25 +66,6 @@ python test_system.py                 # 334 tests
 python -m uvicorn backend.app:app --reload --port 8000
 ```
 
-### Modern React Web App (`web/`) — Port 3000
-A cybersecurity-themed frontend built with React 19, TypeScript, Tailwind CSS, and Framer Motion:
-```bash
-cd web
-npm install
-npm run dev        # Starts Vite dev server with proxy to :8000 on http://localhost:3000
-# or production preview:
-npm run build && npm run preview -- --port 3000 --host 0.0.0.0
-```
-Features include:
-- **Interactive Footprint Scan**: Live footprint scanner querying `/api/scan/full` with staged terminal scanning animation.
-- **Privacy Exposure Score**: Radial SVG gauge with graticule ticks, glow bloom, and 5 vector breakdown bars.
-- **Exposure Network**: Bipartite SVG flow mapping identity signals to broker, search, and breach sinks.
-- **Source Explorer**: Search & broker console with risk filtering and expandable detail drawers.
-- **Removal Pipeline**: 6-stage lifecycle animation (*Found → Analysed → Request Generated → Request Sent → Awaiting Response → Removed*) with live Privacy Request card.
-- **Autonomous Agent Loop**: Continuous radar loop and live streaming terminal activity feed.
-- **Rights Advisor**: Floating AI chat widget connected to `/api/agent/chat` (Groq / Gemini) grounded in real scan findings and statutory DPDP s.12/s.13 & GDPR Art. 17 rights.
-
-
 ### Keys: what needs one, and what does not
 
 **With no `.env` at all, the product runs end to end.** Every breach check, the account
