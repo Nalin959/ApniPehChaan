@@ -17,6 +17,7 @@ htmlcov/
 *.log
 scratch/
 .system_generated/
+push_to_github.sh
 
 # OS files
 .DS_Store
