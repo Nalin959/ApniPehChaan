@@ -27,8 +27,8 @@ PROVIDERS = {
     "gemini": {
         "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
         "key_env": "GEMINI_API_KEY",
-        "default_model": "gemini-3.7-flash",
-        "fallback_models": ["gemini-flash-latest", "gemini-3.5-flash"],
+        "default_model": "gemini-3.8-flash",
+        "fallback_models": ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-3.7-flash"],
         "signup": "https://aistudio.google.com/apikey",
         "note": "Primary reasoning planner driven by Google Gemini.",
     },
