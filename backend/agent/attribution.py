@@ -200,9 +200,10 @@ def attribute_profile(username: str, page_text: str, ident: Identifiers,
         return Attribution(
             tier="candidate", score=0.45,
             signals=[f"'{username}' is a handle you use, but it is a common-name handle"],
-            explanation=(f"You said you use '{username}', but it is just your name with the "
-                         f"punctuation removed — someone else may hold it on {site or 'this site'}. "
-                         f"Write it as '{site_l or 'site'}:{username}' to confirm it for this site."),
+            explanation=(f"You said you use '{username}', but it is your name — or a part of "
+                         f"it, like a surname — used as a handle, and many people share it. "
+                         f"Someone else may well hold it on {site or 'this site'}. Write it as "
+                         f"'{site_l or 'site'}:{username}' to confirm it for this site."),
             is_mine=False)
 
     # A handle this generic identifies nobody.
@@ -305,6 +306,30 @@ def attribute_profile(username: str, page_text: str, ident: Identifiers,
         is_mine=False)
 
 
+def _name_handle_forms(full_name: str) -> set:
+    """
+    Every handle shape that is really just this person's legal name.
+
+    A SINGLE name part counts. "torvalds", "sharma" and "nalin" are surnames and
+    forenames, and a surname is shared by millions — treating one as distinctive
+    because it is not the *whole* name was how a stranger's account got
+    attributed on twenty-six sites at once. Parts of three characters or fewer
+    are left out; they are caught as generic handles instead.
+    """
+    parts = [x.lower() for x in (full_name or "").split() if x.isalpha()]
+    forms = {p for p in parts if len(p) > 3}
+    if len(parts) >= 2:
+        first, last = parts[0], parts[-1]
+        forms |= {
+            "".join(parts), ".".join(parts), "_".join(parts),
+            first + last, f"{first}.{last}", f"{first}_{last}",
+            first[0] + last, f"{first[0]}.{last}", f"{first[0]}_{last}",
+            last + first, f"{last}.{first}", f"{last}_{first}",
+            last + first[0],
+        }
+    return forms
+
+
 def username_risk(username: str, ident: Identifiers) -> str:
     """
     How likely is this candidate handle to collide with other people?
@@ -319,33 +344,20 @@ def username_risk(username: str, ident: Identifiers) -> str:
     u = (username or "").lower()
 
     if u in ident.bare_handles() or u in ident.scoped_handles().values():
-        # Declared — but a declared common-name handle still collides.
-        name_parts_chk = [x.lower() for x in ident.full_name.split() if x.isalpha()]
-        if len(name_parts_chk) >= 2:
-            plain = {"".join(name_parts_chk), ".".join(name_parts_chk),
-                     "_".join(name_parts_chk), name_parts_chk[0] + name_parts_chk[-1]}
-            if u in plain:
-                return "high"
+        # Declared — but a declared common-name handle still collides. Saying
+        # "I use the handle torvalds" claims a habit, not the torvalds account
+        # on every site that has one.
+        if u in _name_handle_forms(ident.full_name):
+            return "high"
         if any(c.isdigit() for c in u) or len(u) >= 12:
             return "low"
         return "medium"
     if u in GENERIC_HANDLES or len(u) <= 3:
         return "generic"
 
-    name_parts = [x.lower() for x in ident.full_name.split() if x.isalpha()]
-    if len(name_parts) >= 2:
-        forms = {
-            "".join(name_parts),
-            ".".join(name_parts),
-            "_".join(name_parts),
-            name_parts[0] + name_parts[-1],
-            f"{name_parts[0]}.{name_parts[-1]}",
-            f"{name_parts[0]}_{name_parts[-1]}",
-            name_parts[0][0] + name_parts[-1],
-        }
-        if u in forms:
-            # Pure name handle. Shared by everyone with that name.
-            return "high"
+    if u in _name_handle_forms(ident.full_name):
+        # Pure name handle. Shared by everyone with that name.
+        return "high"
 
     # A handle carrying digits or an unusual token is far more personal.
     if any(c.isdigit() for c in u):
@@ -360,8 +372,9 @@ def collision_warning(username: str, risk: str) -> str:
     return {
         "confirmed": f"Candidate matching handle '{username}'. Confirm if this profile is yours.",
         "generic":   f"'{username}' is a generic handle — it identifies nobody in particular.",
-        "high":      (f"'{username}' is just your name with the punctuation removed. Thousands "
-                      f"of people share it, so a match here is very likely someone else."),
+        "high":      (f"'{username}' is your name (or part of it) used as a handle. Many "
+                      f"people share it, so a match here may well be someone else. Write it "
+                      f"as 'site:{username}' to claim it on one site."),
         "medium":    (f"'{username}' could belong to someone else with the same handle. "
                       f"Review profile link to verify if this account is actually yours."),
         "low":       (f"'{username}' is distinctive, but still requires your confirmation "

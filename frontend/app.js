@@ -27,7 +27,20 @@ document.addEventListener('DOMContentLoaded', () => {
     initProfileSync();
     fetchSystemStatus();
     initAICopilot();
+    restoreLatestAgentState();
 });
+
+async function restoreLatestAgentState() {
+    try {
+        const resp = await fetch('/api/agent/latest');
+        const data = await resp.json();
+        if (data && data.user_id && (data.exposures?.length || data.summary?.exposures_total)) {
+            syncAgentToExposuresAndDashboard({ state: data });
+        } else if (window.__indianSources?.length && !state.agentState && !state.scanResults) {
+            renderAgentExposures({ exposures: [] });
+        }
+    } catch(e) {}
+}
 
 // ═══ Particle Background ════════════════════════════════════════════════════
 function initParticles() {
@@ -131,6 +144,7 @@ function navigateTo(section) {
     if (section === 'exposures') {
         if (state.agentState) renderAgentExposures(state.agentState);
         else if (state.scanResults) renderExposures(state.scanResults);
+        else restoreLatestAgentState();
     }
     if (section === 'legal') {
         prefillLegalForm();
@@ -443,32 +457,188 @@ function renderExposures(results) {
     }
 }
 
+/* ── Canonical field names → what a person actually reads ─────────────────────
+   The backend emits canonical snake_case field names ("government_id"). A card
+   is read by someone deciding what to change first, so it names the data the
+   way a person would. Anything unmapped is title-cased rather than dropped — a
+   field the backend adds later degrades to readable, never to blank. */
+const FIELD_LABELS = {
+    aadhaar: 'Aadhaar Number', pan: 'PAN', credit_card: 'Credit Card Data',
+    bank_account: 'Bank Account Details', password: 'Passwords',
+    government_id: 'Government ID', passport: 'Passport Number',
+    ssn: 'Social Security Number', auth_token: 'Authentication Tokens',
+    security_question: 'Security Questions & Answers',
+    session_cookies: 'Session Cookies', religion: 'Religion',
+    sexual_preference: 'Sexual Preference', health: 'Health Data',
+    ethnicity: 'Ethnicity', biometric: 'Biometric Data',
+    address: 'Physical Address', phone: 'Phone Number',
+    date_of_birth: 'Date of Birth', private_message: 'Private Messages',
+    income: 'Income Level', vehicle: 'Vehicle Details', email: 'Email Address',
+    employer: 'Employer', username: 'Username', social_profile: 'Social Profiles',
+    photo: 'Profile Photo', purchase: 'Purchase History',
+    academic: 'Academic Records', gender: 'Gender', nationality: 'Nationality',
+    marital_status: 'Marital Status', ip_address: 'IP Address', city: 'City',
+    name: 'Name', age_range: 'Age Range', interests: 'Interests',
+    device: 'Device Information', browser: 'Browser Details',
+    language: 'Spoken Language', website_activity: 'Website Activity',
+};
+
+function fieldLabel(field) {
+    const key = String(field == null ? '' : field).trim().toLowerCase();
+    if (!key) return '';
+    return FIELD_LABELS[key] ||
+        key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function fieldLabels(fields) {
+    return (fields || []).map(fieldLabel).filter(Boolean);
+}
+
+/* ── Info-stealer infection ──────────────────────────────────────────────────
+   This is not "a site leaked your address". A computer that held this address
+   was infected, so everything saved in its browser — every password, cookie and
+   session token — was taken together, and those credentials are CURRENT, not
+   historic. It is therefore the one finding that leads the page, carries its
+   own card, and ends in three steps rather than a legal notice: there is no
+   fiduciary to serve, the data is already in criminal hands.
+
+   Every value shown arrives masked from the source and is rendered exactly as
+   received. Nothing here unmasks anything, and the password guard below drops
+   any value that is not still masked. */
+function looksMasked(value) {
+    return /\*/.test(String(value == null ? '' : value));
+}
+
+function createInfostealerCard(exp) {
+    const d = exp.detail || {};
+    const machines = Array.isArray(d.machines) ? d.machines : [];
+    const severity = exp.severity || 'critical';
+
+    const card = document.createElement('div');
+    card.className = `exposure-card severity-${severity} infostealer-card`;
+    card.dataset.source = 'infostealer';
+    card.dataset.severity = severity;
+
+    let metaHtml = '';
+    if (d.source_dataset) metaHtml += ` · <span>${escapeHtml(d.source_dataset)}</span>`;
+    if (machines.length) {
+        metaHtml += ` · <span>${machines.length} infected machine${machines.length === 1 ? '' : 's'}</span>`;
+    }
+    if (d.user_services != null) metaHtml += ` · <span>${escapeHtml(d.user_services)} personal accounts exposed</span>`;
+    if (d.corporate_services != null) metaHtml += ` · <span>${escapeHtml(d.corporate_services)} corporate accounts exposed</span>`;
+
+    const machinesHtml = machines.map(m => {
+        const rows = [
+            ['Computer', m.computer_name],
+            ['Operating system', m.operating_system],
+            ['Compromised on', (m.date_compromised || '').split('T')[0]],
+            ['IP address (masked at source)', m.ip],
+            ['Antivirus present', Array.isArray(m.antiviruses) ? m.antiviruses.join(', ') : m.antiviruses],
+            ['Malware path', m.malware_path],
+        ].filter(([, v]) => v != null && String(v).trim() !== '');
+
+        const rowsHtml = rows.map(([label, value]) => `
+            <div class="stealer-row">
+                <span class="stealer-row-label">${escapeHtml(label)}</span>
+                <span class="stealer-row-value">${escapeHtml(value)}</span>
+            </div>`).join('');
+
+        // Logins and passwords are masked by the source. The password list is
+        // filtered again here: if a value no longer carries its mask it is not
+        // rendered at all, so no upstream change can turn this into a password
+        // display.
+        const logins = (m.top_logins || []).filter(v => String(v || '').trim() !== '').slice(0, 6);
+        const passwords = (m.top_passwords || []).filter(looksMasked).slice(0, 6);
+
+        const loginsHtml = logins.length ? `
+            <div class="stealer-creds">
+                <span class="stealer-creds-label">Accounts saved on it (masked at source)</span>
+                <div class="stealer-creds-tags">${logins.map(v => `<span class="stealer-masked">${escapeHtml(v)}</span>`).join('')}</div>
+            </div>` : '';
+
+        const passwordsHtml = passwords.length ? `
+            <div class="stealer-creds">
+                <span class="stealer-creds-label">Stolen passwords — shown masked, never unmasked</span>
+                <div class="stealer-creds-tags">${passwords.map(v => `<span class="stealer-masked">${escapeHtml(v)}</span>`).join('')}</div>
+            </div>` : '';
+
+        return `<div class="stealer-machine">${rowsHtml}${loginsHtml}${passwordsHtml}</div>`;
+    }).join('');
+
+    const tagsHtml = fieldLabels(exp.data_found || []).map(dc =>
+        `<span class="pii-tag pii-tag-danger">${escapeHtml(dc)}</span>`
+    ).join('');
+
+    card.innerHTML = `
+        <div class="exposure-header">
+            <span class="exposure-title">🚨 ${escapeHtml(exp.source_name || 'Info-stealer malware infection')}</span>
+            <span class="severity-badge ${severity}">${escapeHtml(severity)}</span>
+        </div>
+        <div class="exposure-meta">Info-Stealer Infection${metaHtml}</div>
+        <div class="stealer-lede">Every credential saved in this computer's browser was taken at once — not one site's password, all of them. These credentials are current, not historic, so a stolen session cookie can be replayed without any password at all.</div>
+        ${machinesHtml || `<div class="stealer-machine"><div class="stealer-row"><span class="stealer-row-value">The dataset confirmed the infection but returned no machine detail.</span></div></div>`}
+        <div class="exposure-tags">${tagsHtml}</div>
+        <div class="stealer-fix">
+            <div class="stealer-fix-title">Do this now, in this order</div>
+            <ol class="stealer-steps">
+                <li>Change every password saved in that browser, starting with email and banking — from a different, clean device.</li>
+                <li>Sign out of all sessions everywhere, on every account, to kill the stolen session cookies.</li>
+                <li>Turn on two-factor authentication everywhere it is offered.</li>
+            </ol>
+        </div>
+        <div class="exposure-actions">
+            <span class="stealer-nonotice">No erasure notice applies — this data is in criminal hands, not a company record that can be served.</span>
+        </div>
+    `;
+
+    return card;
+}
+
 function createExposureCard(data) {
     const card = document.createElement('div');
     card.className = `exposure-card severity-${data.severity}`;
     card.dataset.source = data.source;
     card.dataset.severity = data.severity;
+    if (data.isCandidate) card.dataset.candidate = 'true';
+    if (data.isIndian) card.dataset.indian = 'true';
 
-    const tagsHtml = (data.dataClasses || []).slice(0, 6).map(dc =>
+    // A breach can leak a dozen field types. Show the first six and say how many
+    // were held back, rather than silently truncating the list.
+    const dataClasses = data.dataClasses || [];
+    let tagsHtml = dataClasses.slice(0, 6).map(dc =>
         `<span class="pii-tag">${escapeHtml(dc)}</span>`
     ).join('');
+    if (dataClasses.length > 6) {
+        tagsHtml += `<span class="pii-tag pii-tag-more">+${dataClasses.length - 6} more</span>`;
+    }
 
     let metaHtml = '';
     if (data.domain) metaHtml += `<span>${escapeHtml(data.domain)}</span>`;
-    if (data.date) metaHtml += ` · <span>${data.date}</span>`;
+    if (data.date) metaHtml += ` · <span>${escapeHtml(data.date)}</span>`;
     if (data.pwnCount) metaHtml += ` · <span>${formatNumber(data.pwnCount)} records</span>`;
-    if (data.category) metaHtml += ` · <span>${data.category}</span>`;
-    if (data.removalDifficulty) metaHtml += ` · Removal: ${data.removalDifficulty}`;
+    if (data.category) metaHtml += ` · <span>${escapeHtml(data.category)}</span>`;
+    if (data.removalDifficulty) metaHtml += ` · Removal: ${escapeHtml(data.removalDifficulty)}`;
 
     // A source that cannot lawfully be served must not offer a notice button.
-    // Drafting a DPDP erasure notice against a court judgment or an MCA filing
-    // produces a letter with no addressee in law — worse than useless, because
-    // it tells the user they have a remedy they do not have.
-    let actionsHtml = data.noNotice
-        ? `<span class="exposure-nonservable">Erasure not available — see basis</span>`
-        : `<button class="exposure-action-btn" onclick="generateNoticeForExposure('${escapeHtml(data.companyName || '')}', '${escapeHtml(data.companyEmail || '')}')">Generate Legal Notice</button>`;
-    if (data.optOutUrl) {
-        actionsHtml += `<a href="${escapeHtml(data.optOutUrl)}" target="_blank" class="exposure-action-btn danger">Opt-Out Link ↗</a>`;
+    let actionsHtml = '';
+    if (data.isCandidate) {
+        actionsHtml = `
+            <div class="cand-actions" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                <button class="cand-btn yes" onclick="confirmCandidateCard('${escapeHtml(data.exposureId)}', true, this)">✓ Yes, mine</button>
+                <button class="cand-btn no" onclick="confirmCandidateCard('${escapeHtml(data.exposureId)}', false, this)">✗ Not me</button>
+                ${data.profileUrl ? `<a href="${escapeHtml(data.profileUrl)}" target="_blank" class="cand-link" style="margin-left:6px;">View Profile ↗</a>` : ''}
+            </div>
+        `;
+    } else if (data.noNotice) {
+        actionsHtml = `<span class="exposure-nonservable">Erasure not available — see basis</span>`;
+        if (data.optOutUrl) {
+            actionsHtml += `<a href="${escapeHtml(data.optOutUrl)}" target="_blank" class="exposure-action-btn danger" style="margin-left:8px;">Opt-Out Link ↗</a>`;
+        }
+    } else {
+        actionsHtml = `<button class="exposure-action-btn" onclick="generateNoticeForExposure('${escapeHtml(data.companyName || '')}', '${escapeHtml(data.companyEmail || '')}')">Generate Legal Notice</button>`;
+        if (data.optOutUrl) {
+            actionsHtml += `<a href="${escapeHtml(data.optOutUrl)}" target="_blank" class="exposure-action-btn danger">Opt-Out Link ↗</a>`;
+        }
     }
 
     card.innerHTML = `
@@ -476,13 +646,51 @@ function createExposureCard(data) {
             <span class="exposure-title">${escapeHtml(data.title)}</span>
             <span class="severity-badge ${data.severity}">${data.severity}</span>
         </div>
-        <div class="exposure-meta">${data.type}${metaHtml ? ' · ' + metaHtml : ''}</div>
+        <div class="exposure-meta">${escapeHtml(data.type)}${metaHtml ? ' · ' + metaHtml : ''}</div>
+        ${data.description ? `<div class="exposure-desc">${escapeHtml(data.description)}</div>` : ''}
         <div class="exposure-tags">${tagsHtml}</div>
         <div class="exposure-actions">${actionsHtml}</div>
     `;
 
     return card;
 }
+
+window.confirmCandidateCard = async function(exposureId, isMine, btn) {
+    const card = btn.closest('.exposure-card');
+    try {
+        btn.disabled = true;
+        const profile = typeof agProfile === 'function' ? agProfile() : {};
+        const resp = await fetch('/api/agent/confirm', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ...profile, exposure_id: exposureId, is_mine: isMine }),
+        });
+        const data = await resp.json();
+        if (card) {
+            if (!isMine) {
+                card.style.transition = 'all 0.3s ease';
+                card.style.opacity = '0';
+                card.style.transform = 'scale(0.95)';
+                setTimeout(() => card.remove(), 300);
+            } else {
+                card.classList.remove('severity-low');
+                card.classList.add('severity-medium');
+                delete card.dataset.candidate;
+                const meta = card.querySelector('.exposure-meta');
+                if (meta) meta.textContent = 'Confirmed Account · DPDP s.12 Erasure Available';
+                const actions = card.querySelector('.exposure-actions');
+                if (actions) actions.innerHTML = `<span class="ev-badge ev-verified" style="color:var(--accent-success);font-weight:700;">✓ Confirmed as yours</span>`;
+            }
+        }
+        if (data && data.state) {
+            syncAgentToExposuresAndDashboard({ state: data.state });
+        }
+        showToast(isMine ? 'Account confirmed and added to removal plan' : 'Account dismissed as not yours', 'success');
+    } catch(e) {
+        btn.disabled = false;
+        showToast('Could not update attribution: ' + e.message, 'error');
+    }
+};
 
 function initExposureFilters() {
     document.querySelectorAll('.filter-btn').forEach(btn => {
@@ -496,6 +704,10 @@ function initExposureFilters() {
                     card.style.display = '';
                 } else if (['critical', 'high', 'medium', 'low'].includes(filter)) {
                     card.style.display = card.dataset.severity === filter ? '' : 'none';
+                } else if (filter === 'candidates') {
+                    card.style.display = card.dataset.candidate === 'true' ? '' : 'none';
+                } else if (filter === 'indian') {
+                    card.style.display = card.dataset.indian === 'true' ? '' : 'none';
                 } else {
                     card.style.display = card.dataset.source === filter ? '' : 'none';
                 }
@@ -856,14 +1068,14 @@ function agProfile() {
         country: agEl('ag-country').value,
         declared_accounts: (agEl('ag-declared')?.value || '').trim(),
         password: (agEl('ag-password')?.value || ''),
-        sandbox: !!agEl('ag-sandbox')?.checked,
+        sandbox: false,
         known_usernames: (agEl('ag-usernames')?.value || '').trim(),
         alt_emails: (agEl('ag-altemails')?.value || '').trim(),
         alt_phones: (agEl('ag-altphones')?.value || '').trim(),
         date_of_birth: (agEl('ag-dob')?.value || '').trim(),
         upi_id: (agEl('ag-upi')?.value || '').trim(),
         websites: (agEl('ag-websites')?.value || '').trim(),
-        search_guessed_handles: !!agEl('ag-guessed')?.checked,
+        search_guessed_handles: agEl('ag-guess') ? agEl('ag-guess').checked : true,
         aadhaar: (agEl('ag-aadhaar')?.value || '').trim(),
         pan: (agEl('ag-pan')?.value || '').trim(),
     };
@@ -1155,8 +1367,13 @@ function updateDashboardFromAgent(st, riskScore) {
     const s = st.summary || {};
     const exposures = (st.exposures || []).filter(e => e.status !== 'not_mine');
     const breaches = exposures.filter(e => e.source_type === 'breach').length;
-    const brokers = exposures.filter(e => e.source_type === 'data_broker' || e.source_type === 'public_profile').length;
+    const brokers = exposures.filter(e => e.source_type === 'data_broker'
+        || e.source_type === 'public_profile' || e.source_type === 'open_web').length;
     const pastes = exposures.filter(e => e.source_type === 'paste').length;
+    // An info-stealer infection is neither a company breach nor a broker record.
+    // Folding it into "Breach Incidents" would bury the one number on this page
+    // that means "act today", so it gets a counter of its own.
+    const infostealers = exposures.filter(e => e.source_type === 'infostealer').length;
 
     const score = Math.round(riskScore != null ? riskScore : (s.overall_risk || 0));
     const scoreEl = document.getElementById('risk-score-value');
@@ -1168,6 +1385,10 @@ function updateDashboardFromAgent(st, riskScore) {
     if (brEl) brEl.textContent = brokers;
     const pEl = document.getElementById('paste-count');
     if (pEl) pEl.textContent = pastes;
+    const iEl = document.getElementById('infostealer-count');
+    if (iEl) iEl.textContent = infostealers;
+    const iCard = document.getElementById('stat-infostealer');
+    if (iCard) iCard.classList.toggle('stat-alarm', infostealers > 0);
 
     const badge = document.getElementById('risk-level-badge');
     if (badge) {
@@ -1188,6 +1409,10 @@ function updateDashboardFromAgent(st, riskScore) {
     const recsList = document.getElementById('recommendations-list');
     if (recsCard && recsList) {
         const recs = [];
+        // Stolen live credentials come before anything a legal notice can fix.
+        if (infostealers > 0) {
+            recs.push(`🚨 Malware Infection: ${infostealers} infected machine record${infostealers > 1 ? 's' : ''} carried your address — every password saved in that browser was stolen. Change them all (email and banking first), sign out of all sessions everywhere, and enable two-factor authentication.`);
+        }
         const plan = st.removal_plan;
         if (plan) {
             if (plan.self_serve_count > 0) {
@@ -1217,9 +1442,21 @@ function renderAgentExposures(st) {
     container.innerHTML = '';
 
     const cards = [];
+    // An info-stealer infection outranks every other finding on this page — it
+    // is live credentials in criminal hands, not a historic record — so it is
+    // built by its own card builder and placed at the top of the list. Handling
+    // it before the badge ladder below also means it can never fall through to
+    // the generic "Data Broker" default.
+    const urgent = [];
     const exposures = (st.exposures || []).filter(e => e.status !== 'not_mine');
 
+    // 1. Render identity-attributed findings & candidate accounts
     exposures.forEach(exp => {
+        if (exp.source_type === 'infostealer') {
+            urgent.push(createInfostealerCard(exp));
+            return;
+        }
+
         const isCand = exp.status === 'unconfirmed';
         const d = exp.detail || {};
         const isNotServable = exp.evidence_class === 'judicial_record' || exp.evidence_class === 'statutory_publication';
@@ -1228,38 +1465,88 @@ function renderAgentExposures(st) {
         let typeBadge = 'Data Broker';
         if (exp.source_type === 'breach') {
             srcType = 'breach';
-            typeBadge = 'Verified Breach';
+            // Name the corpus that confirmed it. "Verified Breach · XposedOrNot"
+            // tells the user which dataset to go and check; a bare label does not.
+            typeBadge = d.source_dataset ? `Verified Breach · ${d.source_dataset}` : 'Verified Breach';
         } else if (exp.source_type === 'paste') {
             srcType = 'paste';
             typeBadge = 'Dark Web Leak';
         } else if (exp.source_type === 'public_profile') {
             srcType = 'broker';
             typeBadge = isCand ? 'Candidate Account (Unconfirmed)' : 'Public Profile';
+        } else if (exp.source_type === 'open_web') {
+            // Found by searching the open web, then confirmed by fetching the
+            // page and finding the identifier on it. Say which identifier, so
+            // the badge carries the evidence rather than a generic label.
+            srcType = 'breach';
+            const what = (d.identifier_type || 'identifier').replace('_', ' ');
+            typeBadge = `Open Web · your ${what} found on this page`;
         }
 
         let domain = d.url ? d.url.replace(/^https?:\/\//, '').split('/')[0] : (d.website || exp.source_name);
         const card = createExposureCard({
+            exposureId: exp.id,
             title: isCand ? `${exp.source_name} (@${exp.record_id})` : exp.source_name,
             source: srcType,
             severity: exp.severity || (isCand ? 'low' : 'medium'),
             domain: domain,
             date: (exp.discovered_at || '').split('T')[0] || (d.date_found ? d.date_found.split('T')[0] : ''),
             pwnCount: d.pwn_count,
-            dataClasses: exp.data_found || [],
+            dataClasses: fieldLabels(exp.data_found || []),
+            // The breach datasets carry their own prose and industry label; both
+            // say more about what actually happened than the source name does.
+            description: exp.source_type === 'breach' ? (d.description || '') : '',
+            category: exp.source_type === 'breach' && d.industry ? `Industry: ${d.industry}` : '',
             type: typeBadge,
             companyName: exp.source_name,
             companyEmail: d.privacy_email || '',
-            removalDifficulty: d.removal_difficulty || (exp.status === 'removed' ? 'Removed' : (isCand ? 'Requires Confirmation' : 'Standard')),
+            removalDifficulty: d.removal_difficulty || (exp.status === 'removed' ? 'Removed' : (isCand ? 'Requires Attribution' : 'Standard')),
             optOutUrl: d.url || d.removal_url || d.opt_out_url || '',
-            noNotice: isNotServable || isCand,
+            profileUrl: d.url || '',
+            noNotice: isNotServable,
+            isCandidate: isCand,
         });
         cards.push(card);
     });
 
-    if (cards.length === 0) {
+    // 2. Render all 51 monitored Indian fiduciaries & threat surface
+    if (window.__indianSources?.length) {
+        const rank = { critical: 0, high: 1, medium: 2, low: 3 };
+        const erasable = {
+            dpdp_erasure: 'DPDP s.12 — erasure available',
+            dpdp_limited: 'Retention duty applies — dispute/correct only',
+            statutory_publication: 'Statutory publication — erasure does not lie',
+            judicial_record: 'Court record — needs a court application'
+        };
+        const activeNames = new Set(exposures.map(e => (e.source_name || '').toLowerCase()));
+
+        [...window.__indianSources]
+            .filter(src => !activeNames.has((src.name || '').toLowerCase()))
+            .sort((a, b) => (rank[a.severity] ?? 9) - (rank[b.severity] ?? 9))
+            .forEach(src => {
+                const servable = src.legal_class === 'dpdp_erasure';
+                cards.push(createExposureCard({
+                    title: src.name,
+                    source: 'broker',
+                    severity: src.severity || 'medium',
+                    domain: src.website,
+                    category: `${src.category} · India`,
+                    removalDifficulty: erasable[src.legal_class] || src.legal_class,
+                    optOutUrl: src.removal_url,
+                    type: servable ? 'Indian Registry · Servable' : 'Indian Registry · Statutory Protection',
+                    companyName: src.name,
+                    companyEmail: '',
+                    noNotice: !servable,
+                    isIndian: true,
+                }));
+            });
+    }
+
+    const ordered = urgent.concat(cards);
+    if (ordered.length === 0) {
         container.innerHTML = `<div class="glass-card empty-state"><div class="empty-icon">✅</div><h3>No Significant Exposures</h3><p>No critical data exposures were found for the provided identity.</p></div>`;
     } else {
-        cards.forEach(c => container.appendChild(c));
+        ordered.forEach(c => container.appendChild(c));
     }
 }
 

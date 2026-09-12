@@ -55,7 +55,7 @@ CREATE TABLE IF NOT EXISTS exposures (
     id               TEXT PRIMARY KEY,
     user_id          TEXT,
     run_id           TEXT,
-    source_type      TEXT,   -- breach | data_broker | paste | public_profile
+    source_type      TEXT,   -- breach | data_broker | paste | public_profile | open_web
     source_name      TEXT,
     source_id        TEXT,   -- broker slug / breach name
     record_id        TEXT,   -- id of the record inside that source (for removal + verify)

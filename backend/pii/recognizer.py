@@ -112,8 +112,12 @@ def _compile_patterns():
     patterns = [
         # ── Indian Aadhaar Number (12 digits, starts with 2-9) ──
         # Formats: 2345 6789 0123, 234567890123
+        # A leading '+' marks a telephone country code, never a national ID:
+        # '+91' followed by a 10-digit mobile is 12 digits that clear Verhoeff
+        # about 10% of the time, so without this guard one Indian mobile in ten
+        # is reported as somebody's Aadhaar number.
         (
-            r'\b([2-9]\d{3})\s?(\d{4})\s?(\d{4})\b',
+            r'(?<![+\d])\b([2-9]\d{3})\s?(\d{4})\s?(\d{4})\b',
             "AADHAAR",
             lambda m: verhoeff_validate(m.group(1) + m.group(2) + m.group(3)),
             0.85,
@@ -299,9 +303,16 @@ class PIIRecognizer:
                 span = match.end() - match.start()
                 candidates.append((algorithmically_valid, span, int(confidence * 1000), entity))
 
-        # Strongest evidence wins its span: checksum-validated first, then the
-        # longer match, then the more confident one.
-        candidates.sort(key=lambda c: (-c[0], -c[1], -c[2], c[3].start))
+        # Strongest evidence wins its span: the longer match first, then
+        # checksum-validated, then the more confident one.
+        #
+        # Span has to outrank the checksum flag. Candidates whose validator
+        # failed were dropped above, so this flag only separates "carries a
+        # check digit" from "carries none" — and a 12-digit checksum clears by
+        # chance once in ten. Ranking the flag first let a chance Verhoeff hit
+        # inside a longer phone number outrank the phone match that explained
+        # the whole string.
+        candidates.sort(key=lambda c: (-c[1], -c[0], -c[2], c[3].start))
 
         accepted: list[PIIEntity] = []
         claimed: list[tuple[int, int]] = []

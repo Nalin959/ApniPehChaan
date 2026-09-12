@@ -9,6 +9,102 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/styles.css">
+    <style>
+    /* ── Info-stealer infections & enriched breach records ───────────────────
+       Same tokens as styles.css. An info-stealer finding is the most severe
+       thing this product can report, so its card takes the full width of the
+       exposure grid, sits on a red ground and keeps a live pulse on its rail:
+       it must be impossible to scroll past. */
+    .exposure-card.infostealer-card {
+        grid-column: 1 / -1;
+        border-color: rgba(239, 68, 68, 0.45);
+        background: linear-gradient(180deg, rgba(239, 68, 68, 0.10), var(--bg-glass) 55%);
+        box-shadow: 0 0 32px rgba(239, 68, 68, 0.16);
+    }
+    .exposure-card.infostealer-card::before {
+        background: var(--accent-danger);
+        height: 4px;
+        animation: stealerPulse 2s ease-in-out infinite;
+    }
+    @keyframes stealerPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+    .infostealer-card .exposure-title { color: #fecaca; font-size: 1.02rem; }
+
+    .stealer-lede {
+        font-size: 0.86rem; line-height: 1.55; color: #fca5a5;
+        border-left: 2px solid rgba(239, 68, 68, 0.5);
+        padding-left: 10px; margin-bottom: 12px;
+    }
+    .stealer-machine {
+        background: rgba(6, 11, 22, 0.55);
+        border: 1px solid rgba(239, 68, 68, 0.2);
+        border-radius: var(--radius-sm);
+        padding: 12px 14px; margin-bottom: 10px;
+    }
+    .stealer-row {
+        display: flex; gap: 12px; justify-content: space-between;
+        align-items: baseline; font-size: 0.78rem; padding: 3px 0;
+    }
+    .stealer-row-label { color: var(--text-tertiary); white-space: nowrap; }
+    .stealer-row-value {
+        color: var(--text-primary); font-family: var(--font-mono);
+        font-size: 0.74rem; text-align: right; word-break: break-all;
+    }
+    .stealer-creds { margin-top: 10px; }
+    .stealer-creds-label {
+        display: block; font-size: 0.66rem; text-transform: uppercase;
+        letter-spacing: 0.07em; color: var(--text-tertiary); margin-bottom: 6px;
+    }
+    .stealer-creds-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+    .stealer-masked {
+        font-family: var(--font-mono); font-size: 0.7rem; padding: 3px 8px;
+        border-radius: var(--radius-sm); background: rgba(239, 68, 68, 0.1);
+        border: 1px solid rgba(239, 68, 68, 0.22); color: #fca5a5;
+    }
+    .stealer-fix {
+        background: rgba(239, 68, 68, 0.08);
+        border: 1px solid rgba(239, 68, 68, 0.22);
+        border-radius: var(--radius-sm); padding: 12px 14px; margin-top: 4px;
+    }
+    .stealer-fix-title {
+        font-family: var(--font-display); font-weight: 700; font-size: 0.8rem;
+        color: #fecaca; text-transform: uppercase; letter-spacing: 0.06em;
+        margin-bottom: 8px;
+    }
+    .stealer-steps { margin: 0; padding-left: 18px; }
+    .stealer-steps li {
+        font-size: 0.82rem; line-height: 1.5; color: var(--text-secondary);
+        margin-bottom: 5px;
+    }
+    .stealer-nonotice {
+        display: inline-block; padding: 7px 12px; border-radius: var(--radius-sm);
+        background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.28);
+        color: #fca5a5; font-size: 0.76rem; font-weight: 600;
+    }
+
+    /* Breach prose from the dataset, clamped so one verbose record cannot push
+       the rest of the grid off the screen. */
+    .exposure-desc {
+        font-size: 0.8rem; line-height: 1.5; color: var(--text-secondary);
+        margin-bottom: 10px; display: -webkit-box; -webkit-line-clamp: 3;
+        -webkit-box-orient: vertical; overflow: hidden;
+    }
+    .pii-tag.pii-tag-more {
+        background: rgba(148, 163, 184, 0.1); color: var(--text-tertiary);
+        border-color: rgba(148, 163, 184, 0.2);
+    }
+    .pii-tag.pii-tag-danger {
+        background: rgba(239, 68, 68, 0.12); color: #fca5a5;
+        border-color: rgba(239, 68, 68, 0.25);
+    }
+
+    /* Dashboard counter for infections. */
+    .stealer-icon { background: rgba(239, 68, 68, 0.12); color: var(--accent-danger); }
+    .stat-card.stat-alarm {
+        border-color: rgba(239, 68, 68, 0.45);
+        box-shadow: 0 0 24px rgba(239, 68, 68, 0.14);
+    }
+    .stat-card.stat-alarm .stat-value { color: var(--accent-danger); }
+    </style>
 </head>
 <body>
     <!-- ═══ Ambient Background Particles ═══ -->
@@ -113,9 +209,20 @@
                             already checked against every service that accepts one — but no
                             username search does, and nothing else about you is unique.
                             <code>nalinchamp@gmail.com</code> and <code>nalinchamp@yahoo.com</code>
-                            are different people, so we will not guess <code>nalinchamp</code> is
-                            you. Write <code>site:handle</code> to claim one namespace outright.
+                            are different people, so a handle we guess is only ever shown as
+                            an unconfirmed <strong>candidate</strong>, never counted as yours.
+                            Write <code>site:handle</code> to claim one namespace outright.
                         </p>
+                        <label class="agent-check">
+                            <input type="checkbox" id="ag-guess" checked>
+                            Also search handles derived from my email / UPI local part
+                            <span class="agent-hint-inline">
+                                Widens the sweep so a scan still looks when you declare no
+                                handle. Anything found this way stays a candidate for your
+                                confirmation — it never enters your risk score or removal plan.
+                                Your legal name is never used.
+                            </span>
+                        </label>
                         <details class="ident-more">
                             <summary>More identifiers <span>(optional — each one stops strangers being flagged as you)</span></summary>
                             <label>Other emails<input type="text" id="ag-altemails" placeholder="old@work.com, me@college.edu" autocomplete="off"></label>
@@ -153,14 +260,6 @@
                         The password never leaves this machine: only the first 5 characters of its
                         SHA-1 are sent, and the match is done locally.
                     </p>
-                    <label class="agent-toggle">
-                        <input type="checkbox" id="ag-guessed">
-                        <span>Also guess handles from my email and name <em>(neither is unique — every hit stays unconfirmed)</em></span>
-                    </label>
-                    <label class="agent-toggle">
-                        <input type="checkbox" id="ag-sandbox">
-                        <span>Enable demo sandbox <em>(adds synthetic records — not real findings)</em></span>
-                    </label>
                     <button class="agent-btn primary" id="ag-run">Deploy Privacy Agent</button>
                     <button class="agent-btn ghost" id="ag-reset">Reset this identity</button>
                     <div class="agent-disclosure" id="ag-disclosure"></div>
@@ -258,6 +357,15 @@
                         <div class="stat-label">Privacy Risk Score</div>
                     </div>
                     <div class="stat-badge" id="risk-level-badge">Not Scanned</div>
+                </div>
+                <div class="stat-card" id="stat-infostealer">
+                    <div class="stat-icon stealer-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l7 4v6c0 5-3 8-7 10-4-2-7-5-7-10V6l7-4z"/><path d="M9.5 10.5l5 5m0-5l-5 5"/></svg>
+                    </div>
+                    <div class="stat-content">
+                        <div class="stat-value" id="infostealer-count">0</div>
+                        <div class="stat-label">Stealer Infections</div>
+                    </div>
                 </div>
                 <div class="stat-card">
                     <div class="stat-icon breach-icon">
@@ -427,7 +535,9 @@
                 <button class="filter-btn" data-filter="high">High</button>
                 <button class="filter-btn" data-filter="medium">Medium</button>
                 <button class="filter-btn" data-filter="breach">Breaches</button>
+                <button class="filter-btn" data-filter="infostealer">Stealer Malware</button>
                 <button class="filter-btn" data-filter="broker">Brokers</button>
+                <button class="filter-btn" data-filter="indian">Indian Sources</button>
                 <button class="filter-btn" data-filter="paste">Dark Web</button>
             </div>
 

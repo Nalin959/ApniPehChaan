@@ -100,6 +100,11 @@ class IdentityMatch:
     raw_score: float = 0.0       # similarity before corroboration is applied
     corroboration: float = 1.0   # discount for thin evidence (see _corroboration)
     evidence_note: str = ""
+    # Whether anything unique to one person matched. Without it a record is
+    # never attributed, however many shared attributes agree.
+    has_unique_identifier: bool = False
+    # Scored well, but on shared attributes only — show it, do not act on it.
+    needs_confirmation: bool = False
 
     def to_dict(self):
         return {
@@ -111,6 +116,8 @@ class IdentityMatch:
             "matched_fields": self.matched_fields,
             "unmatched_fields": self.unmatched_fields,
             "is_match": self.is_match,
+            "has_unique_identifier": self.has_unique_identifier,
+            "needs_confirmation": self.needs_confirmation,
             "confidence_label": self.confidence_label,
         }
 
@@ -130,6 +137,11 @@ class IdentityResolver:
         "name": 0.15,
         "aadhaar": 0.15,
         "pan": 0.10,
+        # A date of birth was absent from this table, so it was never compared
+        # at all: a record could agree on it and the agreement counted for
+        # nothing. It is the field that most often separates two people who
+        # share a name, which is exactly the case this engine exists to decide.
+        "date_of_birth": 0.15,
         "address": 0.05,
         "ip_address": 0.05,
         "upi": 0.05,
@@ -139,8 +151,13 @@ class IdentityResolver:
     # Identifiers unique enough to identify a person on their own.
     STRONG_IDENTIFIERS = {"email", "phone", "aadhaar", "pan", "upi"}
 
+    # A date of birth is not unique — roughly one person in 36,500 shares any
+    # given one — so it is not a STRONG identifier and cannot attribute a record
+    # alone. It is a powerful corroborator next to a name, and is treated as one.
+
     # Thresholds for field-level match
-    EXACT_FIELDS = {"email", "phone", "aadhaar", "pan", "upi", "ip_address"}
+    EXACT_FIELDS = {"email", "phone", "aadhaar", "pan", "upi", "ip_address",
+                    "date_of_birth"}
     FUZZY_FIELDS = {"name", "address", "city"}
     FUZZY_THRESHOLD = 0.80
 
@@ -208,12 +225,24 @@ class IdentityResolver:
         else:
             label = "unlikely"
 
+        # Attribution requires a unique identifier. Name + city is not one:
+        # "Rahul Sharma" in Mumbai is thousands of people, and scoring that as a
+        # match is how the agent ends up demanding erasure of a stranger's
+        # record. Evidence that rests only on shared attributes is surfaced for
+        # the user to confirm, never acted on by itself — the same rule the
+        # account attributor and the open-web search apply.
+        has_unique = any(f in self.STRONG_IDENTIFIERS for f in matched_fields)
+        is_match = bool(has_unique and overall_score >= 0.45)
+        needs_confirmation = bool(not has_unique and overall_score >= 0.45)
+
         return IdentityMatch(
             overall_score=overall_score,
             field_scores=field_scores,
             matched_fields=matched_fields,
             unmatched_fields=unmatched_fields,
-            is_match=overall_score >= 0.45,
+            is_match=is_match,
+            has_unique_identifier=has_unique,
+            needs_confirmation=needs_confirmation,
             confidence_label=label,
             raw_score=raw_score,
             corroboration=corroboration,
@@ -251,8 +280,29 @@ class IdentityResolver:
         if field in ("email", "upi"):
             return value.lower()
         elif field == "phone":
-            # Strip country code and spaces
-            return re.sub(r'[\s\-\+]', '', value).lstrip('0').lstrip('91')
+            # Compare on the last ten digits — the subscriber number — which is
+            # what identifies an Indian mobile however it was written.
+            #
+            # This previously read .lstrip('0').lstrip('91'), which strips
+            # CHARACTERS rather than a prefix. It ate every leading 9 and 1 in
+            # the number: 9111111111 was reduced to the empty string and so
+            # matched nothing, while 9198765432 and 8765432 — two different
+            # numbers — both collapsed to 8765432 and matched each other.
+            digits = re.sub(r'\D', '', value)
+            return digits[-10:] if len(digits) >= 10 else digits
+        elif field == "date_of_birth":
+            # One date, many renderings: 1994-03-11, 11/03/1994, 11-03-1994.
+            # Compared as an ISO date so the format cannot decide the answer.
+            v = value.strip()
+            m = re.match(r'^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$', v)
+            if m:
+                y, mo, d = m.groups()
+            else:
+                m = re.match(r'^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$', v)
+                if not m:
+                    return v.lower()
+                d, mo, y = m.groups()
+            return f"{y}-{int(mo):02d}-{int(d):02d}"
         elif field in ("aadhaar", "pan"):
             return re.sub(r'\s', '', value).upper()
         elif field == "name":

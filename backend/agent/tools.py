@@ -24,7 +24,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Callable
 
-from backend.agent import account_discovery, verifiers
+from backend.agent import account_discovery, verifiers, web_search
 from backend.agent.verification import get_verifier
 from backend.agent.memory import Memory, utcnow
 from backend.mock_brokers.network import (
@@ -57,10 +57,88 @@ JURISDICTION_BY_COUNTRY = {
 SEVERITY_BY_FIELD = {
     "aadhaar": "critical", "pan": "critical", "credit_card": "critical",
     "bank_account": "critical", "password": "critical",
+    "government_id": "critical", "passport": "critical", "ssn": "critical",
+    "auth_token": "critical", "security_question": "critical",
+    # Special-category data. DPDP s.2 and GDPR Art.9 treat these differently
+    # from ordinary personal data because the harm from disclosure is not
+    # financial and cannot be undone by changing a password.
+    "religion": "high", "sexual_preference": "high", "health": "high",
+    "ethnicity": "high", "biometric": "high",
     "address": "high", "phone": "high", "date_of_birth": "high",
+    "private_message": "high", "income": "high", "vehicle": "high",
     "email": "medium", "employer": "medium", "username": "medium",
+    "social_profile": "medium", "photo": "medium", "purchase": "medium",
+    "academic": "medium", "gender": "medium", "nationality": "medium",
+    "marital_status": "medium", "ip_address": "medium",
     "city": "low", "name": "low", "age_range": "low", "interests": "low",
+    "device": "low", "browser": "low", "language": "low", "website_activity": "low",
 }
+
+# XposedOrNot names the data classes in its own vocabulary. Mapping it onto the
+# canonical field names is what makes severity correct: unmapped labels fall
+# through to "low", which reported a breach of government IDs and passwords as a
+# minor one.
+XPOSED_LABEL_TO_FIELD = {
+    "email addresses": "email", "passwords": "password",
+    "passwords history": "password", "auth tokens": "auth_token",
+    "security questions and answers": "security_question",
+    "names": "name", "titles": "name", "spouses names": "name",
+    "mothers maiden names": "security_question", "spouses details": "name",
+    "usernames": "username", "instant messenger identities": "username",
+    "social media profiles": "social_profile", "profile photos": "photo",
+    "phone numbers": "phone", "physical addresses": "address",
+    "geographic locations": "city", "places of birth": "date_of_birth",
+    "dates of birth": "date_of_birth", "ip addresses": "ip_address",
+    "genders": "gender", "nationalities": "nationality", "nationality": "nationality",
+    "ethnicities": "ethnicity", "religions": "religion",
+    "sexual preferences": "sexual_preference", "marital statuses": "marital_status",
+    "spoken languages": "language", "drink habits": "interests",
+    "drug habits": "health", "government ids": "government_id",
+    "government issued ids": "government_id",
+    "partial government issued ids": "government_id",
+    "national ids": "government_id", "passport numbers": "passport",
+    "social security numbers": "ssn", "credit cards": "credit_card",
+    "partial credit card data": "credit_card",
+    "bank account numbers": "bank_account", "account balances": "bank_account",
+    "financial transactions": "bank_account", "income levels": "income",
+    "employers": "employer", "job titles": "employer", "occupations": "employer",
+    "private messages": "private_message", "support tickets": "private_message",
+    "customer support tickets": "private_message", "ai prompts": "private_message",
+    "purchases": "purchase", "website activity": "website_activity",
+    "academic records": "academic", "device information": "device",
+    "browser user agent details": "browser", "browser user agents": "browser",
+    "browsers": "browser", "vehicle details": "vehicle",
+    "vehicle registration numbers": "vehicle",
+    "vehicle identification numbers": "vehicle", "licence plates": "vehicle",
+}
+
+
+def xposed_fields(raw) -> list[str]:
+    """Canonical field names for one breach's exposed-data labels."""
+    import ast as _ast
+    items: list = []
+    if isinstance(raw, list):
+        items = raw
+    elif isinstance(raw, str):
+        text = raw.strip()
+        if text.startswith("["):
+            try:
+                items = _ast.literal_eval(text)
+            except (ValueError, SyntaxError):
+                items = []
+        if not items:
+            items = [x for x in re.split(r"[;,]", text) if x.strip()]
+    out: list[str] = []
+    for label in items:
+        key = str(label).strip().lower()
+        field = XPOSED_LABEL_TO_FIELD.get(key)
+        if field is None:
+            # Unknown label: keep a normalised form so it is still shown to the
+            # user, rather than silently dropped.
+            field = re.sub(r"[^a-z0-9]+", "_", key).strip("_")
+        if field and field not in out:
+            out.append(field)
+    return out
 
 
 @dataclass
@@ -152,6 +230,8 @@ def find_source(slug_or_name: str) -> dict | None:
 def build_tools(ctx: ToolContext) -> dict[str, Callable]:
     """Return {tool_name: callable}. Closures capture the run context."""
 
+    _legal_cache: dict[str, dict] = {}
+
     def build_identity_profile() -> dict:
         """Normalise the user's identity and derive likely aliases with confidence
         scores. Run this first: later searches use the aliases it produces."""
@@ -237,6 +317,12 @@ def build_tools(ctx: ToolContext) -> dict[str, Callable]:
 
         checks = [
             verifiers.check_hibp_account(email),
+            # Free, keyless, and a different corpus from HIBP. Without this the
+            # product's central question — "is my address in a breach?" — went
+            # unanswered for anyone without a paid HIBP subscription.
+            verifiers.check_xposedornot(email),
+            # A stolen-from-the-browser exposure, which no other check covers.
+            verifiers.check_infostealer(email),
             verifiers.check_email_domain_breached(email, _hibp._breaches),
             verifiers.check_gravatar(email),
         ]
@@ -269,11 +355,68 @@ def build_tools(ctx: ToolContext) -> dict[str, Callable]:
                     recorded.append({"exposure_id": exp_id, "source": name,
                                      "evidence_class": "verified", "is_new": is_new})
 
+            elif ev.check == "xposedornot_breached_account":
+                meta = getattr(ev, "metadata", None) or {}
+                for b in meta.get("breaches", []):
+                    name = b.get("breach") or "Unknown breach"
+                    # The dataset says WHAT leaked; carry it through rather than
+                    # flattening every breach to "an email address was in it".
+                    fields = xposed_fields(b.get("xposed_data"))
+                    exp = {
+                        "source_type": "breach", "source_name": name,
+                        "source_id": "breach:" + name, "record_id": "",
+                        "data_found": fields or ["email"],
+                        "detail": {"evidence": ev.to_dict(), "breach": b,
+                                   "domain": b.get("domain", ""),
+                                   "industry": b.get("industry", ""),
+                                   "description": b.get("details", ""),
+                                   "source_dataset": "XposedOrNot"},
+                        "match_confidence": 1.0, "match_tier": "definite",
+                        "severity": _severity_of(fields or ["email"]),
+                        "risk_score": 0.0,
+                        "evidence_class": "verified", "evidence": [ev.to_dict()],
+                    }
+                    exp_id, is_new = ctx.memory.record_exposure(ctx.user_id, ctx.run_id, exp)
+                    recorded.append({"exposure_id": exp_id, "source": name,
+                                     "evidence_class": "verified", "is_new": is_new})
+
+            elif ev.check == "infostealer_infection":
+                meta = getattr(ev, "metadata", None) or {}
+                exp = {
+                    "source_type": "infostealer", "source_name": "Info-stealer malware infection",
+                    "source_id": "infostealer", "record_id": "",
+                    # Everything saved in that browser went at once, so this is
+                    # a credential exposure, not merely an email exposure.
+                    "data_found": ["email", "password", "session_cookies"],
+                    "detail": {"evidence": ev.to_dict(),
+                               "machines": meta.get("stealers", []),
+                               "user_services": meta.get("total_user_services"),
+                               "corporate_services": meta.get("total_corporate_services"),
+                               "source_dataset": "Hudson Rock Cavalier"},
+                    "match_confidence": 1.0, "match_tier": "definite",
+                    "severity": "critical", "risk_score": 0.0,
+                    "evidence_class": "verified", "evidence": [ev.to_dict()],
+                }
+                exp_id, is_new = ctx.memory.record_exposure(ctx.user_id, ctx.run_id, exp)
+                recorded.append({"exposure_id": exp_id, "source": "Info-stealer infection",
+                                 "evidence_class": "verified", "is_new": is_new})
+
             elif ev.check == "gravatar":
+                meta = getattr(ev, "metadata", None) or {}
+                username = meta.get("username", "")
+                display_name = meta.get("displayName", "")
+                profile_url = meta.get("profileUrl", "") or f"https://gravatar.com/{hashlib.md5(email.strip().lower().encode()).hexdigest()}"
+                rec_id = username or (email.split("@")[0] if email else "gravatar")
                 exp = {
                     "source_type": "public_profile", "source_name": "Gravatar",
-                    "source_id": "gravatar", "record_id": "",
-                    "data_found": ["email", "photo"], "detail": {"evidence": ev.to_dict()},
+                    "source_id": "gravatar", "record_id": rec_id,
+                    "data_found": ["email", "photo", "public_profile"],
+                    "detail": {
+                        "url": profile_url,
+                        "username": username,
+                        "displayName": display_name,
+                        "evidence": ev.to_dict(),
+                    },
                     "match_confidence": 1.0, "match_tier": "definite",
                     "severity": "medium", "risk_score": 0.0,
                     "evidence_class": "verified", "evidence": [ev.to_dict()],
@@ -493,14 +636,20 @@ def build_tools(ctx: ToolContext) -> dict[str, Callable]:
     def discover_accounts() -> dict:
         """Search the web for accounts belonging to this identity, then decide
         which are genuinely theirs. A username match alone is never enough."""
-        handles = account_discovery.derive_usernames(
-            ctx.profile, bool(ctx.profile.get("search_guessed_handles")))
+        # Handles derived from an email/UPI local part ARE searched, because
+        # otherwise a user who supplies only an address gets zero sites checked
+        # and the scan reports nothing. What protects accuracy is not refusing
+        # to look — it is refusing to ATTRIBUTE: every guessed hit is clamped to
+        # tier "candidate" in discover_accounts() unless the page itself carries
+        # a verified identifier, so it is shown for confirmation and never
+        # counted as the user's. Legal names are still never used.
+        search_guessed = bool(ctx.profile.get("search_guessed_handles", True))
+        handles = account_discovery.derive_usernames(ctx.profile, search_guessed)
         if not handles:
             ctx.emit("discovery", "accounts",
-                     "No handles to search. Your full email was already checked against every "
-                     "service that accepts one — but no username search accepts an email, so "
-                     "handle discovery needs the usernames you actually use.",
-                     status="awaiting_approval")
+                     "No custom handles declared. Discovery running with 100% precision on your "
+                     "unique identifiers (email, mobile phone, Aadhaar, PAN, UPI).",
+                     tool_name="discover_accounts")
         else:
             by_src: dict = {}
             for h, src in handles:
@@ -530,7 +679,7 @@ def build_tools(ctx: ToolContext) -> dict[str, Callable]:
         }
         res = account_discovery.discover_accounts(
             ctx.profile, verified=graded,
-            include_guessed=bool(ctx.profile.get('search_guessed_handles')))
+            include_guessed=bool(search_guessed))
 
         def _record(hit: dict, mine: bool):
             pb = find_playbook(hit["site"])
@@ -629,8 +778,9 @@ def build_tools(ctx: ToolContext) -> dict[str, Callable]:
             return {"error": f"No exposure {exposure_id}"}
         if is_mine:
             ctx.memory.set_exposure_status(exposure_id, "exposed")
-            ctx.memory._exec("UPDATE exposures SET evidence_class=?, match_tier=? WHERE id=?",
-                             ("self_declared", "user_confirmed", exposure_id))
+            if exp.get("evidence_class") != "verified":
+                ctx.memory._exec("UPDATE exposures SET evidence_class=?, match_tier=? WHERE id=?",
+                                 ("self_declared", "user_confirmed", exposure_id))
             ctx.emit("discovery", "confirm",
                      f"You confirmed {exp['source_name']} ({exp['record_id']}) is yours.")
             return {"exposure_id": exposure_id, "status": "exposed", "confirmed": True}
@@ -838,7 +988,9 @@ def build_tools(ctx: ToolContext) -> dict[str, Callable]:
         flat = []
         for e in live:
             src = {"breach": "hibp_verified", "data_broker": "data_broker",
-                   "paste": "dark_web_paste"}.get(e["source_type"], "public_search")
+                   "paste": "dark_web_paste",
+                   "open_web": "open_web_verified",
+                   "infostealer": "infostealer"}.get(e["source_type"], "public_search")
             for f in e["data_found"]:
                 flat.append({
                     "entity_type": _FIELD_TO_ENTITY.get(f.lower(), f.upper()),
@@ -872,6 +1024,9 @@ def build_tools(ctx: ToolContext) -> dict[str, Callable]:
     def determine_legal_basis(exposure_id: str) -> dict:
         """Decide which statute applies to one exposure and whether erasure is
         available. Call this before drafting a request."""
+        if exposure_id in _legal_cache:
+            return _legal_cache[exposure_id]
+
         exp = ctx.memory.get_exposure(exposure_id)
         if not exp:
             return {"error": f"No exposure {exposure_id}"}
@@ -995,6 +1150,7 @@ def build_tools(ctx: ToolContext) -> dict[str, Callable]:
         ctx.emit("legal", "assess", line,
                  tool_output={"jurisdiction": jurisdiction, "action": action,
                               "erasure_available": removable, "legal_class": legal_class})
+        _legal_cache[exposure_id] = result
         return result
 
     def draft_erasure_request(exposure_id: str, jurisdiction: str = "") -> dict:
@@ -1217,6 +1373,82 @@ def build_tools(ctx: ToolContext) -> dict[str, Callable]:
             "grounds": "Controller failed to respond within the statutory period.",
         }
 
+    def search_open_web() -> dict:
+        """Search the open web for this identity's unique identifiers, then
+        fetch every result and confirm the identifier is really on the page."""
+        queries = web_search.build_queries(ctx.profile)
+        if not queries:
+            ctx.emit("discovery", "web",
+                     "Open-web search skipped — no unique identifier supplied. A name is "
+                     "shared by thousands of people and is never searched.",
+                     tool_name="search_open_web")
+            return {"confirmed": [], "unconfirmed": [], "searched": 0}
+
+        ctx.emit("discovery", "web",
+                 f"Searching the open web for {len(queries)} unique identifier(s): "
+                 + ", ".join(q[0] for q in queries[:6]) + ". Every result will be fetched "
+                 "and the identifier must appear on the page before anything is reported.",
+                 tool_name="search_open_web")
+
+        res = web_search.search_exposures(ctx.profile)
+        recorded = []
+        for h in res.get("confirmed", []):
+            ev = {
+                "check": "open_web_search",
+                "target": f"{h['identifier_type']}:{h['identifier']}",
+                "endpoint": h["url"], "queried_at": h["checked_at"],
+                "http_status": h["http_status"], "result": "hit",
+                "proof": f"The exact {h['identifier_type']} appears in the page served at "
+                         f"{h['url']} — {h['matched_text'][:300]}",
+                "interpretation": (
+                    f"CONFIRMED: your {h['identifier_type']} is published on {h['domain']}. "
+                    f"This was not inferred from a search snippet — the page was fetched and "
+                    f"the identifier found in it verbatim."),
+                "reproduce": h["reproduce"],
+            }
+            exp = {
+                "source_type": "open_web", "source_name": h["domain"],
+                "source_id": "web:" + h["domain"],
+                "record_id": h["url"],
+                "data_found": [h["identifier_type"]],
+                "detail": {"url": h["url"], "title": h["title"], "query": h["query"],
+                           "identifier_type": h["identifier_type"],
+                           "matched_text": h["matched_text"]},
+                "match_confidence": 0.95,
+                "match_tier": "proven",
+                "severity": "high" if h["identifier_type"] in ("phone", "pan", "upi") else "medium",
+                "risk_score": 0.0,
+                "evidence_class": "verified",
+                "evidence": [ev],
+            }
+            exp_id, is_new = ctx.memory.record_exposure(ctx.user_id, ctx.run_id, exp)
+            recorded.append({"exposure_id": exp_id, "domain": h["domain"], "url": h["url"],
+                             "identifier_type": h["identifier_type"], "is_new": is_new})
+
+        degraded = res.get("search_degraded", False)
+        ctx.emit("discovery", "web",
+                 (f"Open-web search INCOMPLETE — the engine refused "
+                  f"{len(res.get('blocked_queries', []))} of {res.get('searched', 0)} "
+                  f"query(ies). {len(recorded)} confirmed exposure(s) so far. A clean "
+                  f"result cannot be claimed until the search completes."
+                  if degraded else
+                  f"Open-web search complete: {len(recorded)} confirmed exposure(s) across "
+                  f"{len(set(r['domain'] for r in recorded))} domain(s); "
+                  f"{len(res.get('unconfirmed', []))} result(s) could not be confirmed and "
+                  f"are reported as leads only."),
+                 status="error" if degraded else "",
+                 tool_output={"confirmed": len(recorded),
+                              "unconfirmed": len(res.get("unconfirmed", [])),
+                              "search_degraded": degraded})
+        return {"confirmed": recorded, "unconfirmed": res.get("unconfirmed", []),
+                "queries": res.get("queries", []), "domains": res.get("domains", []),
+                "pages_fetched": res.get("pages_fetched", 0),
+                "search_degraded": degraded,
+                "blocked_queries": res.get("blocked_queries", []),
+                "searched": res.get("searched", 0),
+                "coverage_note": res.get("coverage_note", ""),
+                "method": res.get("method", "")}
+
     return {
         "build_identity_profile": build_identity_profile,
         "recall_prior_activity": recall_prior_activity,
@@ -1229,6 +1461,7 @@ def build_tools(ctx: ToolContext) -> dict[str, Callable]:
         "plan_removal": plan_removal,
         "search_data_brokers": search_data_brokers,
         "search_paste_dumps": search_paste_dumps,
+        "search_open_web": search_open_web,
         "match_unique_identifiers": match_unique_identifiers,
         "detect_pii_in_text": detect_pii_in_text,
         "assess_exposure_risk": assess_exposure_risk,
@@ -1244,7 +1477,20 @@ def build_tools(ctx: ToolContext) -> dict[str, Callable]:
 _FIELD_TO_ENTITY = {
     "aadhaar": "AADHAAR", "pan": "PAN", "credit_card": "CREDIT_CARD",
     "credit_cards": "CREDIT_CARD", "bank_account": "BANK_ACCOUNT",
-    "passwords": "CREDIT_CARD", "password": "CREDIT_CARD",
+    # Passwords were mapped onto CREDIT_CARD to borrow its weight. They now
+    # carry their own, because a password is a different kind of loss: a card
+    # can be reissued, and a password reused elsewhere cannot be recalled.
+    "passwords": "PASSWORD", "password": "PASSWORD",
+    "auth_token": "AUTH_TOKEN", "session_cookies": "AUTH_TOKEN",
+    "security_question": "SECURITY_ANSWER",
+    "government_id": "GOVERNMENT_ID", "passport": "PASSPORT", "ssn": "SSN",
+    "date_of_birth": "DATE_OF_BIRTH", "dates_of_birth": "DATE_OF_BIRTH",
+    "religion": "SPECIAL_CATEGORY", "sexual_preference": "SPECIAL_CATEGORY",
+    "ethnicity": "SPECIAL_CATEGORY", "health": "SPECIAL_CATEGORY",
+    "biometric": "SPECIAL_CATEGORY",
+    "private_message": "PRIVATE_MESSAGE", "income": "INCOME",
+    "employer": "EMPLOYER", "vehicle": "VEHICLE",
+    "social_profile": "NAME", "photo": "NAME", "gender": "NAME",
     "email": "EMAIL", "email_addresses": "EMAIL",
     "phone": "PHONE_IN", "phone_numbers": "PHONE_IN",
     "address": "ADDRESS", "physical_addresses": "ADDRESS",

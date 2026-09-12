@@ -27,7 +27,8 @@ RECOGNISED = {
     "HIBP_API_KEY",         # enables real breach-membership checks
     "SOVEREIGN_PLANNER",    # pin a planner: anthropic | <provider> | deterministic
     # OpenAI-compatible free providers — one adapter covers all of them.
-    "GROQ_API_KEY", "CEREBRAS_API_KEY", "GITHUB_TOKEN", "MISTRAL_API_KEY",
+    "GROQ_API_KEY", "GEMINI_API_KEY", "GEMINI_MODEL",
+    "CEREBRAS_API_KEY", "GITHUB_TOKEN", "MISTRAL_API_KEY",
     "OPENROUTER_API_KEY", "TOGETHER_API_KEY", "OLLAMA_API_KEY",
     "OPENAI_COMPAT_PROVIDER", "OPENAI_COMPAT_MODEL",
     "SOVEREIGN_MODEL",

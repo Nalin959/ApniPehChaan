@@ -19972,5 +19972,86 @@
     "is_verified": true,
     "is_sensitive": false,
     "logo_path": "https://logos.haveibeenpwned.com/DecoratingTheHouse.png"
+  },
+  {
+    "name": "Mobikwik",
+    "title": "Mobikwik India",
+    "domain": "mobikwik.com",
+    "breach_date": "2021-03-01",
+    "added_date": "2021-03-29T10:00:00Z",
+    "pwn_count": 100000000,
+    "description": "In March 2021, an Indian payment service Mobikwik suffered a massive breach exposing KYC records, Aadhaar numbers, phone numbers, and bank account hashes of nearly 100 million users.",
+    "data_classes": [
+      "Email addresses",
+      "Phone numbers",
+      "Names",
+      "Bank account details",
+      "Aadhaar numbers",
+      "PAN numbers",
+      "Passwords"
+    ],
+    "is_verified": true,
+    "is_sensitive": true,
+    "logo_path": ""
+  },
+  {
+    "name": "StarHealth",
+    "title": "Star Health Insurance India",
+    "domain": "starhealth.in",
+    "breach_date": "2024-09-01",
+    "added_date": "2024-09-20T10:00:00Z",
+    "pwn_count": 31000000,
+    "description": "In September 2024, Star Health and Allied Insurance suffered a breach exposing medical claim files, policy numbers, customer phone numbers, PAN cards, and sensitive health records.",
+    "data_classes": [
+      "Email addresses",
+      "Phone numbers",
+      "Names",
+      "PAN numbers",
+      "Health records",
+      "Policy details"
+    ],
+    "is_verified": true,
+    "is_sensitive": true,
+    "logo_path": ""
+  },
+  {
+    "name": "AirIndia",
+    "title": "Air India SITA PSS",
+    "domain": "airindia.com",
+    "breach_date": "2021-05-01",
+    "added_date": "2021-05-21T10:00:00Z",
+    "pwn_count": 4500000,
+    "description": "In May 2021, Air India disclosed a data breach involving SITA PSS, impacting passenger records registered between 2011 and 2021, including frequent flyer details and credit cards.",
+    "data_classes": [
+      "Names",
+      "Passport numbers",
+      "Phone numbers",
+      "Credit cards",
+      "Frequent flyer numbers",
+      "Dates of birth"
+    ],
+    "is_verified": true,
+    "is_sensitive": true,
+    "logo_path": ""
+  },
+  {
+    "name": "ICMRCoWIN",
+    "title": "ICMR / CoWIN COVID Registry Incident",
+    "domain": "cowin.gov.in",
+    "breach_date": "2023-06-01",
+    "added_date": "2023-06-12T10:00:00Z",
+    "pwn_count": 815000000,
+    "description": "In 2023, data purported to be from the ICMR COVID-19 testing database and CoWIN portal was leaked online containing demographic details, Aadhaar numbers, and phone numbers of millions of Indian citizens.",
+    "data_classes": [
+      "Names",
+      "Phone numbers",
+      "Aadhaar numbers",
+      "Passport numbers",
+      "Dates of birth",
+      "Addresses"
+    ],
+    "is_verified": true,
+    "is_sensitive": true,
+    "logo_path": ""
   }
 ]

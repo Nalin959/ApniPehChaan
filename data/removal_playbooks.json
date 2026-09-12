@@ -177,10 +177,13 @@
       "service": "About.me",
       "country": "US",
       "method": "self_serve",
-      "url": "https://about.me/",
+      "url": "https://about.me/account/settings",
       "effort_minutes": 3,
       "steps": [
-        "Log in → Account settings → Delete account."
+        "Sign in to About.me.",
+        "Open Account settings (https://about.me/account/settings).",
+        "Choose 'Delete account' and confirm.",
+        "Re-check https://about.me/<handle> returns 404 — a live page means the deletion did not take."
       ],
       "escalation": "Self-serve is definitive.",
       "legal_class": "gdpr_erasure"
@@ -190,10 +193,13 @@
       "service": "Linktree",
       "country": "AU",
       "method": "self_serve",
-      "url": "https://linktr.ee/",
+      "url": "https://linktr.ee/admin/account",
       "effort_minutes": 3,
       "steps": [
-        "Log in → Account settings → Delete account."
+        "Sign in to Linktree.",
+        "Open Admin → Account (https://linktr.ee/admin/account).",
+        "Scroll to 'Delete account' and confirm with your password.",
+        "Re-check https://linktr.ee/<handle> returns 404."
       ],
       "escalation": "Self-serve is definitive.",
       "legal_class": "gdpr_erasure"
@@ -220,7 +226,11 @@
       "url": "https://soundcloud.com/settings/account",
       "effort_minutes": 3,
       "steps": [
-        "Settings → Account → Delete account."
+        "Sign in to SoundCloud.",
+        "Open Settings → Account (https://soundcloud.com/settings/account).",
+        "Choose 'Delete account'. Download your uploads first — deletion is irreversible.",
+        "Confirm by email.",
+        "Re-check https://soundcloud.com/<handle> returns 404."
       ],
       "escalation": "SoundCloud is EU-based; a GDPR Art.17 request is the fallback.",
       "legal_class": "gdpr_erasure"
@@ -261,7 +271,11 @@
       "url": "https://dev.to/settings/account",
       "effort_minutes": 3,
       "steps": [
-        "Settings → Account → Delete account."
+        "Sign in to DEV.",
+        "Open Settings → Account (https://dev.to/settings/account).",
+        "Under 'Delete account', request deletion and confirm by email.",
+        "Your articles are removed with the account; export them first if you want them.",
+        "Re-check https://dev.to/<handle> returns 404."
       ],
       "escalation": "Self-serve is definitive.",
       "legal_class": "gdpr_erasure"
@@ -274,7 +288,11 @@
       "url": "https://www.chess.com/settings",
       "effort_minutes": 3,
       "steps": [
-        "Settings → Privacy → Close account."
+        "Sign in to Chess.com.",
+        "Open Settings (https://www.chess.com/settings) → Privacy.",
+        "Use 'Close account'. Chess.com keeps game archives for fair-play integrity, but the public profile stops serving.",
+        "Confirm by email.",
+        "Re-check https://www.chess.com/member/<handle> returns 404."
       ],
       "escalation": "Self-serve is definitive.",
       "legal_class": "gdpr_erasure"
@@ -292,6 +310,695 @@
       ],
       "escalation": "Retention of payment records is lawful; the profile still goes.",
       "legal_class": "gdpr_erasure"
+    },
+    {
+      "id": "huggingface",
+      "service": "Hugging Face",
+      "country": "US",
+      "method": "self_serve",
+      "url": "https://huggingface.co/settings/profile",
+      "effort_minutes": 3,
+      "steps": [
+        "Settings → Account → Delete account.",
+        "Remove public models and spaces first if you want backups."
+      ],
+      "escalation": "Self-serve is definitive.",
+      "legal_class": "gdpr_erasure"
+    },
+    {
+      "id": "kaggle",
+      "service": "Kaggle",
+      "country": "US",
+      "method": "self_serve",
+      "url": "https://www.kaggle.com/account",
+      "effort_minutes": 3,
+      "steps": [
+        "Account Settings → Close account.",
+        "Datasets remain unless deleted prior to account closure."
+      ],
+      "escalation": "Google/Kaggle privacy grievance portal.",
+      "legal_class": "ccpa_erasure"
+    },
+    {
+      "id": "lichess",
+      "service": "Lichess",
+      "country": "FR",
+      "method": "self_serve",
+      "url": "https://lichess.org/account/close",
+      "effort_minutes": 2,
+      "steps": [
+        "Profile → Close account.",
+        "Confirm password to permanently wipe profile."
+      ],
+      "escalation": "GDPR Art 17 request to Lichess association contact.",
+      "legal_class": "gdpr_erasure"
+    },
+    {
+      "id": "foundit",
+      "service": "Foundit (Monster India)",
+      "country": "IN",
+      "method": "self_serve",
+      "url": "https://www.foundit.in/",
+      "effort_minutes": 5,
+      "steps": [
+        "Log in → Profile Settings → Account Settings → Delete Account.",
+        "Confirm verification code via email.",
+        "Check recruiter search visibility is toggled off."
+      ],
+      "escalation": "Serve DPDP s.12 notice requiring notice to downstream recruiters under s.12(3).",
+      "legal_class": "dpdp_erasure"
+    },
+    {
+      "id": "internshala",
+      "service": "Internshala",
+      "country": "IN",
+      "method": "self_serve",
+      "url": "https://internshala.com/",
+      "effort_minutes": 4,
+      "steps": [
+        "Manage Account → Delete Account.",
+        "Enter reason and confirm deletion."
+      ],
+      "escalation": "Write to grievance officer under IT Rules 2021 / DPDP.",
+      "legal_class": "dpdp_erasure"
+    },
+    {
+      "id": "timesjobs",
+      "service": "TimesJobs",
+      "country": "IN",
+      "method": "self_serve",
+      "url": "https://www.timesjobs.com/",
+      "effort_minutes": 5,
+      "steps": [
+        "My Profile → Account Settings → Delete profile.",
+        "Confirm removal via OTP."
+      ],
+      "escalation": "Serve DPDP Section 12 erasure demand on Times Business Solutions.",
+      "legal_class": "dpdp_erasure"
+    },
+    {
+      "id": "hirist",
+      "service": "Hirist",
+      "country": "IN",
+      "method": "self_serve",
+      "url": "https://www.hirist.tech/",
+      "effort_minutes": 3,
+      "steps": [
+        "Account Settings → Delete profile.",
+        "Confirm via email link."
+      ],
+      "escalation": "DPDP Section 12 notice to Info Edge grievance officer.",
+      "legal_class": "dpdp_erasure"
+    },
+    {
+      "id": "jeevansathi",
+      "service": "Jeevansathi",
+      "country": "IN",
+      "method": "self_serve",
+      "url": "https://www.jeevansathi.com/",
+      "effort_minutes": 5,
+      "steps": [
+        "Settings → Profile Settings → Delete Profile.",
+        "Choose 'Delete permanently' instead of temporary hide."
+      ],
+      "escalation": "DPDP notice citing sensitive demographic and caste data.",
+      "legal_class": "dpdp_erasure"
+    },
+    {
+      "id": "communitymatrimony",
+      "service": "CommunityMatrimony",
+      "country": "IN",
+      "method": "self_serve",
+      "url": "https://www.communitymatrimony.com/",
+      "effort_minutes": 5,
+      "steps": [
+        "Settings → Deactivate/Delete Profile.",
+        "Confirm OTP verification."
+      ],
+      "escalation": "DPDP Section 12 notice to Matrimony.com grievance officer.",
+      "legal_class": "dpdp_erasure"
+    },
+    {
+      "id": "housing",
+      "service": "Housing.com",
+      "country": "IN",
+      "method": "self_serve",
+      "url": "https://housing.com/",
+      "effort_minutes": 5,
+      "steps": [
+        "My Activity → Listed Properties → Mark as Sold / De-list.",
+        "Profile → Delete Account."
+      ],
+      "escalation": "Serve DPDP notice to purge cached owner phone and listing details.",
+      "legal_class": "dpdp_erasure"
+    },
+    {
+      "id": "nobroker",
+      "service": "NoBroker",
+      "country": "IN",
+      "method": "self_serve",
+      "url": "https://www.nobroker.in/",
+      "effort_minutes": 5,
+      "steps": [
+        "Dashboard → Listed Properties → Close Listing.",
+        "Account Settings → Delete Account."
+      ],
+      "escalation": "Email grievance officer to purge contact records from brokerage team.",
+      "legal_class": "dpdp_erasure"
+    },
+    {
+      "id": "tradeindia",
+      "service": "TradeIndia",
+      "country": "IN",
+      "method": "email_request",
+      "url": "https://www.tradeindia.com/",
+      "effort_minutes": 15,
+      "steps": [
+        "Find Grievance Officer details on TradeIndia privacy page.",
+        "Submit written withdrawal of consent for business listing and buyer enquiries."
+      ],
+      "escalation": "Statutory notice under DPDP Act 2023 s.12(1).",
+      "legal_class": "dpdp_erasure"
+    },
+    {
+      "id": "commonfloor",
+      "service": "CommonFloor",
+      "country": "IN",
+      "method": "email_request",
+      "url": "https://www.commonfloor.com/",
+      "effort_minutes": 15,
+      "steps": [
+        "Contact CommonFloor resident community support.",
+        "Request de-listing of apartment and resident directory profile."
+      ],
+      "escalation": "DPDP s.12 statutory demand.",
+      "legal_class": "dpdp_erasure"
+    },
+    {
+      "id": "instafinancials",
+      "service": "InstaFinancials",
+      "country": "IN",
+      "method": "not_removable",
+      "url": "https://www.instafinancials.com/",
+      "effort_minutes": 0,
+      "steps": [
+        "Corporate records are statutory filings under the Companies Act 2013.",
+        "DPDP Act s.3(c)(ii) excludes data made publicly available under legal obligation.",
+        "To correct details, submit Form DIR-6 on the MCA21 portal."
+      ],
+      "escalation": "No erasure right lies against an MCA mirror; correct the source record at MCA.",
+      "legal_class": "statutory_publication"
+    },
+    {
+      "id": "quickcompany",
+      "service": "QuickCompany",
+      "country": "IN",
+      "method": "not_removable",
+      "url": "https://www.quickcompany.in/",
+      "effort_minutes": 0,
+      "steps": [
+        "Statutory corporate mirror. Erasure does not apply under DPDP s.3(c)(ii).",
+        "File correction on MCA portal."
+      ],
+      "escalation": "Correction only via Ministry of Corporate Affairs.",
+      "legal_class": "statutory_publication"
+    },
+    {
+      "id": "crif_highmark",
+      "service": "CRIF High Mark",
+      "country": "IN",
+      "method": "not_removable",
+      "url": "https://www.crifhighmark.com/",
+      "effort_minutes": 15,
+      "steps": [
+        "Retention is mandated by the Credit Information Companies (Regulation) Act 2005.",
+        "Erasure is not available; dispute and correction are.",
+        "File online dispute for erroneous credit enquiries or loan defaults."
+      ],
+      "escalation": "Escalate unresolved disputes to RBI Banking Ombudsman.",
+      "legal_class": "dpdp_limited"
+    },
+    {
+      "id": "ckyc_cersai",
+      "service": "Central KYC Registry (CKYCR)",
+      "country": "IN",
+      "method": "not_removable",
+      "url": "https://www.ckycindia.in/",
+      "effort_minutes": 20,
+      "steps": [
+        "KYC records maintained under Prevention of Money Laundering Act (PMLA).",
+        "Statutory retention duty overrides DPDP erasure.",
+        "Request KYC profile update through your primary banking institution."
+      ],
+      "escalation": "Correction via reporting financial entity.",
+      "legal_class": "dpdp_limited"
+    },
+    {
+      "id": "epfo_uan",
+      "service": "EPFO / UAN Member Portal",
+      "country": "IN",
+      "method": "not_removable",
+      "url": "https://unifiedportal-mem.epfindia.gov.in/",
+      "effort_minutes": 15,
+      "steps": [
+        "Statutory social security records under EPF Act 1952. Non-erasable.",
+        "Corrections submitted via Joint Declaration Form counter-signed by employer."
+      ],
+      "escalation": "Grievance through EPFiGMS portal.",
+      "legal_class": "statutory_publication"
+    },
+    {
+      "id": "gstin_search",
+      "service": "GST Public Portal",
+      "country": "IN",
+      "method": "not_removable",
+      "url": "https://www.gst.gov.in/",
+      "effort_minutes": 15,
+      "steps": [
+        "Taxpayer registration is public by statute under CGST Act 2017.",
+        "Cancellation of GSTIN is available via Form GST REG-16 upon business closure."
+      ],
+      "escalation": "Surrender registration through Jurisdictional Tax Officer.",
+      "legal_class": "statutory_publication"
+    },
+    {
+      "id": "casemine",
+      "service": "Casemine India",
+      "country": "IN",
+      "method": "not_removable",
+      "url": "https://www.casemine.com/",
+      "effort_minutes": 0,
+      "steps": [
+        "Judicial record mirror. DPDP does not apply.",
+        "Redaction requires an application to the High Court or Supreme Court that issued the verdict."
+      ],
+      "escalation": "Formal petition for redaction of identity under Article 226/32.",
+      "legal_class": "judicial_record"
+    },
+    {
+      "id": "livelaw",
+      "service": "LiveLaw Court Archives",
+      "country": "IN",
+      "method": "not_removable",
+      "url": "https://www.livelaw.in/",
+      "effort_minutes": 0,
+      "steps": [
+        "Journalistic reporting of public judicial proceedings.",
+        "Removal requires certified court order granting anonymity."
+      ],
+      "escalation": "Judicial application to trial/appellate court.",
+      "legal_class": "judicial_record"
+    },
+    {
+      "id": "mahabhulekh",
+      "service": "Mahabhulekh (Maharashtra Land Records)",
+      "country": "IN",
+      "method": "not_removable",
+      "url": "https://bhulekh.mahabhumi.gov.in/",
+      "effort_minutes": 0,
+      "steps": [
+        "Land ownership records are statutory public records under Maharashtra Land Revenue Code.",
+        "DPDP s.3(c)(ii) excludes statutory publications. Mutation entry required for change of ownership."
+      ],
+      "escalation": "Talathi / Tahsildar revenue office for statutory record correction.",
+      "legal_class": "statutory_publication"
+    },
+    {
+      "id": "bhoomi_karnataka",
+      "service": "Bhoomi Karnataka",
+      "country": "IN",
+      "method": "not_removable",
+      "url": "https://landrecords.karnataka.gov.in/",
+      "effort_minutes": 0,
+      "steps": [
+        "Bhoomi is the Karnataka statutory land record. Ownership entries are published under state land-revenue law, so erasure does not lie against the register itself.",
+        "What CAN be changed is an inaccuracy: apply for mutation or correction at the Taluk office, or via https://landrecords.karnataka.gov.in/.",
+        "If a private people-search site has re-published the record, that copy is a separate controller's processing and IS removable under DPDP s.12 — serve the re-publisher, not the registry."
+      ],
+      "escalation": "Revenue officer dispute filing.",
+      "legal_class": "statutory_publication"
+    },
+    {
+      "id": "dharani_telangana",
+      "service": "Dharani Telangana",
+      "country": "IN",
+      "method": "not_removable",
+      "url": "https://dharani.telangana.gov.in/",
+      "effort_minutes": 0,
+      "steps": [
+        "Dharani is the Telangana statutory land record; entries are published under state law and erasure does not lie against the register itself.",
+        "Corrections to an inaccurate entry are applied for through the Tahsildar or https://dharani.telangana.gov.in/.",
+        "A private aggregator mirroring the record is a separate controller — that copy is removable under DPDP s.12 even though the original is not."
+      ],
+      "escalation": "District Collector revenue grievance.",
+      "legal_class": "statutory_publication"
+    },
+    {
+      "id": "sarathi_morth",
+      "service": "Sarathi Driving License Portal",
+      "country": "IN",
+      "method": "not_removable",
+      "url": "https://sarathi.parivahan.gov.in/",
+      "effort_minutes": 15,
+      "steps": [
+        "Statutory vehicle driving registry under Motor Vehicles Act 1988.",
+        "Corrections go through Parivahan portal with RTO verification."
+      ],
+      "escalation": "RTO grievance officer.",
+      "legal_class": "statutory_publication"
+    },
+    {
+      "id": "mobikwik_leak",
+      "service": "Mobikwik Leak Archive",
+      "country": "IN",
+      "method": "statutory_notice",
+      "url": "https://www.mobikwik.com/",
+      "effort_minutes": 15,
+      "steps": [
+        "Historical dark-web leak cannot be erased from peer-to-peer torrents/dumps.",
+        "Serve DPDP erasure request to One Mobikwik Systems to purge internal legacy records.",
+        "Immediately rotate banking passwords, enable 2FA, and monitor CIBIL reports."
+      ],
+      "escalation": "File complaint with Data Protection Board of India (DPBI) and CERT-In.",
+      "legal_class": "dpdp_erasure"
+    },
+    {
+      "id": "dominos_india_leak",
+      "service": "Domino's India Leak Archive",
+      "country": "IN",
+      "method": "email_request",
+      "url": "https://www.dominos.co.in/",
+      "effort_minutes": 10,
+      "steps": [
+        "Submit account and delivery address purge request to Jubilant FoodWorks grievance officer.",
+        "Cite DPDP s.12(1) withdrawal of consent for historical customer database."
+      ],
+      "escalation": "Formal DPDP Section 12 erasure notice.",
+      "legal_class": "dpdp_erasure"
+    },
+    {
+      "id": "bigbasket_leak",
+      "service": "BigBasket Leak Archive",
+      "country": "IN",
+      "method": "self_serve",
+      "url": "https://www.bigbasket.com/",
+      "effort_minutes": 5,
+      "steps": [
+        "Delete customer account in BigBasket mobile app.",
+        "Reset passwords on all accounts sharing the same email/password."
+      ],
+      "escalation": "DPDP s.12 notice to grievance officer.",
+      "legal_class": "dpdp_erasure"
+    },
+    {
+      "id": "air_india_leak",
+      "service": "Air India SITA Leak Archive",
+      "country": "IN",
+      "method": "email_request",
+      "url": "https://www.airindia.com/",
+      "effort_minutes": 15,
+      "steps": [
+        "Write to Air India DPO requesting audit and purge of compromised frequent flyer profile.",
+        "Monitor passport number usage for identity theft."
+      ],
+      "escalation": "DPBI supervisory authority complaint.",
+      "legal_class": "dpdp_erasure"
+    },
+    {
+      "id": "railyatri_leak",
+      "service": "RailYatri Leak Archive",
+      "country": "IN",
+      "method": "email_request",
+      "url": "https://www.railyatri.in/",
+      "effort_minutes": 10,
+      "steps": [
+        "Identify the exact records in the leaked archive that carry your data.",
+        "Email the RailYatri grievance officer requesting erasure under DPDP s.12, quoting the breach and the identifiers involved.",
+        "Understand the limit: an archive already circulating cannot be un-published by the controller. Rotate any password reused from it and enable 2FA.",
+        "Keep the acknowledgement and escalate to the Data Protection Board if there is no response within 30 days."
+      ],
+      "escalation": "DPBI complaint for non-compliance.",
+      "legal_class": "dpdp_erasure"
+    },
+    {
+      "id": "upstox_leak",
+      "service": "Upstox Security Incident",
+      "country": "IN",
+      "method": "statutory_only",
+      "url": "https://upstox.com/",
+      "effort_minutes": 15,
+      "steps": [
+        "SEBI regulations require 5-year post-account-closure retention of KYC data.",
+        "Formally close trading and demat accounts to start the 5-year statutory countdown clock."
+      ],
+      "escalation": "SEBI SCORES portal grievance.",
+      "legal_class": "dpdp_limited"
+    },
+    {
+      "id": "star_health_leak",
+      "service": "Star Health Leak Archive",
+      "country": "IN",
+      "method": "statutory_only",
+      "url": "https://www.starhealth.in/",
+      "effort_minutes": 15,
+      "steps": [
+        "IRDAI health insurance regulations govern policy data retention.",
+        "File security inquiry with Star Health Grievance Officer requesting fraud monitoring."
+      ],
+      "escalation": "IRDAI Bima Bharosa grievance.",
+      "legal_class": "dpdp_limited"
+    },
+    {
+      "id": "gitlab",
+      "service": "GitLab",
+      "country": "US",
+      "method": "self_serve",
+      "url": "https://gitlab.com/-/user_settings/account",
+      "effort_minutes": 5,
+      "steps": [
+        "Sign in to GitLab.",
+        "Open Settings → Account.",
+        "Scroll to 'Delete account' at the bottom.",
+        "Enter your password to confirm. Personal projects are deleted with the account; contributions to other projects remain but are reassigned to a ghost user.",
+        "Re-check https://gitlab.com/<handle> returns 404."
+      ],
+      "escalation": "GitLab Inc. is GDPR/CCPA-exposed. If the profile persists, send an Art.17 erasure request to dpo@gitlab.com.",
+      "legal_class": "gdpr_erasure"
+    },
+    {
+      "id": "pastebin",
+      "service": "Pastebin",
+      "country": "NZ",
+      "method": "email_request",
+      "url": "https://pastebin.com/contact",
+      "effort_minutes": 10,
+      "steps": [
+        "Note the paste URLs that contain your data.",
+        "If you own the account, sign in and delete each paste from your dashboard first.",
+        "For pastes posted by someone else, use https://pastebin.com/contact and submit an abuse/removal report citing personal data.",
+        "Quote each paste URL and state that it publishes your personal data without consent.",
+        "Pastebin removes reported personal-data pastes; keep the ticket ID."
+      ],
+      "escalation": "If the paste is not removed, it is third-party publication of personal data — escalate under DPDP s.12 to the grievance officer, and report the URL to Google for search de-indexing.",
+      "legal_class": "gdpr_erasure"
+    },
+    {
+      "id": "roblox",
+      "service": "Roblox",
+      "country": "US",
+      "method": "self_serve",
+      "url": "https://www.roblox.com/my/account",
+      "effort_minutes": 10,
+      "steps": [
+        "Sign in to Roblox and open Settings → Account Info.",
+        "Use 'Delete My Account' (under Account Info) — or, if unavailable in your region, contact Roblox Support and request deletion.",
+        "Confirm by email. Roblox retains some data for moderation and legal reasons.",
+        "Re-check https://www.roblox.com/user.aspx?username=<handle>."
+      ],
+      "escalation": "Roblox is CCPA/GDPR-exposed. Submit a formal request via its privacy portal if self-serve deletion is refused.",
+      "legal_class": "ccpa_erasure"
+    },
+    {
+      "id": "atcoder",
+      "service": "AtCoder",
+      "country": "JP",
+      "method": "self_serve",
+      "url": "https://atcoder.jp/settings",
+      "effort_minutes": 5,
+      "steps": [
+        "Sign in to AtCoder and open Settings.",
+        "Clear the personal fields (affiliation, birth year, country) you do not want public.",
+        "Use the account deletion option at the bottom of Settings if you want the profile gone.",
+        "Contest results remain in the archive under the handle; the personal profile fields do not."
+      ],
+      "escalation": "AtCoder is a Japanese controller under APPI. Email contact@atcoder.jp with a deletion request if settings do not remove the data.",
+      "legal_class": "dpdp_erasure"
+    },
+    {
+      "id": "patreon",
+      "service": "Patreon",
+      "country": "US",
+      "method": "self_serve",
+      "url": "https://www.patreon.com/settings/account",
+      "effort_minutes": 5,
+      "steps": [
+        "Sign in to Patreon and open Settings → Account.",
+        "Scroll to 'Delete your account'.",
+        "Cancel any active memberships first, then confirm deletion.",
+        "Re-check https://www.patreon.com/<handle> returns 404."
+      ],
+      "escalation": "Patreon offers a GDPR/CCPA data request form at https://www.patreon.com/policy/legal — use it if the page persists.",
+      "legal_class": "ccpa_erasure"
+    },
+    {
+      "id": "substack",
+      "service": "Substack",
+      "country": "US",
+      "method": "self_serve",
+      "url": "https://substack.com/settings",
+      "effort_minutes": 5,
+      "steps": [
+        "Sign in to Substack and open Settings.",
+        "Under 'Account', use 'Delete account' (delete or transfer any publication you own first).",
+        "Confirm by email.",
+        "Re-check https://<handle>.substack.com returns 404."
+      ],
+      "escalation": "Email privacy@substack.com citing GDPR Art.17 / CCPA if the publication remains live.",
+      "legal_class": "gdpr_erasure"
+    },
+    {
+      "id": "blogger",
+      "service": "Blogger",
+      "country": "US",
+      "method": "self_serve",
+      "url": "https://myaccount.google.com/deleteservices",
+      "effort_minutes": 10,
+      "steps": [
+        "Sign in to the Google account that owns the blog.",
+        "To remove one blog: Blogger → Settings → 'Remove your blog'.",
+        "To remove Blogger entirely: use https://myaccount.google.com/deleteservices and select Blogger.",
+        "Note a deleted blogspot subdomain is not re-usable but does stop serving.",
+        "Request Google Search removal at https://search.google.com/search-console/remove-outdated-content for cached copies."
+      ],
+      "escalation": "Google is a GDPR controller; submit an Art.17 request through its privacy troubleshooter if content remains indexed.",
+      "legal_class": "gdpr_erasure"
+    },
+    {
+      "id": "tumblr",
+      "service": "Tumblr",
+      "country": "US",
+      "method": "self_serve",
+      "url": "https://www.tumblr.com/settings/account",
+      "effort_minutes": 5,
+      "steps": [
+        "Sign in to Tumblr and open Settings → Account.",
+        "Scroll to 'Delete account'.",
+        "Enter your email and password to confirm.",
+        "Re-check https://<handle>.tumblr.com returns 404."
+      ],
+      "escalation": "Tumblr (Automattic) honours GDPR/CCPA requests at https://www.tumblr.com/privacy — use it if the blog persists.",
+      "legal_class": "gdpr_erasure"
+    },
+    {
+      "id": "mastodon",
+      "service": "Mastodon",
+      "country": "EU",
+      "method": "self_serve",
+      "url": "https://mastodon.social/auth/edit",
+      "effort_minutes": 10,
+      "steps": [
+        "Sign in to your Mastodon instance and open Preferences → Account.",
+        "Use 'Delete account' at the bottom of the account settings page.",
+        "Note that posts already federated to other instances are deleted by a request that most, but not all, instances honour.",
+        "Re-check https://mastodon.social/@<handle> returns 404."
+      ],
+      "escalation": "Mastodon gGmbH is an EU controller. Send a GDPR Art.17 request to the instance admin for copies that remain on federated servers.",
+      "legal_class": "gdpr_erasure"
+    },
+    {
+      "id": "flickr",
+      "service": "Flickr",
+      "country": "US",
+      "method": "self_serve",
+      "url": "https://www.flickr.com/account",
+      "effort_minutes": 10,
+      "steps": [
+        "Sign in to Flickr and open Settings → Personal Information.",
+        "Use 'Delete your Flickr account'. Download your photos first — deletion is irreversible.",
+        "Confirm by email.",
+        "Re-check https://www.flickr.com/people/<handle> returns 404."
+      ],
+      "escalation": "Flickr (SmugMug) handles privacy requests at privacy@flickr.com — cite GDPR Art.17 or CCPA.",
+      "legal_class": "ccpa_erasure"
+    },
+    {
+      "id": "instructables",
+      "service": "Instructables",
+      "country": "US",
+      "method": "email_request",
+      "url": "https://www.instructables.com/account/",
+      "effort_minutes": 15,
+      "steps": [
+        "Sign in and remove or unpublish the Instructables that carry your personal data.",
+        "Instructables is an Autodesk service and has no self-serve account deletion.",
+        "Email privacy.questions@autodesk.com requesting deletion of the Instructables account and its associated personal data.",
+        "Quote your member URL (https://www.instructables.com/member/<handle>/) and the Autodesk account email.",
+        "Autodesk responds within 30 days under GDPR/CCPA."
+      ],
+      "escalation": "If Autodesk does not respond in 30 days, escalate to the relevant supervisory authority (GDPR) or the California AG (CCPA).",
+      "legal_class": "gdpr_erasure"
+    },
+    {
+      "id": "freelancer",
+      "service": "Freelancer",
+      "country": "AU",
+      "method": "self_serve",
+      "url": "https://www.freelancer.com/users/settings.php",
+      "effort_minutes": 10,
+      "steps": [
+        "Sign in to Freelancer and open Settings → Account.",
+        "Close any open projects or contests first.",
+        "Use 'Close account' at the bottom of the Account tab.",
+        "Freelancer retains transaction records for statutory accounting periods; the public profile stops serving.",
+        "Re-check https://www.freelancer.com/u/<handle> returns 404."
+      ],
+      "escalation": "Freelancer Ltd is subject to the Australian Privacy Act and GDPR for EU users — email privacy@freelancer.com citing Art.17.",
+      "legal_class": "gdpr_erasure"
+    },
+    {
+      "id": "wikipedia",
+      "service": "Wikipedia",
+      "country": "US",
+      "method": "not_removable",
+      "url": "https://en.wikipedia.org/wiki/Wikipedia:Courtesy_vanishing",
+      "effort_minutes": 20,
+      "steps": [
+        "Edits cannot be deleted. Every contribution is irrevocably licensed CC BY-SA, and the licence REQUIRES attribution history be kept — so the edit record is not erasable.",
+        "What is available is 'courtesy vanishing': the account is renamed to a random string, breaking the link between the edits and your name.",
+        "Blank your user page, then request vanishing at https://meta.wikimedia.org/wiki/Special:GlobalRenameRequest.",
+        "Personal data you yourself wrote on your user page CAN be revision-deleted — ask an administrator via Oversight (https://en.wikipedia.org/wiki/Wikipedia:Oversight)."
+      ],
+      "escalation": "Oversight suppression is the route for genuinely private information (an address, a phone number) accidentally published; erasure of the edit history itself is not available under the licence.",
+      "legal_class": "statutory_publication"
+    },
+    {
+      "id": "infostealer",
+      "service": "Info-stealer malware infection",
+      "country": "GLOBAL",
+      "method": "credential_rotation",
+      "url": "https://haveibeenpwned.com/Passwords",
+      "effort_minutes": 90,
+      "steps": [
+        "Treat every password saved in that computer's browser as known to someone else. An info-stealer copies the whole password store in one go, not one site's login.",
+        "Start with the accounts that can reset the others: your email first, then your phone/SIM account, then banking and UPI.",
+        "Change each password to a new, unique one. Reusing a variation of the old password does not help — the old one is known.",
+        "Sign out of all sessions everywhere ('log out of all devices'). A stolen session cookie lets someone in WITHOUT the password, so changing the password alone is not enough.",
+        "Turn on two-factor authentication everywhere it is offered, preferring an authenticator app over SMS.",
+        "Run a full antivirus scan on the affected machine, and do not re-enter passwords on it until it is clean — otherwise the new passwords are stolen too.",
+        "Check your email account's filters and forwarding rules: attackers commonly add a hidden forward to keep reading your mail after you regain control."
+      ],
+      "escalation": "If money moved, report it immediately: in India, call cybercrime helpline 1930 or file at cybercrime.gov.in. Notify your bank to freeze and reissue. A police complaint is also what your bank will ask for.",
+      "legal_class": "dpdp_erasure"
     }
   ],
   "method_order": [
@@ -326,6 +1033,16 @@
       "label": "Erasure does not apply",
       "why": "A privacy request has no addressee in law here. The real route is stated instead.",
       "typical_time": "n/a"
+    },
+    "credential_rotation": {
+      "label": "Rotate your credentials now",
+      "why": "Nothing can be deleted here — the data was taken from YOUR computer, not held by a company you can serve. Erasure has no addressee. What actually reduces the harm is making the stolen credentials worthless, and that is urgent: these passwords are current, not historic.",
+      "typical_time": "1-2 hours, today"
+    },
+    "statutory_only": {
+      "label": "Retention is required by law — dispute, don't delete",
+      "why": "A sector regulator compels this organisation to KEEP the record, so a deletion request will be lawfully refused: SEBI requires five years of KYC data after an account closes, and IRDAI sets its own retention for policy data. DPDP's erasure right yields to another statute that mandates retention. What you CAN do is correct an inaccuracy, restrict further processing such as marketing, and take the handling of the incident to the sector regulator's grievance channel, which is a faster and more effective route here than a data-protection notice.",
+      "typical_time": "2-6 weeks via the regulator's grievance portal"
     }
   }
 }

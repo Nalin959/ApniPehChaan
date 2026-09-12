@@ -67,9 +67,13 @@ class Evidence:
     proof: str                # the raw evidence, quotable
     interpretation: str       # what it does and does NOT prove
     reproduce: str = ""       # a command the user can run themselves
+    metadata: dict | None = None
 
     def to_dict(self):
-        return asdict(self)
+        d = asdict(self)
+        if d.get("metadata") is None:
+            d["metadata"] = {}
+        return d
 
 
 def _now():
@@ -150,7 +154,8 @@ def check_gravatar(email: str) -> Evidence:
 
     md5 = hashlib.md5(email.strip().lower().encode()).hexdigest()
     url = f"https://www.gravatar.com/avatar/{md5}?d=404"
-    profile_url = f"https://www.gravatar.com/{md5}"
+    profile_url = f"https://gravatar.com/{md5}"
+    json_url = f"https://en.gravatar.com/{md5}.json"
     reproduce = f"curl -sI '{url}'"
 
     try:
@@ -167,13 +172,40 @@ def check_gravatar(email: str) -> Evidence:
         return Evidence("gravatar", email, url, _now(), None, "unavailable", str(e),
                         "Could not reach the service; nothing is claimed.", reproduce)
 
+    meta = {}
+    username = ""
+    display_name = ""
+    try:
+        req = urllib.request.Request(json_url, headers={"User-Agent": USER_AGENT})
+        with urllib.request.urlopen(req, timeout=4) as jresp:
+            jdata = json.loads(jresp.read().decode())
+            entry = (jdata.get("entry") or [{}])[0]
+            username = entry.get("preferredUsername", "")
+            display_name = entry.get("displayName", "")
+            if entry.get("profileUrl"):
+                profile_url = entry.get("profileUrl")
+            meta = {
+                "username": username,
+                "displayName": display_name,
+                "profileUrl": profile_url,
+            }
+    except Exception:
+        meta = {"username": "", "displayName": "", "profileUrl": profile_url}
+
+    details = []
+    if username:
+        details.append(f"handle: @{username}")
+    if display_name:
+        details.append(f"name: {display_name}")
+    detail_str = f" ({', '.join(details)})" if details else ""
+
     return Evidence(
         "gravatar", email, url, _now(), status, "hit",
-        f"HTTP {status} — an avatar is served for MD5 {md5}.",
+        f"HTTP {status} — active public profile{detail_str}: {profile_url}",
         f"CONFIRMED: a public Gravatar profile exists for this address and is visible to anyone "
-        f"who knows it. The profile may also expose a display name, location and linked accounts: "
-        f"{profile_url}",
-        reproduce)
+        f"who knows it. Profile URL: {profile_url}",
+        reproduce,
+        metadata=meta)
 
 
 # ── 3. HIBP breached account (real, requires a paid key) ─────────────────────
@@ -275,3 +307,129 @@ def network_available() -> bool:
         return True
     except Exception:
         return False
+
+
+# ── 5. XposedOrNot breached account (real, free, no key) ─────────────────────
+
+def check_xposedornot(email: str) -> Evidence:
+    """
+    Breach membership for a specific address, from a free public dataset.
+
+    This exists because the authoritative answer — Have I Been Pwned — needs a
+    paid subscription, and without one `check_hibp_account` correctly refuses to
+    guess and returns `not_checked`. That left the single most important
+    question in the product unanswered for anyone without a card on file.
+
+    XposedOrNot indexes breach corpora and answers the same question for free.
+    It is a different dataset, so it is reported under its own name and never
+    presented as an HIBP result: agreement between them is corroboration, and
+    absence here is not proof of absence there.
+    """
+    if not email:
+        return Evidence("xposedornot_breached_account", "(none supplied)", "", _now(), None,
+                        "not_checked", "", "No email supplied.", "")
+
+    url = f"https://api.xposedornot.com/v1/breach-analytics?email={urllib.request.quote(email)}"
+    reproduce = f"curl -s '{url}'"
+
+    try:
+        resp = _get(url)
+        status = resp.status
+        data = json.loads(resp.read().decode())
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return Evidence("xposedornot_breached_account", email, url, _now(), 404, "clear",
+                            "HTTP 404 — the address is not present in any indexed breach.",
+                            "CONFIRMED CLEAR by this dataset: the address does not appear in any "
+                            "breach XposedOrNot indexes. Other datasets may still hold it.",
+                            reproduce)
+        return Evidence("xposedornot_breached_account", email, url, _now(), e.code, "unavailable",
+                        str(e), "The service returned an error; nothing is claimed.", reproduce)
+    except Exception as e:
+        return Evidence("xposedornot_breached_account", email, url, _now(), None, "unavailable",
+                        str(e), "Could not reach the service; nothing is claimed.", reproduce)
+
+    # A clean address comes back as an Error/Not found body with HTTP 200.
+    if isinstance(data, dict) and data.get("Error"):
+        return Evidence("xposedornot_breached_account", email, url, _now(), status, "clear",
+                        f"The service reports: {data.get('Error')}.",
+                        "CONFIRMED CLEAR by this dataset: the address does not appear in any "
+                        "breach XposedOrNot indexes. Other datasets may still hold it.",
+                        reproduce)
+
+    exposed = ((data or {}).get("ExposedBreaches") or {}).get("breaches_details") or []
+    if not exposed:
+        return Evidence("xposedornot_breached_account", email, url, _now(), status, "clear",
+                        "The service returned no breach records for this address.",
+                        "CONFIRMED CLEAR by this dataset. Other datasets may still hold it.",
+                        reproduce)
+
+    names = [b.get("breach", "") for b in exposed if b.get("breach")]
+    return Evidence(
+        "xposedornot_breached_account", email, url, _now(), status, "hit",
+        f"XposedOrNot lists this address in {len(names)} breach(es): {', '.join(names)}",
+        "CONFIRMED: this exact address appears in the breach records named above. A breach "
+        "record cannot be un-published — rotate any password reused from these services and "
+        "turn on two-factor authentication.",
+        reproduce,
+        metadata={"breaches": exposed})
+
+
+# ── 6. Infostealer-malware infection (real, free, no key) ────────────────────
+
+def check_infostealer(email: str) -> Evidence:
+    """
+    Whether this address was harvested from a computer infected by info-stealer
+    malware.
+
+    This is a different and more severe exposure than a site breach. A breach
+    leaks what one company held. An info-stealer infection means everything
+    saved in that computer's browser — every password, cookie and session token
+    — was taken at once, and the credentials are current rather than historic.
+
+    Hudson Rock publishes a free lookup over the infection corpora their
+    Cavalier product indexes. Values come back already masked at source; nothing
+    here unmasks them, and no password is ever stored.
+    """
+    if not email:
+        return Evidence("infostealer_infection", "(none supplied)", "", _now(), None,
+                        "not_checked", "", "No email supplied.", "")
+
+    url = ("https://cavalier.hudsonrock.com/api/json/v2/osint-tools/search-by-email"
+           f"?email={urllib.request.quote(email)}")
+    reproduce = f"curl -s '{url}'"
+
+    try:
+        resp = _get(url)
+        status = resp.status
+        data = json.loads(resp.read().decode())
+    except urllib.error.HTTPError as e:
+        return Evidence("infostealer_infection", email, url, _now(), e.code, "unavailable",
+                        str(e), "The service returned an error; nothing is claimed.", reproduce)
+    except Exception as e:
+        return Evidence("infostealer_infection", email, url, _now(), None, "unavailable",
+                        str(e), "Could not reach the service; nothing is claimed.", reproduce)
+
+    stealers = (data or {}).get("stealers") or []
+    if not stealers:
+        return Evidence("infostealer_infection", email, url, _now(), status, "clear",
+                        (data or {}).get("message", "No infection associated with this address."),
+                        "CONFIRMED CLEAR by this dataset: no computer known to this corpus was "
+                        "infected while this address was saved on it.",
+                        reproduce)
+
+    dates = [s.get("date_compromised", "") for s in stealers if s.get("date_compromised")]
+    machines = [s.get("computer_name", "?") for s in stealers]
+    return Evidence(
+        "infostealer_infection", email, url, _now(), status, "hit",
+        f"{len(stealers)} infected machine(s) carried this address — "
+        f"{', '.join(machines[:4])}; compromised {', '.join(d[:10] for d in dates[:4])}.",
+        "CONFIRMED, AND THIS IS THE URGENT ONE: a computer holding this address was infected by "
+        "info-stealer malware, so every credential saved in its browser was taken together — not "
+        "one site's password, all of them. Change every password saved in that browser, starting "
+        "with email and banking, and sign out of all sessions everywhere. Turn on two-factor "
+        "authentication; a stolen session cookie can otherwise be replayed without a password.",
+        reproduce,
+        metadata={"stealers": stealers,
+                  "total_user_services": (data or {}).get("total_user_services"),
+                  "total_corporate_services": (data or {}).get("total_corporate_services")})

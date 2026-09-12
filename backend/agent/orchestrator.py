@@ -25,7 +25,8 @@ from dataclasses import dataclass
 from backend.agent import openai_compat_planner
 from backend.agent.memory import get_memory, utcnow
 from backend.agent.prompts import (
-    SYSTEM, DISCOVERY_GOAL, JUDGEMENT_GOAL, JUDGEMENT_SYSTEM, REMEDIATION_GOAL)
+    SYSTEM, DISCOVERY_GOAL, JUDGEMENT_GOAL, JUDGEMENT_SYSTEM, REMEDIATION_GOAL,
+    NO_EXPOSURES_GOAL, NO_EXPOSURES_SYSTEM)
 from backend.agent.tools import ToolContext, build_tools
 from backend.mock_brokers.network import get_network
 
@@ -167,6 +168,11 @@ def _run_mandatory_discovery(ctx: ToolContext, tools: dict) -> dict:
     if ctx.profile.get("password"):
         out["password"] = tools["verify_password_exposure"](ctx.profile["password"])
     out["accounts"] = tools["discover_accounts"]()
+    # The open web, not just the site list. A fixed roster of sites can only
+    # find what is on the roster; this asks a search engine for the identifiers
+    # that belong to exactly one person, then reads every page it gets back and
+    # keeps only those where the identifier is actually present.
+    out["web"] = tools["search_open_web"]()
     out["declared"] = tools["declare_known_accounts"](ctx.profile.get("declared_accounts", ""))
     out["brokers"] = tools["search_data_brokers"]()
     out["pastes"] = tools["search_paste_dumps"]() if ctx.sandbox else {"exposures": []}
@@ -186,8 +192,11 @@ def _run_deterministic_discovery(ctx: ToolContext, tools: dict) -> str:
     accounts, declared = g["accounts"], g["declared"]
     brokers, pastes, risk = g["brokers"], g["pastes"], g["risk"]
 
+    web = g["web"]
     actionable = [{"exposure_id": a["exposure_id"], "name": a["site"]}
                   for a in accounts.get("found", [])]
+    actionable += [{"exposure_id": w["exposure_id"], "name": w["domain"]}
+                   for w in web.get("confirmed", [])]
     actionable += [{"exposure_id": d["exposure_id"], "name": d["service"]}
                    for d in declared.get("declared", [])]
     actionable += [{"exposure_id": r["exposure_id"], "name": r["broker"]}
@@ -224,6 +233,18 @@ def _run_deterministic_discovery(ctx: ToolContext, tools: dict) -> str:
         (f"{n_idhits} confirmed leak exposure(s) matched on your unique identifiers "
          f"({', '.join(idmatch.get('searched', []))}). " if n_idhits else
          f"No leak match on your unique identifiers ({', '.join(idmatch.get('searched', [])) or 'none supplied'}). ")
+        + (f"Open-web search confirmed your data on {len(web.get('confirmed', []))} page(s) "
+           f"across {len(web.get('domains', []))} domain(s) — each one fetched and the "
+           f"identifier found on the page itself. " if web.get("confirmed") else "")
+        # A refused search is not a clean one. Say so, rather than let silence
+        # read as "nothing is out there".
+        + (f"The open-web search could NOT be completed — the search engine refused "
+           f"{len(web.get('blocked_queries', []))} of {web.get('searched', 0)} quer(ies) "
+           f"(rate limiting). This is not a clean result; re-run to finish it. "
+           if web.get("search_degraded") else
+           (f"Open-web search completed and found no page carrying your identifiers "
+            f"verbatim ({web.get('pages_fetched', 0)} result(s) read). "
+            if not web.get("confirmed") else ""))
         + f"Found {n_found} live account(s) by searching {accounts.get('sites_checked', 0)} sites, "
         f"{n_verified} verified breach/profile exposure(s)"
         + (f", {n_declared} you declared" if n_declared else "")
@@ -372,24 +393,76 @@ def run_discovery(profile: dict, stream: EventStream) -> RunResult:
             # Dispatch is absent from this set, so the agent cannot send anything
             # even if it decides it wants to.
             JUDGEMENT_TOOLS = ("determine_legal_basis", "plan_removal",
-                               "draft_erasure_request", "confirm_account")
+                               "draft_erasure_request")
             phase_tools = {k: v for k, v in tools.items() if k in JUDGEMENT_TOOLS}
-            actionable = ([{"exposure_id": a["exposure_id"], "source": a["site"]}
-                           for a in gathered["accounts"].get("attributed", [])]
-                          + [{"exposure_id": d["exposure_id"], "source": d["service"]}
-                             for d in gathered["declared"].get("declared", [])]
-                          + [{"exposure_id": r["exposure_id"], "source": r["broker"]}
-                             for r in gathered["brokers"].get("removable_records", [])])
 
-            goal = JUDGEMENT_GOAL.format(
-                profile=json.dumps(profile, indent=2),
-                risk=gathered["risk"].get("overall_score"),
-                level=gathered["risk"].get("risk_level"),
-                exposures=json.dumps(actionable, indent=2) or "[]",
-            )
-            summary = (_run_llm(ctx, phase_tools, goal, stream) if mode == "anthropic"
-                       else openai_compat_planner.run(
-                           ctx, phase_tools, JUDGEMENT_SYSTEM, goal, stream))
+            # Query all active actionable exposures recorded for this user across all tools
+            # Unconfirmed candidates are held back for user confirmation in the UI
+            all_exposures = ctx.memory.get_exposures(ctx.user_id)
+            active_exposures = [
+                e for e in all_exposures
+                if e.get("status") in ("exposed", None) and e.get("evidence_class") != "candidate"
+            ]
+            # Rank by severity and send the planner only the worst of them.
+            #
+            # An address in a large breach corpus can produce hundreds of
+            # exposures. Every one of them costs tokens in the goal, and the
+            # whole conversation is resent on every round trip, so an unbounded
+            # list walks straight through a free tier's per-minute token budget
+            # (Groq: 8000) and the run dies mid-way. It is also worse reasoning:
+            # the judgement asked for is which exposures are worth acting on,
+            # and that judgement is not improved by paging through the two
+            # hundredth low-severity record.
+            #
+            # The cap is on what the PLANNER sees. Every exposure is still
+            # recorded, still scored, and still shown to the user.
+            _RANK = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+            ranked = sorted(active_exposures,
+                            key=lambda e: (_RANK.get((e.get("severity") or "low").lower(), 3),
+                                           -(e.get("risk_score") or 0.0)))
+            PLANNER_EXPOSURE_CAP = 40
+            actionable = [
+                {"exposure_id": e.get("exposure_id") or e["id"], "source": e["source_name"],
+                 "severity": e.get("severity")}
+                for e in ranked[:PLANNER_EXPOSURE_CAP]
+            ]
+            withheld = len(ranked) - len(actionable)
+            if withheld > 0:
+                ctx.emit("orchestrator", "plan",
+                         f"{len(ranked)} active exposures; the {len(actionable)} most severe are "
+                         f"sent for judgement and {withheld} lower-severity record(s) are "
+                         f"summarised. All {len(ranked)} remain in your ledger and risk score.")
+            if not actionable:
+                actionable = ([{"exposure_id": a.get("exposure_id") or a["id"], "source": a["site"]}
+                               for a in gathered["accounts"].get("attributed", [])]
+                              + [{"exposure_id": d.get("exposure_id") or d["id"], "source": d["service"]}
+                                 for d in gathered["declared"].get("declared", [])]
+                              + [{"exposure_id": r.get("exposure_id") or r["id"], "source": r["broker"]}
+                                 for r in gathered["brokers"].get("removable_records", [])]
+                              + [{"exposure_id": b.get("exposure_id") or b["id"], "source": b["source"]}
+                                 for b in gathered["breaches"].get("verified_exposures", [])]
+                              + [{"exposure_id": h.get("exposure_id") or h["id"], "source": h["source"]}
+                                 for h in gathered["identifiers"].get("hits", [])])
+
+            if actionable:
+                goal = JUDGEMENT_GOAL.format(
+                    profile=json.dumps(profile, indent=2),
+                    risk=gathered["risk"].get("overall_score"),
+                    level=gathered["risk"].get("risk_level"),
+                    exposures=json.dumps(actionable, indent=2),
+                )
+                summary = (_run_llm(ctx, phase_tools, goal, stream) if mode == "anthropic"
+                           else openai_compat_planner.run(
+                               ctx, phase_tools, JUDGEMENT_SYSTEM, goal, stream))
+            else:
+                goal = NO_EXPOSURES_GOAL.format(
+                    profile=json.dumps(profile, indent=2),
+                    risk=gathered["risk"].get("overall_score"),
+                    level=gathered["risk"].get("risk_level"),
+                )
+                summary = (_run_llm(ctx, {}, goal, stream) if mode == "anthropic"
+                           else openai_compat_planner.run(
+                               ctx, {}, NO_EXPOSURES_SYSTEM, goal, stream))
         else:
             summary = _run_deterministic_discovery(ctx, tools)
     except Exception as exc:                                   # demo must not hard-fail
@@ -418,8 +491,11 @@ def run_remediation(profile: dict, request_ids: list[str], stream: EventStream) 
     try:
         if mode in ("anthropic", "openai_compat"):
             goal = REMEDIATION_GOAL.format(request_ids=", ".join(request_ids))
-            summary = (_run_llm(ctx, tools, goal, stream) if mode == "anthropic"
-                       else openai_compat_planner.run(ctx, tools, SYSTEM, goal, stream))
+            REMEDIATION_TOOLS = ("submit_erasure_request", "check_request_status",
+                                 "verify_removal", "escalate_to_regulator")
+            phase_tools = {k: v for k, v in tools.items() if k in REMEDIATION_TOOLS}
+            summary = (_run_llm(ctx, phase_tools, goal, stream) if mode == "anthropic"
+                       else openai_compat_planner.run(ctx, phase_tools, SYSTEM, goal, stream))
         else:
             summary = _run_deterministic_remediation(ctx, tools, request_ids)
     except Exception as exc:

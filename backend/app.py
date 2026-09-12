@@ -895,9 +895,20 @@ async def agent_info():
                 "self_declared": "You stated you hold this account. Valid grounds under DPDP s.12.",
                 "sandbox": "Synthetic demo record. Off by default and labelled wherever it appears.",
             },
-            "free_checks": ["hibp_pwned_passwords (k-anonymous)", "gravatar", "hibp_breach_catalog"],
-            "needs_key": {"hibp_breached_account": "Set HIBP_API_KEY (~$3.95/mo). "
-                                                   "Reported as not_checked without it — never guessed."},
+            "free_checks": [
+                "xposedornot_breached_account (breach membership, no key)",
+                "infostealer_infection (Hudson Rock Cavalier, no key)",
+                "hibp_pwned_passwords (k-anonymous, no key)",
+                "gravatar",
+                "hibp_breach_catalog",
+                "open_web_search (identifier verified on the fetched page)",
+            ],
+            "needs_key": {"hibp_breached_account":
+                          "Set HIBP_API_KEY (~$3.95/mo) to add Have I Been Pwned as a SECOND "
+                          "breach corpus. Not required: breach membership is answered for free "
+                          "by XposedOrNot. Without an HIBP key this one check reports "
+                          "not_checked — it is never guessed, and never silently merged with "
+                          "the free dataset's answer."},
             "not_attempted": ("Indian people-search sites publish no API for this, and probing "
                               "signup or password-reset endpoints to enumerate accounts would "
                               "breach their terms. The tool asks the user instead."),
@@ -923,6 +934,18 @@ async def agent_state(user_id: str):
     if not _memory.get_user(user_id):
         raise HTTPException(status_code=404, detail="Unknown user")
     return _dashboard_state(user_id)
+
+
+@app.get("/api/agent/latest")
+async def agent_latest():
+    """Return dashboard state for the most recently active user."""
+    row = _memory._row("SELECT user_id FROM runs ORDER BY started_at DESC LIMIT 1")
+    if not row:
+        row = _memory._row("SELECT id as user_id FROM users ORDER BY created_at DESC LIMIT 1")
+    if not row or not row.get("user_id"):
+        return {"user_id": None, "exposures": [], "requests": [], "summary": {}}
+    return _dashboard_state(row["user_id"])
+
 
 
 @app.get("/api/agent/events/{run_id}")
@@ -1373,10 +1396,10 @@ async def agent_confirm(req: ConfirmRequest):
     """
     if not req.exposure_id:
         raise HTTPException(status_code=400, detail="exposure_id is required.")
-    user_id = _memory.upsert_user(_profile_of(req))
     exp = _memory.get_exposure(req.exposure_id)
-    if not exp or exp["user_id"] != user_id:
-        raise HTTPException(status_code=404, detail="Unknown exposure for this identity.")
+    if not exp:
+        raise HTTPException(status_code=404, detail="Unknown exposure.")
+    user_id = exp["user_id"]
 
     if req.is_mine:
         _memory.set_exposure_status(req.exposure_id, "exposed")

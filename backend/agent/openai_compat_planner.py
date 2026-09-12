@@ -18,6 +18,7 @@ tools.py run identically whichever provider chose the order.
 import inspect
 import json
 import os
+import time
 import typing
 
 # base_url + a sensible free model for each. All are free-tier, no card needed
@@ -26,13 +27,26 @@ PROVIDERS = {
     "groq": {
         "base_url": "https://api.groq.com/openai/v1",
         "key_env": "GROQ_API_KEY",
-        # Measured on a live free key, single tool-calling round trip:
-        #   openai/gpt-oss-120b  1.3s   <- default; largest, clean tool calls
-        #   openai/gpt-oss-20b   0.5s   faster but smaller
-        #   qwen/qwen3.x-27b     rejects a 20-tool schema as "request too large"
-        "default_model": "openai/gpt-oss-120b",
+        # Default to OpenAI GPT-OSS on Groq for maximum statutory reasoning and compliance
+        "default_model": "openai/gpt-oss-20b",
+        "fallback_models": ["openai/gpt-oss-120b", "qwen/qwen3.8-27b"],
         "signup": "https://console.groq.com/keys",
         "note": "Fastest inference available free. Excellent for a live demo.",
+    },
+    # Google exposes Gemini through an OpenAI-compatible endpoint, so the same
+    # adapter drives it. It is here because .env.example has always advertised
+    # GEMINI_API_KEY while no provider existed to consume it: a key set in the
+    # file was silently ignored and the run fell back to the deterministic
+    # planner, with nothing saying why. A second free provider is also real
+    # insurance — if one free tier is throttling during a demo, the other is
+    # very unlikely to be throttling at the same moment.
+    "gemini": {
+        "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
+        "key_env": "GEMINI_API_KEY",
+        "default_model": "gemini-2.5-flash",
+        "fallback_models": ["gemini-2.5-flash-lite", "gemini-2.0-flash"],
+        "signup": "https://aistudio.google.com/apikey",
+        "note": "Generous free tier; good fallback when another provider throttles.",
     },
     "cerebras": {
         "base_url": "https://api.cerebras.ai/v1",
@@ -155,23 +169,25 @@ def _schema_for(fn, brief: bool = False) -> dict:
     }
 
 
+MAX_RESULT_CHARS = 300
+
 def _compact(result) -> str:
     """
     Shrink a tool result to what the planner actually needs to decide the next step.
 
     Long free-text fields — legal reasoning, notice bodies, step lists — are the
     bulk of these payloads and the model does not need them verbatim to choose a
-    tool. Ids, counts and verdicts do.
+    tool. Ids, counts, verdicts, and methods do.
     """
     if not isinstance(result, dict):
         return json.dumps(result, default=str)[:MAX_RESULT_CHARS]
 
-    DROP = {"request_text", "steps", "legal_basis", "legal_position", "evidence",
-            "excluded_sites", "sources", "checks_run", "recommendations",
-            "why_this_method", "escalation", "reason", "note", "caveat",
-            "disclaimer", "method", "interpretation", "why_candidates",
-            "improve_accuracy", "where_each_helps", "why_unique_matters",
-            "domain_context", "directory_context"}
+    DROP = {"request_text", "steps", "evidence", "excluded_sites", "sources",
+            "checks_run", "recommendations", "why_this_method", "escalation",
+            "reason", "note", "caveat", "disclaimer", "interpretation",
+            "why_candidates", "improve_accuracy", "where_each_helps",
+            "why_unique_matters", "domain_context", "directory_context",
+            "how_collected", "description", "details"}
 
     def shrink(v, depth=0):
         if isinstance(v, dict):
@@ -180,8 +196,8 @@ def _compact(result) -> str:
             # A long list tells the planner a count, not a catalogue.
             head = [shrink(x, depth + 1) for x in v[:4]]
             return head + [f"…and {len(v) - 4} more"] if len(v) > 4 else head
-        if isinstance(v, str) and len(v) > 160:
-            return v[:160] + "…"
+        if isinstance(v, str) and len(v) > 120:
+            return v[:120] + "…"
         return v
 
     out = json.dumps(shrink(result), default=str)
@@ -243,17 +259,80 @@ def run(ctx, tools: dict, system: str, goal: str, stream, max_steps: int = 25) -
     called_tools: set = set()
     nudges = 0
 
+    active_model = model
+    fallback_pool = [m for m in PROVIDERS.get(provider, {}).get("fallback_models", []) if m != active_model]
+    models_to_try = [active_model] + fallback_pool
+
     total_in = total_out = 0
+    # Emitting several tool calls in one turn is what keeps the run inside a
+    # free tier's per-minute token budget, but it is also what these models get
+    # wrong: gpt-oss intermittently emits tool-call arguments that are not valid
+    # JSON, and the provider rejects the whole request with a 400 rather than
+    # the model's own mistake. Falling straight back to the deterministic
+    # pipeline threw away the reasoning layer over a transient formatting slip,
+    # so a parse failure now retries in series before it is treated as fatal.
+    allow_parallel = True
+
     for _ in range(max_steps):
-        resp = client.chat.completions.create(
-            model=model, messages=messages, tools=schemas,
-            tool_choice="auto", temperature=0.2,
-            # Explicitly allow many tool calls per turn. One call per exposure
-            # means the whole conversation is resent per exposure, which is what
-            # exhausts a per-minute token budget; batching collapses ~16 round
-            # trips into ~3.
-            parallel_tool_calls=True,
-        )
+        resp = None
+        for candidate in list(models_to_try):
+            for attempt in range(3):
+                try:
+                    resp = client.chat.completions.create(
+                        model=candidate, messages=messages, tools=schemas,
+                        tool_choice="auto", temperature=0.2,
+                        parallel_tool_calls=allow_parallel,
+                    )
+                    if candidate != active_model:
+                        ctx.emit("orchestrator", "plan",
+                                 f"Switched model to {candidate} to respect provider rate limits.")
+                        active_model = candidate
+                    break
+                except Exception as exc:
+                    err_text = str(exc).lower()
+                    is_rate_limit = ("429" in str(exc) or "rate limit" in err_text
+                                     or "quota" in err_text or "token" in err_text)
+                    is_parse_fail = ("parsing failed" in err_text
+                                     or "could not be parsed" in err_text
+                                     or "failed to call a function" in err_text
+                                     or "tool call validation failed" in err_text)
+
+                    # A malformed tool call is the model's slip, not a dead end.
+                    # One call per turn is the formulation it gets right most
+                    # often, so drop to series and try the same model again.
+                    if is_parse_fail and not is_rate_limit and attempt < 2:
+                        if allow_parallel:
+                            allow_parallel = False
+                            ctx.emit("orchestrator", "plan",
+                                     f"{candidate} returned a malformed tool call; retrying "
+                                     f"one call at a time.")
+                        else:
+                            ctx.emit("orchestrator", "plan",
+                                     f"{candidate} returned a malformed tool call; retrying.")
+                        time.sleep(1.5 * (attempt + 1))
+                        continue
+
+                    if is_rate_limit and len(models_to_try) > 1 and candidate != models_to_try[-1]:
+                        models_to_try.remove(candidate)
+                        ctx.emit("orchestrator", "plan",
+                                 f"Rate limit on {candidate}; failing over to {models_to_try[0]}…")
+                        break
+
+                    # A model that cannot produce a usable tool call after three
+                    # tries is swapped out rather than taking the run down.
+                    if is_parse_fail and len(models_to_try) > 1 and candidate != models_to_try[-1]:
+                        models_to_try.remove(candidate)
+                        ctx.emit("orchestrator", "plan",
+                                 f"{candidate} kept returning malformed tool calls; "
+                                 f"failing over to {models_to_try[0]}…")
+                        break
+                    raise exc
+            if resp is not None:
+                break
+
+        if resp is None:
+            break
+
         u = getattr(resp, "usage", None)
         if u:
             total_in += u.prompt_tokens or 0
@@ -278,7 +357,9 @@ def run(ctx, tools: dict, system: str, goal: str, stream, max_steps: int = 25) -
             # wasted a round trip doing so.
             missing = [t for t in ESSENTIAL_TOOLS
                        if t in tools and t not in called_tools]
-            if missing and nudges < 1:
+            has_exposures = ("Exposures to evaluate" in goal and "[]" not in goal
+                             and "Exposures found: 0" not in goal)
+            if missing and nudges < 1 and has_exposures:
                 nudges += 1
                 messages.append({"role": "assistant", "content": msg.content or ""})
                 messages.append({
@@ -300,6 +381,8 @@ def run(ctx, tools: dict, system: str, goal: str, stream, max_steps: int = 25) -
 
         for call in msg.tool_calls:
             called_tools.add(call.function.name)
+            if call.function.name == "plan_removal":
+                called_tools.add("determine_legal_basis")
             fn = tools.get(call.function.name)
             if fn is None:
                 result = {"error": f"unknown tool {call.function.name!r}"}

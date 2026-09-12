@@ -14,6 +14,7 @@ Tests all core components:
 
 import json
 import os
+import urllib.error
 import os
 import sys
 import time
@@ -53,6 +54,355 @@ def section(name):
 # ═══════════════════════════════════════════════════════════════════════════════
 # Test Suite
 # ═══════════════════════════════════════════════════════════════════════════════
+
+def test_open_web_search():
+    section("12. Open-web search (no false positives)")
+
+    from backend.agent import web_search as ws
+
+    # ── what gets searched ──
+    q = ws.build_queries({"name": "Rahul Sharma", "email": "rahul@gmail.com",
+                          "phone": "+91 98765 43210", "upi_id": "rahul@okaxis",
+                          "pan": "ABCPD1234E", "known_usernames": "darkknight92"})
+    qs = [x[0] for x in q]
+    kinds = {x[2] for x in q}
+
+    test("Email is searched as an exact phrase", '"rahul@gmail.com"' in qs)
+    test("Phone is searched bare and with +91",
+         '"9876543210"' in qs and '"+919876543210"' in qs)
+    test("UPI ID is searched", '"rahul@okaxis"' in qs)
+    test("PAN is searched", '"ABCPD1234E"' in qs)
+    test("Declared handle is searched", '"darkknight92"' in qs)
+
+    # The whole point: a name is shared by thousands, so it is never a query.
+    test("Legal name is NEVER searched",
+         not any("Rahul" in x or "Sharma" in x for x in qs), f"queries were {qs}")
+    test("Only unique-identifier kinds are searched",
+         kinds <= {"email", "phone", "upi", "pan", "username"}, f"kinds {kinds}")
+
+    # A profile with nothing unique produces no search at all.
+    empty = ws.build_queries({"name": "Rahul Sharma"})
+    test("A name alone produces no query", empty == [], f"got {empty}")
+
+    # ── the phone matcher, which is where a false positive would come from ──
+    import re as _re
+
+    def match(text, ident="9876543210"):
+        for m in _re.finditer(r"(?<![\d])\+?\d[\d\s\-().]{6,20}\d(?![\d])", text):
+            d = _re.sub(r"\D", "", m.group(0))
+            if len(d) > 13:
+                continue
+            if d == ident or (d.endswith(ident) and d[:-len(ident)] in ("0", "91", "091", "0091")):
+                return True
+        return False
+
+    test("Bare 10-digit mobile matches", match("call 9876543210 now"))
+    test("Spaced mobile matches (98765 43210)", match("Mobile: 98765 43210"))
+    test("+91 mobile matches", match("call +919876543210"))
+    test("Hyphenated +91 mobile matches", match("call +91-98765-43210"))
+    test("Trunk-prefixed mobile matches", match("dial 09876543210"))
+
+    # Digits from unrelated numbers must never be joined into a match.
+    test("Digits split across unrelated numbers do NOT match",
+         not match("Order 1234567 placed. Invoice 8909876 total 543210 rupees."))
+    test("A row of unrelated figures does NOT match",
+         not match("figures 1234567 8909876 543210 listed"))
+    test("A longer number containing the digits does NOT match",
+         not match("Ref 129876543210456"))
+    test("A non-country prefix does NOT match", not match("txn 559876543210"))
+
+    # ── a username is not unique, so a web hit on one is never a finding ──
+    hits = [
+        ws.WebHit(query='"jsmith"', identifier="jsmith", identifier_type="username",
+                  url="https://example.com/a", domain="example.com", title="", http_status=200,
+                  confirmed=True, matched_text="jsmith", checked_at="now", reproduce=""),
+        ws.WebHit(query='"me@x.com"', identifier="me@x.com", identifier_type="email",
+                  url="https://example.com/b", domain="example.com", title="", http_status=200,
+                  confirmed=True, matched_text="me@x.com", checked_at="now", reproduce=""),
+        ws.WebHit(query='"jsmith"', identifier="jsmith", identifier_type="username",
+                  url="https://example.com/b", domain="example.com", title="", http_status=200,
+                  confirmed=True, matched_text="jsmith", checked_at="now", reproduce=""),
+    ]
+    UNIQUE = {"email", "phone", "upi", "pan"}
+    unique_pages = {h.url for h in hits if h.confirmed and h.identifier_type in UNIQUE}
+    for h in hits:
+        if h.confirmed and h.identifier_type == "username" and h.url not in unique_pages:
+            h.confirmed = False
+
+    by_url = {(h.url, h.identifier_type): h.confirmed for h in hits}
+    test("Username alone on a page is NOT confirmed",
+         by_url[("https://example.com/a", "username")] is False)
+    test("A unique identifier on a page IS confirmed",
+         by_url[("https://example.com/b", "email")] is True)
+    test("Username IS confirmed when the same page carries a unique identifier",
+         by_url[("https://example.com/b", "username")] is True)
+
+    # ── a refused search must never read as a clean one ──
+    # A rate-limited engine serves a page with no results on it, which is the
+    # same shape as "nothing found". If those collapse together the tool tells
+    # somebody their data is nowhere online precisely when it stopped looking.
+    real = ws.search_web
+
+    def fake(results, blocked):
+        return lambda q, engine_state=None: (
+            results, "blocked" if blocked else ("ok" if results else "empty"))
+
+    try:
+        ws.search_web = fake([], blocked=True)
+        r = ws.search_exposures({"email": "someone@example.com"}, max_pages=0)
+        test("A blocked search is flagged as degraded", r["search_degraded"] is True)
+        test("A blocked search is not reported as complete", r["complete"] is False)
+        test("A blocked search names the queries it could not run",
+             r["blocked_queries"] == ['"someone@example.com"'], f"got {r['blocked_queries']}")
+        test("A blocked search warns that clean does not mean absent",
+             "does NOT mean" in r["coverage_note"])
+        test("A blocked search confirms nothing", r["confirmed"] == [])
+
+        # Throttling applies to the client, not to the question: once the engine
+        # has refused, the rest of the run must fail fast rather than pay a
+        # network timeout per query to rediscover the same block. Counted at
+        # the network layer, which is what the timeouts are actually spent on.
+        ws.search_web = real
+        real_once = ws._search_once
+        hits = {"n": 0}
+
+        def blocked_once(q):
+            hits["n"] += 1
+            return [], "blocked"
+
+        real_mg_2 = ws._marginalia
+        mg_hits = {"n": 0}
+
+        def mg_dead(q):
+            mg_hits["n"] += 1
+            raise TimeoutError("secondary down too")
+
+        try:
+            ws._search_once = blocked_once
+            ws._marginalia = mg_dead
+            ws.BLOCK_BACKOFF_S = ()          # no sleeping inside the test
+            multi = ws.search_exposures(
+                {"email": "a@b.com,c@d.com", "phone": "9876543210"}, max_pages=0)
+            # Only the FIRST query may reach the PRIMARY. It tries the quoted
+            # and unquoted form; later queries skip the throttled primary.
+            test("A blocked run stops hitting the throttled primary",
+                 hits["n"] <= 2, f"primary was called {hits['n']} times")
+            # The secondary is NOT skipped — it is not throttled, and a primary
+            # refusal says nothing about whether it can answer this query.
+            # The first query's fallback lives inside _search_once, which is
+            # stubbed here, so the count covers every query after the first.
+            test("The secondary index is still tried for every later query",
+                 mg_hits["n"] == multi["searched"] - 1,
+                 f'secondary tried {mg_hits["n"]}x for {multi["searched"]} queries')
+            test("Both engines failing reports every query as blocked",
+                 len(multi["blocked_queries"]) == multi["searched"],
+                 f'{len(multi["blocked_queries"])} of {multi["searched"]}')
+            test("A short-circuited run is still flagged degraded",
+                 multi["search_degraded"] is True)
+        finally:
+            ws._search_once = real_once
+            ws._marginalia = real_mg_2
+            ws.BLOCK_BACKOFF_S = (5,)
+
+        ws.search_web = fake([], blocked=False)
+        r2 = ws.search_exposures({"email": "someone@example.com"}, max_pages=0)
+        test("A genuinely empty search is NOT flagged as degraded",
+             r2["search_degraded"] is False)
+        test("A genuinely empty search is reported as complete", r2["complete"] is True)
+        test("A completed search says so", "completed" in r2["coverage_note"])
+    finally:
+        ws.search_web = real
+
+    # ── the secondary index rescues a throttled primary ──
+    # A refused primary used to end the search. A second, unthrottled index is
+    # consulted before giving up, and anything it returns is verified on the
+    # page exactly as a primary result would be — so coverage widens without
+    # the standard of proof moving.
+    real_ddg, real_mg = ws._ddg, ws._marginalia
+    seen_q = {}
+    try:
+        def ddg_blocked(q, endpoint):
+            raise urllib.error.HTTPError(endpoint, 202, "anomaly", None, None)
+
+        def mg_ok(q):
+            seen_q["q"] = q
+            return [("https://example.org/page", "A page")]
+
+        import urllib.error
+        ws._ddg, ws._marginalia = ddg_blocked, mg_ok
+        res, status = ws._search_once('"me@example.com"')
+        test("A throttled primary falls back to the secondary index", status == "ok",
+             f"status={status}")
+        test("The fallback returns usable results",
+             res == [("https://example.org/page", "A page")], f"got {res}")
+        test("The fallback query drops the phrase quotes",
+             seen_q.get("q") == "me@example.com", f'sent {seen_q.get("q")!r}')
+
+        # If the secondary is down too, the run is still reported as blocked —
+        # never as clean.
+        def mg_down(q):
+            raise TimeoutError("slow")
+        ws._marginalia = mg_down
+        res2, status2 = ws._search_once('"me@example.com"')
+        test("Both engines down is reported as blocked, not clear", status2 == "blocked")
+        test("Both engines down confirms nothing", res2 == [])
+    finally:
+        ws._ddg, ws._marginalia = real_ddg, real_mg
+
+    # ── the result cache ──
+    import shutil
+    shutil.rmtree(ws._CACHE_DIR, ignore_errors=True)
+
+    ws._cache_put("q-ok", [("https://a.test/1", "t")], "ok")
+    got = ws._cache_get("q-ok")
+    test("A successful search is cached", got is not None and got[1] == "ok")
+    test("Cached results round-trip intact",
+         got[0] == [("https://a.test/1", "t")], f"got {got}")
+
+    # Caching a refusal would turn one throttled minute into hours of
+    # pretending to have looked.
+    ws._cache_put("q-blocked", [], "blocked")
+    test("A BLOCKED search is never cached", ws._cache_get("q-blocked") is None)
+
+    ws._cache_put("q-empty", [], "empty")
+    test("A genuinely empty result IS cached",
+         (ws._cache_get("q-empty") or (None, None))[1] == "empty")
+
+    # An expired entry must be re-queried, not served stale.
+    import os as _os, time as _t
+    _os.utime(ws._cache_path("q-ok"), (_t.time() - ws.CACHE_TTL_S - 60,) * 2)
+    test("An expired cache entry is ignored", ws._cache_get("q-ok") is None)
+    shutil.rmtree(ws._CACHE_DIR, ignore_errors=True)
+
+
+def test_free_intel():
+    section("14. Free breach intelligence (no paid key)")
+
+    from backend.agent import verifiers as v
+    from backend.agent.tools import xposed_fields, _severity_of, XPOSED_LABEL_TO_FIELD
+
+    # ── severity must survive the vocabulary change ──
+    # XposedOrNot names data classes its own way. Unmapped labels fall through
+    # to "low", which reported a breach of government IDs and passwords as
+    # minor — the first version of this integration did exactly that.
+    cases = [
+        ("Email addresses;Usernames", "medium", ["email", "username"]),
+        ("Email addresses;Passwords", "critical", ["email", "password"]),
+        ("Email addresses;Government IDs", "critical", ["email", "government_id"]),
+        ("Email addresses;Credit cards", "critical", ["email", "credit_card"]),
+        ("['Email addresses', 'Religions']", "high", ["email", "religion"]),
+    ]
+    for raw, want_sev, want_fields in cases:
+        got = xposed_fields(raw)
+        test(f"Breach fields parsed: {raw[:34]}", got == want_fields, f"got {got}")
+        test(f"Severity is {want_sev} for {want_fields[-1]}",
+             _severity_of(got) == want_sev, f"got {_severity_of(got)}")
+
+    test("A JSON-list form is parsed as well as a semicolon list",
+         xposed_fields("['Email addresses', 'Passwords']") == ["email", "password"])
+    test("An unknown label is kept, not dropped",
+         xposed_fields("Quantum telepathy records") == ["quantum_telepathy_records"])
+    test("Label map covers the common classes",
+         all(k in XPOSED_LABEL_TO_FIELD for k in
+             ("email addresses", "passwords", "phone numbers", "government ids")))
+
+    # ── the checks refuse to guess when given nothing ──
+    test("XposedOrNot with no email is not_checked",
+         v.check_xposedornot("").result == "not_checked")
+    test("Infostealer check with no email is not_checked",
+         v.check_infostealer("").result == "not_checked")
+
+    # ── evidence discipline ──
+    for fn in (v.check_xposedornot, v.check_infostealer):
+        ev = fn("")
+        test(f"{ev.check} records an endpoint field", hasattr(ev, "endpoint"))
+        test(f"{ev.check} states what it does not prove", len(ev.interpretation) > 10)
+
+
+def test_site_roster():
+    section("13. Discovery site roster")
+
+    from backend.agent import account_discovery as ad
+
+    test("Site roster is non-empty", len(ad.SITES) > 0)
+    test("Every site has a URL template and category",
+         all("{u}" in s["url"] and s.get("category") for s in ad.SITES.values()))
+
+    # Measured 2026-09-12: five invented handles all returned HTTP 200 from
+    # Kaggle, so a hit there proved nothing; Replit returned 404 even for
+    # handles that exist, so it could never produce one.
+    test("Kaggle is excluded (soft 404)", "Kaggle" not in ad.SITES)
+    test("Kaggle exclusion records the reason", "Kaggle" in ad.EXCLUDED)
+    test("Replit is excluded (never returns 200)", "Replit" not in ad.SITES)
+    test("Replit exclusion records the reason", "Replit" in ad.EXCLUDED)
+    test("No site is both checked and excluded",
+         not (set(ad.SITES) & set(ad.EXCLUDED)),
+         f"overlap {set(ad.SITES) & set(ad.EXCLUDED)}")
+
+    # The bug that made scans report nothing: with no declared handle the
+    # deriver returned an empty list, so zero sites were ever checked.
+    handles = ad.derive_usernames({"email": "nalinchamp@gmail.com"})
+    test("A handle is derived from an email when none is declared",
+         [h for h, _ in handles] == ["nalinchamp"], f"got {handles}")
+    test("A derived handle is tagged as a guess",
+         all(src in ("email_local", "upi_local") for _, src in handles))
+    test("Declared handles are still preferred",
+         ad.derive_usernames({"known_usernames": "realhandle",
+                              "email": "other@gmail.com"})[0][1] == "declared")
+    test("A name never produces a handle",
+         ad.derive_usernames({"name": "Nalin Sharma"}) == [])
+
+    # Every site we search must have a removal playbook. Without one,
+    # plan_removal falls through to "statutory_notice" — so adding a site and
+    # forgetting its playbook makes the agent serve a 30-day legal notice on a
+    # service that has a delete button, which is the escalation this product
+    # explicitly exists to avoid.
+    from backend.agent.tools import find_playbook
+    missing = [site for site in ad.SITES if not find_playbook(site)]
+    test("Every searched site has a removal playbook",
+         not missing, f"no playbook for: {missing}")
+
+    KNOWN_METHODS = {"self_serve", "privacy_form", "email_request", "statutory_notice",
+                     "statutory_only", "not_removable", "credential_rotation"}
+    import json as _json
+    pbs = _json.load(open(os.path.join(PROJECT_ROOT, "data", "removal_playbooks.json")))["playbooks"]
+    ids = [p["id"] for p in pbs]
+    test("Playbook ids are unique", len(ids) == len(set(ids)),
+         f"duplicates: {[i for i in ids if ids.count(i) > 1]}")
+    test("Every playbook has a usable URL",
+         all(p.get("url", "").startswith("http") for p in pbs))
+    test("Every playbook has concrete steps",
+         all(len(p.get("steps", [])) >= 2 for p in pbs))
+    test("Every playbook declares a known method",
+         all(p.get("method") in KNOWN_METHODS for p in pbs),
+         f'bad: {sorted({p.get("method") for p in pbs} - KNOWN_METHODS)}')
+
+    # Every method a playbook declares must have an entry in method_info, or
+    # plan_removal shows the user a raw slug instead of an explanation.
+    info = _json.load(open(os.path.join(PROJECT_ROOT, "data", "removal_playbooks.json")))["method_info"]
+    missing_info = sorted({p["method"] for p in pbs} - set(info))
+    test("Every method has a user-facing explanation", not missing_info,
+         f"no method_info for: {missing_info}")
+
+    # An info-stealer infection cannot be erased — the data came off the user's
+    # own machine, so there is no controller to serve. The honest answer is not
+    # "nothing to do": it is rotate everything, urgently.
+    inf = find_playbook("infostealer")
+    test("An info-stealer infection has a remediation playbook", inf is not None)
+    test("It routes to credential rotation, not erasure",
+         inf and inf["method"] == "credential_rotation")
+    test("It tells the user to revoke sessions, not just change passwords",
+         inf and any("session" in s.lower() for s in inf["steps"]))
+    test("It gives an Indian incident-reporting route",
+         inf and ("1930" in inf["escalation"] or "cybercrime.gov.in" in inf["escalation"]))
+
+    # Wikipedia edits are CC BY-SA licensed and the licence requires the
+    # attribution history be kept, so erasure genuinely does not lie there.
+    wiki = find_playbook("Wikipedia")
+    test("Wikipedia is marked not removable (licence requires attribution)",
+         wiki and wiki["method"] == "not_removable")
+
+
 
 def test_datasets():
     section("1. Dataset Integrity")
@@ -188,23 +538,44 @@ def test_pii_recognizer():
     types = set(e.entity_type for e in entities)
     test("Multi-entity detection", len(types) >= 3, f"Found {types}")
 
-    # Verhoeff algorithm
-    test("Verhoeff validates correctly", verhoeff_validate("123451234510") or True)  # Basic check
-    test("Verhoeff rejects invalid (starts with 0)", not verhoeff_validate("0123456789") or True)
+    # Verhoeff algorithm. These assert against published test vectors: 236
+    # carries the check digit 3, so 2363 is valid and 2364 is not. The previous
+    # form of these two tests was `verhoeff_validate(...) or True`, which is
+    # true whatever the function returns — both passed while the function was
+    # returning False for the number the test name said it accepted.
+    test("Verhoeff accepts a valid vector (2363)", verhoeff_validate("2363"))
+    test("Verhoeff accepts a valid vector (123451)", verhoeff_validate("123451"))
+    test("Verhoeff rejects a bad check digit (2364)", not verhoeff_validate("2364"))
+    test("Verhoeff rejects a bad check digit (12345)", not verhoeff_validate("12345"))
+
+    # A +91 mobile is twelve digits, and twelve digits clear Verhoeff by chance
+    # about one time in ten. Ranking the checksum flag above match length let
+    # that chance hit outrank the phone match, so roughly one Indian mobile in
+    # ten was reported to its owner as a leaked Aadhaar number.
+    for number in ("+918760560500", "+916513857105"):
+        got = [e.entity_type for e in recognizer.recognize(f"Call me at {number}")]
+        test(f"{number} is a phone, not an Aadhaar",
+             "PHONE_IN" in got and "AADHAAR" not in got, f"got {got}")
 
     # Benchmark run
     benchmark_path = os.path.join(PROJECT_ROOT, "data", "benchmarks", "pii_ground_truth.json")
     with open(benchmark_path) as f:
         samples = json.load(f)
 
+    # Scored on (type, value) pairs, not on the set of types present. Comparing
+    # types alone cannot tell a correct extraction from one that found the right
+    # KIND of thing in the wrong place — "an AADHAAR was detected" would score a
+    # hit even when the digits reported were somebody's phone number.
+    def _norm(v):
+        return "".join(c for c in str(v).lower() if c.isalnum())
+
     tp, fp, fn = 0, 0, 0
     for sample in samples:
-        detected = recognizer.recognize(sample["text"])
-        expected_types = set(e["type"] for e in sample.get("expected_entities", []))
-        detected_types = set(e.entity_type for e in detected)
-        tp += len(expected_types & detected_types)
-        fp += len(detected_types - expected_types)
-        fn += len(expected_types - detected_types)
+        detected = {(e.entity_type, _norm(e.value)) for e in recognizer.recognize(sample["text"])}
+        expected = {(e["type"], _norm(e["value"])) for e in sample.get("expected_entities", [])}
+        tp += len(expected & detected)
+        fp += len(detected - expected)
+        fn += len(expected - detected)
 
     precision = tp / (tp + fp) if (tp + fp) > 0 else 0
     recall = tp / (tp + fn) if (tp + fn) > 0 else 0
@@ -269,6 +640,56 @@ def test_identity_resolver():
 
     sim = jaro_winkler_similarity("Sharma", "Zzzzzz")
     test("JW dissimilar strings < 0.5", sim < 0.5)
+
+    # ── phone normalisation ──
+    # This read .lstrip('0').lstrip('91'), which strips CHARACTERS, not a
+    # prefix: it ate every leading 9 and 1. 9111111111 became the empty string
+    # and matched nothing, and 9198765432 and 8765432 — two different numbers —
+    # both collapsed to 8765432 and matched each other.
+    n = resolver._normalize
+    test("Phone keeps all ten digits", n("phone", "9876543210") == "9876543210")
+    test("Phone strips +91 and spacing",
+         n("phone", "+91 98765 43210") == "9876543210")
+    test("Phone strips a 0 trunk prefix",
+         n("phone", "0919876543210") == "9876543210")
+    test("A number of leading 9s and 1s survives",
+         n("phone", "9111111111") == "9111111111",
+         f'got {n("phone", "9111111111")!r}')
+    test("Two different numbers do NOT normalise alike",
+         n("phone", "9198765432") != n("phone", "8765432"))
+
+    # ── date of birth ──
+    # date_of_birth was absent from FIELD_WEIGHTS, so it was never compared:
+    # a record could agree or disagree on it and neither counted.
+    test("DOB is a compared field", "date_of_birth" in resolver.FIELD_WEIGHTS)
+    test("DOB is compared exactly, not fuzzily",
+         "date_of_birth" in resolver.EXACT_FIELDS)
+    test("DOB formats normalise alike",
+         n("date_of_birth", "11/03/1994") == n("date_of_birth", "1994-03-11") == "1994-03-11")
+
+    me = {"name": "Rahul Sharma", "email": "rahul.s@gmail.com", "phone": "9876543210",
+          "city": "Mumbai", "date_of_birth": "1994-03-11"}
+    same_name = {"name": "Rahul Sharma", "city": "Mumbai"}
+    wrong_dob = {"name": "Rahul Sharma", "city": "Mumbai", "date_of_birth": "1988-01-02"}
+
+    test("A disagreeing DOB lowers the score",
+         resolver.resolve(me, wrong_dob).overall_score
+         < resolver.resolve(me, same_name).overall_score)
+    test("A disagreeing DOB defeats the match",
+         not resolver.resolve(me, wrong_dob).is_match)
+
+    # ── attribution needs something unique ──
+    r_shared = resolver.resolve(me, same_name)
+    test("A same-name, same-city stranger is NOT attributed", not r_shared.is_match)
+    test("A same-name, same-city stranger is surfaced to confirm",
+         r_shared.needs_confirmation)
+    test("Shared attributes are not a unique identifier",
+         not r_shared.has_unique_identifier)
+
+    r_me = resolver.resolve(me, {"email": "rahul.s@gmail.com"})
+    test("A unique identifier IS attributed", r_me.is_match)
+    test("A unique identifier needs no confirmation", not r_me.needs_confirmation)
+    test("A unique identifier is recorded as unique", r_me.has_unique_identifier)
 
 
 def test_risk_calculator():
@@ -515,15 +936,17 @@ def test_evidence_policy():
     test("Every exclusion records a reason",
          all(isinstance(v, str) and len(v) > 20 for v in _ad.EXCLUDED.values()))
 
-    # Only handles the user CLAIMS are searched by default. Nothing else about a
-    # person is unique enough to search on: nalinchamp@gmail.com and
-    # nalinchamp@yahoo.com are different people, and a legal name is shared by
-    # thousands. The full email is searched separately, by identifier-keyed
-    # services — no username search accepts one.
+    # A handle derived from an email IS searched, because refusing to look meant
+    # a user who supplied only an address had zero sites checked and was told
+    # nothing was found. Accuracy is protected at ATTRIBUTION, not by declining
+    # to search: a guessed handle is tagged, and the clamp in discover_accounts
+    # holds it at tier "candidate" unless the page carries a verified
+    # identifier, so it is never counted as the user's data.
     profile = {"name": "Nalin Sharma", "email": "nalinchamp@gmail.com"}
 
-    test("Nothing is searched when no handle is declared",
-         _ad.derive_usernames(profile) == [])
+    derived = _ad.derive_usernames(profile)
+    test("A handle IS derived when none is declared (scan must not be empty)",
+         [h for h, _ in derived] == ["nalinchamp"], f"got {derived}")
     test("No handle derived from an empty profile", _ad.derive_usernames({}) == [])
 
     d = _ad.derive_usernames({**profile, "known_usernames": "darkknight92, github:realhandle"})
@@ -531,21 +954,30 @@ def test_evidence_policy():
     test("Declared handles are searched", sources.get("darkknight92") == "declared")
     test("Site-scoped handle is searched by its bare handle",
          sources.get("realhandle") == "declared")
-    test("Only declared handles are searched by default",
-         all(src == "declared" for _, src in d))
-    test("Email local-part is NOT searched by default", "nalinchamp" not in sources)
-    test("Name-derived handle is NOT searched by default", "nalinsharma" not in sources)
+    test("Declared handles are listed before guesses",
+         [src for _, src in d][:2] == ["declared", "declared"], f"got {d}")
+    test("Email local-part is tagged as a guess, not as declared",
+         sources.get("nalinchamp") == "email_local")
+    test("Name-derived handle is never searched", "nalinsharma" not in sources)
 
-    # Guesses are opt-in, and are tagged so they can never be promoted.
+    # Guesses are tagged so they can never be promoted to a finding.
     opt = _ad.derive_usernames(profile, include_guessed=True)
     opt_src = {h: src for h, src in opt}
-    test("Guessed handles appear only when requested", len(opt) > 0)
+    test("Guessed handles are produced", len(opt) > 0)
     test("Email local-part is tagged as a guess", opt_src.get("nalinchamp") == "email_local")
-    test("Name handle is tagged as a guess", opt_src.get("nalinsharma") == "name_derived")
+    test("Name is never used to derive handles (zero collision risk)",
+         "name_derived" not in set(opt_src.values()) and "nalinsharma" not in opt_src)
     test("Every guessed source is in the permanent-candidate set",
          all(src in _ad.GUESSED_SOURCES for _, src in opt))
-    test("Handle count is bounded", len(opt) <= 8)
+    test("Handle count is bounded", len(opt) <= 12)
     test("Derived handles are plausible", all(3 <= len(h) <= 39 for h, _ in opt))
+
+    # Opting out must still be possible, and must still search what was declared.
+    off = _ad.derive_usernames({**profile, "known_usernames": "darkknight92"},
+                               include_guessed=False)
+    test("Guessing can be turned off", all(src == "declared" for _, src in off))
+    test("Turning guessing off keeps declared handles",
+         [h for h, _ in off] == ["darkknight92"], f"got {off}")
 
     # The Indian registry is a directory, not a set of findings.
     indian = _tools_mod.load_indian_sources()
@@ -615,10 +1047,30 @@ def test_attribution():
     test("Site-scoped handle does NOT carry to other sites", not a.is_mine)
 
     # A distinctive declared handle is safe to accept.
-    dist = Identifiers.from_profile({"name": "Linus Torvalds", "email": "t@x.com",
-                                     "known_usernames": "torvalds"})
-    a = attribute_profile("torvalds", "page", dist, site="GitHub")
+    dist = Identifiers.from_profile({"name": "Nalin Sharma", "email": "t@x.com",
+                                     "known_usernames": "darkknight92"})
+    a = attribute_profile("darkknight92", "page", dist, site="GitHub")
     test("Distinctive declared handle IS attributed", a.is_mine)
+
+    # A handle that is only a PART of the name — a surname, a forename — is not
+    # distinctive. Millions share a surname, and treating one as settled
+    # attributed a stranger's account on every site at once.
+    for handle, who in (("torvalds", "surname"), ("linus", "forename")):
+        part = Identifiers.from_profile({"name": "Linus Torvalds", "email": "t@x.com",
+                                         "known_usernames": handle})
+        a = attribute_profile(handle, "page", part, site="Roblox")
+        test(f"Declared {who} handle is NOT auto-attributed", not a.is_mine, f"{handle} -> {a.tier}")
+        test(f"Declared {who} handle is flagged high collision risk",
+             username_risk(handle, part) == "high")
+
+    # Scoping it still settles that one site — the escape hatch must survive.
+    scoped_part = Identifiers.from_profile({"name": "Linus Torvalds", "email": "t@x.com",
+                                            "known_usernames": "github:torvalds"})
+    a = attribute_profile("torvalds", "page", scoped_part, site="GitHub")
+    test("A scoped name-part handle IS attributed on that site",
+         a.is_mine and a.tier == "proven")
+    a = attribute_profile("torvalds", "page", scoped_part, site="Roblox")
+    test("A scoped name-part handle does NOT carry elsewhere", not a.is_mine)
 
     # Collision risk must flag name-derived handles.
     test("Name-derived handle is high collision risk",
@@ -698,6 +1150,9 @@ if __name__ == "__main__":
     test_evidence_policy()
     test_attribution()
     test_verification()
+    test_open_web_search()
+    test_free_intel()
+    test_site_roster()
 
     elapsed = time.time() - start
 

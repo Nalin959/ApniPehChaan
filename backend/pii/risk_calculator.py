@@ -30,11 +30,36 @@ SENSITIVITY_WEIGHTS = {
     "PIN_CODE":       1.5,
     "NAME":           2.0,
     "ADDRESS":        3.5,
+    # A leaked password is not a fact about you, it is live access to an
+    # account, and it is reusable everywhere you reused it.
+    "PASSWORD":       9.0,
+    "AUTH_TOKEN":     9.5,   # a session token bypasses the password entirely
+    "SECURITY_ANSWER": 8.0,  # resets the password, so it outranks the password
+    "GOVERNMENT_ID":  9.5,   # national ID: cannot be reissued like a card
+    "PASSPORT":       9.0,
+    "SSN":            9.5,
+    "DATE_OF_BIRTH":  5.0,   # the other half of most identity-verification pairs
+    # Special-category data under DPDP s.2 / GDPR Art.9. The harm is not
+    # financial and cannot be undone by changing a credential.
+    "SPECIAL_CATEGORY": 7.5,
+    "PRIVATE_MESSAGE": 6.0,
+    "INCOME":         4.5,
+    "EMPLOYER":       2.5,
+    "VEHICLE":        4.0,
 }
 
 # Source credibility multipliers
 SOURCE_CREDIBILITY = {
     "hibp_verified":      1.0,
+    # An open-web hit that was confirmed by fetching the page and finding the
+    # identifier in it verbatim is directly observed, not inferred — stronger
+    # evidence than a broker's probabilistic claim that it holds a record.
+    "open_web_verified":  0.95,
+    # A named infection in a specialist infostealer corpus, with the machine and
+    # the date of compromise attached. This is the most reliable signal the
+    # product handles, and the most serious: the credentials are current rather
+    # than historic.
+    "infostealer":        1.0,
     "dark_web_paste":     0.85,
     "data_broker":        0.90,
     "combo_list":         0.70,

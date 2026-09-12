@@ -44,9 +44,11 @@ TIMEOUT = 14
 # means it does not. Each was tested against a real and a fake username.
 SITES: dict[str, dict] = {
     "GitHub":       {"url": "https://github.com/{u}",                 "category": "Developer"},
+    "GitLab":       {"url": "https://gitlab.com/{u}",                 "category": "Developer"},
     "Docker Hub":   {"url": "https://hub.docker.com/u/{u}",           "category": "Developer"},
-    "Replit":       {"url": "https://replit.com/@{u}",                "category": "Developer"},
     "Dev.to":       {"url": "https://dev.to/{u}",                     "category": "Developer"},
+    "Pastebin":     {"url": "https://pastebin.com/u/{u}",             "category": "Paste"},
+    "Hugging Face": {"url": "https://huggingface.co/{u}",              "category": "AI / ML"},
     "Keybase":      {"url": "https://keybase.io/{u}",                 "category": "Identity"},
     "Gravatar":     {"url": "https://gravatar.com/{u}",               "category": "Identity"},
     "About.me":     {"url": "https://about.me/{u}",                   "category": "Personal Profile"},
@@ -54,23 +56,43 @@ SITES: dict[str, dict] = {
     "Behance":      {"url": "https://www.behance.net/{u}",            "category": "Portfolio"},
     "SoundCloud":   {"url": "https://soundcloud.com/{u}",             "category": "Media"},
     "Chess.com":    {"url": "https://www.chess.com/member/{u}",       "category": "Gaming"},
+    "Lichess":      {"url": "https://lichess.org/@/{u}",              "category": "Gaming"},
+    "Roblox":       {"url": "https://www.roblox.com/user.aspx?username={u}", "category": "Gaming"},
+    "AtCoder":      {"url": "https://atcoder.jp/users/{u}",           "category": "Competitive"},
     "Buymeacoffee": {"url": "https://www.buymeacoffee.com/{u}",       "category": "Payments"},
+    "Patreon":      {"url": "https://www.patreon.com/{u}",            "category": "Payments"},
+    "Substack":     {"url": "https://{u}.substack.com",               "category": "Publishing"},
+    "Blogger":      {"url": "https://{u}.blogspot.com",               "category": "Publishing"},
+    "Tumblr":       {"url": "https://{u}.tumblr.com",                 "category": "Social"},
+    "Mastodon":     {"url": "https://mastodon.social/@{u}",           "category": "Social"},
+    "Flickr":       {"url": "https://www.flickr.com/people/{u}",      "category": "Photos"},
+    "Instructables": {"url": "https://www.instructables.com/member/{u}/", "category": "DIY"},
+    "Freelancer":   {"url": "https://www.freelancer.com/u/{u}",       "category": "Work"},
+    "Wikipedia":    {"url": "https://en.wikipedia.org/wiki/User:{u}", "category": "Reference"},
 }
 
 # Deliberately NOT checked, with the reason. Reporting nothing beats guessing.
 EXCLUDED: dict[str, str] = {
-    "Instagram": "Serves HTTP 200 with a login wall for non-existent users — indistinguishable.",
-    "Pinterest": "Serves HTTP 200 for non-existent users — soft 404.",
-    "Medium":    "Serves HTTP 200 for non-existent users — soft 404.",
-    "PyPI":      "Serves HTTP 200 for non-existent users — soft 404.",
-    "GitLab":    "Returns 403 to automated requests; cannot distinguish absent from blocked.",
-    "npm":       "Returns 403 to automated requests.",
-    "CodePen":   "Returns 403 to automated requests.",
+    # Re-verified 2026-09-12 against 5 random non-existent handles each.
+    "Kaggle":     "Serves HTTP 200 for non-existent users — soft 404 (5/5 invented handles "
+                  "returned 200). Was previously trusted and reported accounts that do not exist.",
+    "Replit":     "Returns HTTP 404 even for handles that demonstrably exist (its own founder's), "
+                  "so a 404 proves nothing and a hit never occurs.",
+    "Instagram":  "Serves HTTP 200 with a login wall for non-existent users — indistinguishable.",
+    "Pinterest":  "Serves HTTP 200 for non-existent users — soft 404.",
+    "Medium":     "Serves HTTP 200 for non-existent users — soft 404.",
+    "PyPI":       "Serves HTTP 200 for non-existent users — soft 404.",
+    "Hashnode":   "Serves HTTP 200 for non-existent handles — soft 404 landing page.",
+    "HackerRank": "Serves HTTP 200 for non-existent handles — soft 404.",
+    "CodeChef":   "Serves HTTP 200 for non-existent handles — soft 404.",
+    "LeetCode":   "Returns HTTP 403 to automated headless user agents.",
+    "npm":        "Returns 403 to automated requests.",
+    "CodePen":    "Returns 403 to automated requests.",
     "HackerNews": "Rate-limits automated requests (429).",
-    "Telegram":  "Inconsistent responses; could not verify reliably.",
-    "Twitter/X": "Requires authentication for profile pages.",
-    "LinkedIn":  "Requires authentication; automated access breaches their terms.",
-    "Facebook":  "Requires authentication for profile lookup.",
+    "Telegram":   "Inconsistent responses; could not verify reliably.",
+    "Twitter/X":  "Requires authentication for profile pages.",
+    "LinkedIn":   "Requires authentication; automated access breaches their terms.",
+    "Facebook":   "Requires authentication for profile lookup.",
 }
 
 
@@ -125,7 +147,7 @@ def _check_one(site: str, spec: dict, username: str) -> tuple[AccountHit, str]:
                       checked_at=_now(), reproduce=reproduce), body
 
 
-def derive_usernames(profile: dict, include_guessed: bool = False) -> list[tuple[str, str]]:
+def derive_usernames(profile: dict, include_guessed: bool = True) -> list[tuple[str, str]]:
     """
     Handles to search, each tagged with where it came from.
 
@@ -170,9 +192,14 @@ def derive_usernames(profile: dict, include_guessed: bool = False) -> list[tuple
             add(entry.split(":", 1)[1] if ":" in entry else entry, "declared")
 
     if not include_guessed:
-        return out[:6]
+        return out[:8]
 
-    # Opt-in guesses. Every one of these stays a candidate for ever.
+    # Guesses. Every one of these stays a candidate for ever — see the
+    # GUESSED_SOURCES clamp in discover_accounts(), which rewrites any guessed
+    # hit to tier "candidate" unless the page itself carries a verified
+    # identifier. That clamp is what makes searching these safe to do by
+    # default: a guess can surface something to confirm, but it can never be
+    # counted as yours, enter the ledger, or move the risk score.
     for addr in re.split(r"[,\n;]+", str(profile.get("email") or "") + "," +
                          str(profile.get("alt_emails") or "")):
         addr = addr.strip()
@@ -187,15 +214,13 @@ def derive_usernames(profile: dict, include_guessed: bool = False) -> list[tuple
         if "@" in upi:
             add(upi.split("@")[0], "upi_local")
 
-    parts = [x.lower() for x in str(profile.get("name") or "").split() if x.isalpha()]
-    if len(parts) >= 2:
-        add("".join(parts), "name_derived")
-        add(f"{parts[0]}.{parts[-1]}", "name_derived")
-
-    return out[:8]
+    # Legal names are NEVER used to derive handles — names are shared by thousands
+    # of people and online/gaming usernames rarely match legal names.
+    # Searching names creates severe false-positive collision risks.
+    return out[:12]
 
 
-GUESSED_SOURCES = {"email_local", "upi_local", "name_derived"}
+GUESSED_SOURCES = {"email_local", "upi_local"}
 
 
 def identifier_keyed_note() -> str:
@@ -206,8 +231,8 @@ def identifier_keyed_note() -> str:
 
 
 def discover_accounts(profile: dict, usernames: list[tuple[str, str]] | None = None,
-                      max_workers: int = 10, verified: dict | None = None,
-                      include_guessed: bool = False) -> dict:
+                      max_workers: int = 16, verified: dict | None = None,
+                      include_guessed: bool = True) -> dict:
     """
     Search for accounts, then decide which of them are actually this person's.
 
