@@ -761,6 +761,17 @@ class AgentApproveRequest(AgentScanRequest):
     request_ids: list[str] = Field(default_factory=list)
 
 
+class ChatMessage(BaseModel):
+    role: str = "user"
+    content: str = ""
+
+
+class AgentChatRequest(BaseModel):
+    message: str = ""
+    history: list[ChatMessage] = Field(default_factory=list)
+    context: dict = Field(default_factory=dict)
+
+
 def _profile_of(req: AgentScanRequest) -> dict:
     return {"name": req.name, "email": req.email, "phone": req.phone,
             "city": req.city, "country": req.country or "IN",
@@ -917,6 +928,213 @@ async def agent_state(user_id: str):
 @app.get("/api/agent/events/{run_id}")
 async def agent_events(run_id: str):
     return {"run_id": run_id, "events": _memory.get_events(run_id)}
+
+
+def _get_chat_suggestions(tab: str, user_msg: str) -> list[dict]:
+    suggestions = []
+    low = (user_msg or "").lower()
+    if "scan" in low or "check" in low:
+        suggestions.append({"label": "Deploy Privacy Agent", "action": "navigate_tab", "tab": "agent"})
+    if "exposure" in low or "breach" in low or "leak" in low:
+        suggestions.append({"label": "View Discovered Exposures", "action": "navigate_tab", "tab": "exposures"})
+    if "notice" in low or "legal" in low or "dpdp" in low or "gdpr" in low:
+        suggestions.append({"label": "Open Legal Studio", "action": "navigate_tab", "tab": "legal"})
+    if "compliance" in low or "deadline" in low or "tracker" in low:
+        suggestions.append({"label": "Check Statutory Deadlines", "action": "navigate_tab", "tab": "compliance"})
+
+    if not suggestions:
+        if tab == "dashboard":
+            suggestions = [
+                {"label": "Run Privacy Agent", "action": "navigate_tab", "tab": "agent"},
+                {"label": "Explain Risk Score", "action": "ask", "prompt": "Why is my risk score calculated the way it is?"},
+                {"label": "View Exposures", "action": "navigate_tab", "tab": "exposures"},
+            ]
+        elif tab == "exposures":
+            suggestions = [
+                {"label": "How to Remove Truecaller", "action": "ask", "prompt": "How do I remove my listing from Truecaller?"},
+                {"label": "Draft Legal Notice", "action": "navigate_tab", "tab": "legal"},
+                {"label": "Explain Indian Registry", "action": "ask", "prompt": "Why can court records and MCA filings not be erased under DPDP?"},
+            ]
+        elif tab == "legal":
+            suggestions = [
+                {"label": "DPDP s.12 Erasure", "action": "ask", "prompt": "Explain DPDP Act 2023 Section 12 requirements."},
+                {"label": "30-Day Rule", "action": "ask", "prompt": "What happens if a data fiduciary misses the 30-day DPDP deadline?"},
+                {"label": "View Tracker", "action": "navigate_tab", "tab": "compliance"},
+            ]
+        elif tab == "compliance":
+            suggestions = [
+                {"label": "Escalate to DPBI", "action": "ask", "prompt": "How do I escalate an unresponsive broker to the Data Protection Board of India?"},
+                {"label": "Verify Removals", "action": "navigate_tab", "tab": "agent"},
+            ]
+        else:
+            suggestions = [
+                {"label": "Run Full Privacy Audit", "action": "navigate_tab", "tab": "agent"},
+                {"label": "Check Exposures", "action": "navigate_tab", "tab": "exposures"},
+            ]
+    return suggestions[:3]
+
+
+def _expert_privacy_reply(user_msg: str, tab: str, risk_score: float | None, exposure_count: int) -> str:
+    msg = (user_msg or "").lower()
+    if any(w in msg for w in ("dpdp", "india", "section 12", "s.12", "erasure")):
+        return (
+            "### India DPDP Act 2023 — Data Subject Rights\n\n"
+            "Under **Section 12 of the Digital Personal Data Protection Act 2023**, you have the right to request **correction, completion, updating, and erasure** of personal data from data fiduciaries once the original purpose of processing is complete.\n\n"
+            "**Key Principles:**\n"
+            "- **30-Day Statutory Timeline**: Fiduciaries must address your request within 30 days.\n"
+            "- **Section 13 Grievance Redressal**: If ignored, you can formally escalate to the Data Fiduciary's Grievance Officer.\n"
+            "- **DPBI Escalation**: Unresolved complaints may be escalated to the **Data Protection Board of India (DPBI)**, which can levy penalties up to ₹250 crore for significant breaches.\n\n"
+            "*Note: Erasure does NOT apply to mandatory legal retentions (e.g. tax laws, KYC records) or public court records.*"
+        )
+    if any(w in msg for w in ("gdpr", "europe", "article 17", "art 17", "right to be forgotten")):
+        return (
+            "### EU GDPR — Article 17 (Right to Erasure)\n\n"
+            "GDPR **Article 17 ('Right to be Forgotten')** grants data subjects the right to obtain erasure of personal data without undue delay when:\n"
+            "- The personal data is no longer necessary for the purpose it was collected.\n"
+            "- You withdraw consent on which processing is based.\n"
+            "- You object to direct marketing or illegitimate profiling.\n\n"
+            "**Statutory Period**: Controllers must respond and comply within **1 calendar month** (extendable by 2 months for complex cases with prior notice)."
+        )
+    if any(w in msg for w in ("truecaller", "naukri", "shaadi", "justdial", "self-serve", "self serve")):
+        return (
+            "### Self-Serve Removals vs Statutory Notices\n\n"
+            "A core rule of SovereignPrivacy AI: **A legal notice is the escalation, not the opening move.**\n\n"
+            "- **Truecaller**: Direct unlisting form at `truecaller.com/unlisting` takes ~3 minutes and removes your number from public search.\n"
+            "- **Naukri / Job Portals**: Profile deletion is directly available in Account Settings.\n"
+            "- **Public Social Profiles**: Direct account deactivation or deletion avoids 30 days of waiting for a legal notice.\n\n"
+            "Our system only generates statutory notices for persistent data brokers, scrapers, and entities without self-serve tools."
+        )
+    if any(w in msg for w in ("candidate", "username", "handle", "torvalds", "collision", "not mine")):
+        return (
+            "### Identity Attribution & Handle Collisions\n\n"
+            "Unlike simple scanners that assume any matching username belongs to you, SovereignPrivacy AI uses **strict attribution**:\n\n"
+            "- **Name collisions**: Usernames that match common names (like `@torvalds` or `@rahulsharma`) are shared by thousands across the web.\n"
+            "- **Unconfirmed Candidates**: When an account is found with your searched handle, our agent parks it as an **unconfirmed candidate**.\n"
+            "- **Your Control**: It is NOT counted in your risk score or removal plan until you click **'Yes, mine'**.\n"
+            "- Clicking **'Not me'** permanently excludes that stranger's profile from your privacy record."
+        )
+    if any(w in msg for w in ("risk", "score", "calculate", "overall")):
+        score_desc = f"Your current calculated risk score is **{risk_score} / 100**." if risk_score is not None else "Run a privacy audit in the Privacy Agent tab to calculate your risk score."
+        return (
+            f"### Privacy Risk Score Breakdown\n\n{score_desc}\n\n"
+            "**How it is computed:**\n"
+            "1. **Verified Breaches**: Leaked plain-text credentials or sensitive identifiers (Aadhaar, PAN, financial cards) carry highest severity (Critical/High).\n"
+            "2. **Dark-Web Pastes**: Raw dumps containing your contact info and personal records.\n"
+            "3. **Data Broker Exposure**: Aggregation of marketing dossiers, phone directories, and location profiles.\n"
+            "4. **Corroboration Factor**: Multiple sources holding the same unique identifier compound your vulnerability."
+        )
+
+    return (
+        f"### SovereignPrivacy AI Copilot\n\n"
+        f"I am monitoring your privacy posture on the **{tab.replace('-', ' ').title()}** tab. "
+        f"Currently, {exposure_count} exposures have been tracked.\n\n"
+        f"**Actions you can take right now:**\n"
+        f"- **Discover**: Run the autonomous Privacy Agent to scan breach intelligence, dark web pastes, and people directories.\n"
+        f"- **Verify**: Review candidate handles so strangers' accounts are not attributed to you.\n"
+        f"- **Remediate**: Review the removal plan — execute quick self-serve removals or approve statutory DPDP/GDPR erasure notices.\n"
+        f"- **Audit**: All actions generate cryptographic SHA-256 receipts in the immutable audit ledger."
+    )
+
+
+@app.post("/api/agent/chat")
+async def agent_chat(req: AgentChatRequest):
+    """
+    Sitewide AI Privacy Copilot — available across all tabs.
+    Context-aware reasoning powered by Groq (openai/gpt-oss-120b) or expert knowledge engine.
+    """
+    user_msg = (req.message or "").strip()
+    if not user_msg:
+        raise HTTPException(status_code=400, detail="Message cannot be empty")
+
+    ctx = req.context or {}
+    tab = ctx.get("tab", "dashboard")
+    risk_score = ctx.get("risk_score")
+    exposure_count = ctx.get("exposure_count", 0)
+    profile = ctx.get("profile", {})
+    user_name = profile.get("name", "User")
+
+    system_prompt = (
+        "You are SovereignPrivacy AI Copilot — an expert autonomous privacy intelligence and legal defense assistant. "
+        "You help users identify personal data exposures, understand data privacy legislation (India DPDP Act 2023, EU GDPR, US CCPA), "
+        "and assert their statutory rights to erasure, correction, and opt-out.\n\n"
+        f"CURRENT SESSION CONTEXT:\n"
+        f"- Active UI Tab: {tab}\n"
+        f"- User Name: {user_name}\n"
+        f"- Current Risk Score: {risk_score if risk_score is not None else 'Not yet calculated'}\n"
+        f"- Exposures Count: {exposure_count}\n\n"
+        "GUIDELINES:\n"
+        "1. Give direct, actionable, legally precise advice.\n"
+        "2. When discussing Indian law, cite Section 12 (Right to correction and erasure) and Section 13 (Grievance redressal) of DPDP Act 2023.\n"
+        "3. Emphasize that self-serve deletion links should be prioritized over legal notices for services that offer instant deletion (e.g. Truecaller, Naukri, social profiles).\n"
+        "4. Clarify that statutory notices apply to commercial data brokers and data fiduciaries, but NOT public court records (e.g. Indian Kanoon) or statutory corporate filings (MCA21).\n"
+        "5. Keep responses concise (under 250 words), structured with markdown formatting."
+    )
+
+    # 1. Try OpenAI-compatible provider (e.g. Groq with openai/gpt-oss-120b)
+    from backend.agent.openai_compat_planner import configured, PROVIDERS, model_for
+    provider = configured()
+    if provider:
+        try:
+            from openai import OpenAI
+            spec = PROVIDERS[provider]
+            model = model_for(provider)
+            client = OpenAI(api_key=os.environ[spec["key_env"]], base_url=spec["base_url"])
+
+            chat_messages = [{"role": "system", "content": system_prompt}]
+            for h in (req.history or [])[-6:]:
+                if h.content and h.role in ("user", "assistant"):
+                    chat_messages.append({"role": h.role, "content": h.content})
+            chat_messages.append({"role": "user", "content": user_msg})
+
+            resp = client.chat.completions.create(
+                model=model,
+                messages=chat_messages,
+                temperature=0.3,
+                max_tokens=600,
+            )
+            reply = (resp.choices[0].message.content or "").strip()
+            if reply:
+                return {
+                    "reply": reply,
+                    "model": f"{model} ({provider})",
+                    "suggested_actions": _get_chat_suggestions(tab, user_msg)
+                }
+        except Exception:
+            pass
+
+    # 2. Try Anthropic if configured
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        try:
+            from anthropic import Anthropic
+            client = Anthropic()
+            claude_msgs = []
+            for h in (req.history or [])[-6:]:
+                if h.content and h.role in ("user", "assistant"):
+                    claude_msgs.append({"role": h.role, "content": h.content})
+            claude_msgs.append({"role": "user", "content": user_msg})
+            resp = client.messages.create(
+                model="claude-3-5-sonnet-20241022",
+                max_tokens=600,
+                system=system_prompt,
+                messages=claude_msgs,
+            )
+            reply = (resp.content[0].text or "").strip()
+            if reply:
+                return {
+                    "reply": reply,
+                    "model": "claude-3-5-sonnet",
+                    "suggested_actions": _get_chat_suggestions(tab, user_msg)
+                }
+        except Exception:
+            pass
+
+    # 3. Expert Knowledge Engine fallback
+    reply = _expert_privacy_reply(user_msg, tab, risk_score, exposure_count)
+    return {
+        "reply": reply,
+        "model": "SovereignPrivacy Expert Engine (Offline/Fast)",
+        "suggested_actions": _get_chat_suggestions(tab, user_msg)
+    }
 
 
 @app.post("/api/agent/scan")

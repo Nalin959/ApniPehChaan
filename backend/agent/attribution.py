@@ -326,7 +326,9 @@ def username_risk(username: str, ident: Identifiers) -> str:
                      "_".join(name_parts_chk), name_parts_chk[0] + name_parts_chk[-1]}
             if u in plain:
                 return "high"
-        return "confirmed"
+        if any(c.isdigit() for c in u) or len(u) >= 12:
+            return "low"
+        return "medium"
     if u in GENERIC_HANDLES or len(u) <= 3:
         return "generic"
 
@@ -356,12 +358,12 @@ def username_risk(username: str, ident: Identifiers) -> str:
 def collision_warning(username: str, risk: str) -> str:
     """Plain-language note for the UI about why a handle may not be the user."""
     return {
-        "confirmed": f"You confirmed '{username}' is yours.",
+        "confirmed": f"Candidate matching handle '{username}'. Confirm if this profile is yours.",
         "generic":   f"'{username}' is a generic handle — it identifies nobody in particular.",
         "high":      (f"'{username}' is just your name with the punctuation removed. Thousands "
                       f"of people share it, so a match here is very likely someone else."),
-        "medium":    (f"'{username}' could plausibly belong to someone else; treat a match as "
-                      f"unconfirmed until something on the page corroborates it."),
-        "low":       (f"'{username}' is distinctive enough that a match is more likely to be "
-                      f"you — but still needs corroboration before it counts."),
+        "medium":    (f"'{username}' could belong to someone else with the same handle. "
+                      f"Review profile link to verify if this account is actually yours."),
+        "low":       (f"'{username}' is distinctive, but still requires your confirmation "
+                      f"before being attributed to you."),
     }.get(risk, "")

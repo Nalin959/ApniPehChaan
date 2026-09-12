@@ -24,7 +24,9 @@ document.addEventListener('DOMContentLoaded', () => {
     initLegalForm();
     initBenchmark();
     initExposureFilters();
+    initProfileSync();
     fetchSystemStatus();
+    initAICopilot();
 });
 
 // ═══ Particle Background ════════════════════════════════════════════════════
@@ -122,7 +124,22 @@ function navigateTo(section) {
 
     // Refresh section data
     if (section === 'compliance') refreshCompliance();
-    if (section === 'dashboard') fetchSystemStatus();
+    if (section === 'dashboard') {
+        fetchSystemStatus();
+        if (state.agentState) updateDashboardFromAgent(state.agentState, state.agentRisk);
+    }
+    if (section === 'exposures') {
+        if (state.agentState) renderAgentExposures(state.agentState);
+        else if (state.scanResults) renderExposures(state.scanResults);
+    }
+    if (section === 'legal') {
+        prefillLegalForm();
+    }
+
+    // Update AI Copilot
+    if (window.AIAssistant) {
+        window.AIAssistant.onTabChange(section);
+    }
 }
 
 // ═══ System Status ══════════════════════════════════════════════════════════
@@ -134,8 +151,10 @@ async function fetchSystemStatus() {
         document.getElementById('audit-count').textContent = data.audit_trail?.total_receipts || 0;
         document.getElementById('active-requests').textContent = data.compliance_tracker?.total_requests || 0;
 
-        // If we have scan results, update dashboard
-        if (state.scanResults) {
+        // Prioritize agent results if present
+        if (state.agentState) {
+            updateDashboardFromAgent(state.agentState, state.agentRisk);
+        } else if (state.scanResults) {
             updateDashboardFromResults(state.scanResults);
         }
     } catch (e) {
@@ -920,6 +939,7 @@ function agentOnMessage(msg) {
         traceReasoning(msg.text);
     } else if (msg.type === 'phase_complete') {
         agentRender(msg);
+        syncAgentToExposuresAndDashboard(msg);
         agentSetBusy(false);
     } else if (msg.type === 'error') {
         traceAdd('orchestrator', msg.message, 'error');
@@ -1109,6 +1129,210 @@ function agentLevelFor(score) {
     return { label: 'Minimal', color: '#10b981' };
 }
 
+/* ── Bridge: Agent Findings → Exposures Tab & Command Center Dashboard ───── */
+
+function syncAgentToExposuresAndDashboard(msg) {
+    if (!msg || !msg.state) return;
+    const st = msg.state;
+    state.agentState = st;
+    state.agentSummary = st.summary || {};
+    state.agentRisk = agentScoreFrom(msg) ?? (st.summary && st.summary.overall_risk);
+
+    // Update Command Center stats
+    updateDashboardFromAgent(st, state.agentRisk);
+
+    // Render cards in Exposures tab
+    renderAgentExposures(st);
+
+    // Update Copilot if open
+    if (window.AIAssistant) {
+        window.AIAssistant.updateContextStats();
+    }
+}
+
+function updateDashboardFromAgent(st, riskScore) {
+    if (!st) return;
+    const s = st.summary || {};
+    const exposures = (st.exposures || []).filter(e => e.status !== 'not_mine');
+    const breaches = exposures.filter(e => e.source_type === 'breach').length;
+    const brokers = exposures.filter(e => e.source_type === 'data_broker' || e.source_type === 'public_profile').length;
+    const pastes = exposures.filter(e => e.source_type === 'paste').length;
+
+    const score = Math.round(riskScore != null ? riskScore : (s.overall_risk || 0));
+    const scoreEl = document.getElementById('risk-score-value');
+    if (scoreEl) scoreEl.textContent = score;
+
+    const bEl = document.getElementById('breach-count');
+    if (bEl) bEl.textContent = breaches;
+    const brEl = document.getElementById('broker-count');
+    if (brEl) brEl.textContent = brokers;
+    const pEl = document.getElementById('paste-count');
+    if (pEl) pEl.textContent = pastes;
+
+    const badge = document.getElementById('risk-level-badge');
+    if (badge) {
+        const lvl = agentLevelFor(score);
+        badge.textContent = lvl.label;
+        badge.style.background = lvl.color ? `${lvl.color}22` : '';
+        badge.style.color = lvl.color || '';
+    }
+
+    const riskCard = document.getElementById('stat-risk-score');
+    if (riskCard) {
+        if (score >= 60) riskCard.style.borderColor = 'rgba(239, 68, 68, 0.4)';
+        else if (score >= 30) riskCard.style.borderColor = 'rgba(245, 158, 11, 0.4)';
+        else riskCard.style.borderColor = 'rgba(16, 185, 129, 0.4)';
+    }
+
+    const recsCard = document.getElementById('recommendations-card');
+    const recsList = document.getElementById('recommendations-list');
+    if (recsCard && recsList) {
+        const recs = [];
+        const plan = st.removal_plan;
+        if (plan) {
+            if (plan.self_serve_count > 0) {
+                recs.push(`⚡ Quick Action: ${plan.self_serve_count} exposure${plan.self_serve_count > 1 ? 's' : ''} can be removed immediately via self-serve links (~${plan.estimated_minutes} min total).`);
+            }
+            if (plan.needs_notice_count > 0) {
+                recs.push(`⚖️ Statutory Notice: ${plan.needs_notice_count} data fiduciaries require legal erasure notices under DPDP Act s.12.`);
+            }
+        }
+        const unconfirmed = (st.exposures || []).filter(e => e.status === 'unconfirmed').length;
+        if (unconfirmed > 0) {
+            recs.push(`🔍 Attribution Gate: ${unconfirmed} candidate handle${unconfirmed > 1 ? 's' : ''} require your review in Privacy Agent before any action.`);
+        }
+        if (recs.length === 0 && score > 0) {
+            recs.push("Review identified exposures in the Exposures tab and initiate takedowns.");
+        }
+        if (recs.length > 0) {
+            recsCard.style.display = 'block';
+            recsList.innerHTML = recs.map(r => `<div class="recommendation-item">${escapeHtml(r)}</div>`).join('');
+        }
+    }
+}
+
+function renderAgentExposures(st) {
+    const container = document.getElementById('exposure-cards');
+    if (!container || !st) return;
+    container.innerHTML = '';
+
+    const cards = [];
+    const exposures = (st.exposures || []).filter(e => e.status !== 'not_mine');
+
+    exposures.forEach(exp => {
+        const isCand = exp.status === 'unconfirmed';
+        const d = exp.detail || {};
+        const isNotServable = exp.evidence_class === 'judicial_record' || exp.evidence_class === 'statutory_publication';
+
+        let srcType = 'broker';
+        let typeBadge = 'Data Broker';
+        if (exp.source_type === 'breach') {
+            srcType = 'breach';
+            typeBadge = 'Verified Breach';
+        } else if (exp.source_type === 'paste') {
+            srcType = 'paste';
+            typeBadge = 'Dark Web Leak';
+        } else if (exp.source_type === 'public_profile') {
+            srcType = 'broker';
+            typeBadge = isCand ? 'Candidate Account (Unconfirmed)' : 'Public Profile';
+        }
+
+        let domain = d.url ? d.url.replace(/^https?:\/\//, '').split('/')[0] : (d.website || exp.source_name);
+        const card = createExposureCard({
+            title: isCand ? `${exp.source_name} (@${exp.record_id})` : exp.source_name,
+            source: srcType,
+            severity: exp.severity || (isCand ? 'low' : 'medium'),
+            domain: domain,
+            date: (exp.discovered_at || '').split('T')[0] || (d.date_found ? d.date_found.split('T')[0] : ''),
+            pwnCount: d.pwn_count,
+            dataClasses: exp.data_found || [],
+            type: typeBadge,
+            companyName: exp.source_name,
+            companyEmail: d.privacy_email || '',
+            removalDifficulty: d.removal_difficulty || (exp.status === 'removed' ? 'Removed' : (isCand ? 'Requires Confirmation' : 'Standard')),
+            optOutUrl: d.url || d.removal_url || d.opt_out_url || '',
+            noNotice: isNotServable || isCand,
+        });
+        cards.push(card);
+    });
+
+    if (cards.length === 0) {
+        container.innerHTML = `<div class="glass-card empty-state"><div class="empty-icon">✅</div><h3>No Significant Exposures</h3><p>No critical data exposures were found for the provided identity.</p></div>`;
+    } else {
+        cards.forEach(c => container.appendChild(c));
+    }
+}
+
+/* ── Profile Sync Across Tabs ────────────────────────────────────────────── */
+
+function initProfileSync() {
+    const pairs = [
+        ['ag-name', 'input-name', 'user-name'],
+        ['ag-email', 'input-email', 'user-email'],
+        ['ag-phone', 'input-phone', 'user-phone'],
+        ['ag-city', 'input-city'],
+        ['ag-aadhaar', 'input-aadhaar'],
+        ['ag-pan', 'input-pan'],
+    ];
+
+    // Load from localStorage if present
+    const saved = localStorage.getItem('sovereign_profile');
+    if (saved) {
+        try {
+            const p = JSON.parse(saved);
+            Object.entries(p).forEach(([k, val]) => {
+                const el = document.getElementById(k);
+                if (el && val && !el.value) el.value = val;
+            });
+        } catch(e) {}
+    }
+
+    pairs.forEach(group => {
+        group.forEach(id => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.addEventListener('input', () => {
+                const val = el.value;
+                group.forEach(otherId => {
+                    if (otherId !== id) {
+                        const other = document.getElementById(otherId);
+                        if (other) other.value = val;
+                    }
+                });
+                const profileObj = {};
+                ['ag-name', 'ag-email', 'ag-phone', 'ag-city', 'ag-aadhaar', 'ag-pan', 'input-name', 'input-email'].forEach(fid => {
+                    const f = document.getElementById(fid);
+                    if (f) profileObj[fid] = f.value;
+                });
+                localStorage.setItem('sovereign_profile', JSON.stringify(profileObj));
+            });
+        });
+    });
+}
+
+function prefillLegalForm() {
+    const name = document.getElementById('ag-name')?.value || document.getElementById('input-name')?.value;
+    const email = document.getElementById('ag-email')?.value || document.getElementById('input-email')?.value;
+    const phone = document.getElementById('ag-phone')?.value || document.getElementById('input-phone')?.value;
+    const pan = document.getElementById('ag-pan')?.value || document.getElementById('input-pan')?.value;
+    const aadhaar = document.getElementById('ag-aadhaar')?.value || document.getElementById('input-aadhaar')?.value;
+    const city = document.getElementById('ag-city')?.value || document.getElementById('input-city')?.value;
+
+    const un = document.getElementById('user-name');
+    if (un && !un.value && name) un.value = name;
+    const ue = document.getElementById('user-email');
+    if (ue && !ue.value && email) ue.value = email;
+    const up = document.getElementById('user-phone');
+    if (up && !up.value && phone) up.value = phone;
+    const uid = document.getElementById('user-id-number');
+    if (uid && !uid.value) {
+        if (pan) uid.value = `PAN: ${pan}`;
+        else if (aadhaar) uid.value = `Aadhaar: ${aadhaar}`;
+    }
+    const uaddr = document.getElementById('user-address');
+    if (uaddr && !uaddr.value && city) uaddr.value = city;
+}
+
 function agEsc(v) {
     return String(v == null ? '' : v).replace(/[&<>"']/g,
         c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -1201,12 +1425,19 @@ function renderCandidates(st) {
     agEl('candidates-list').innerHTML = cands.map(e => {
         const d = e.detail || {};
         const risk = d.collision_risk || 'medium';
+        const riskClass = (risk === 'confirmed' || risk === 'low') ? 'low' : (risk === 'high' ? 'high' : 'medium');
+        const riskLabel = (risk === 'confirmed' || risk === 'low')
+            ? 'low collision risk'
+            : (risk === 'high' ? 'high collision risk (common name)' : `${risk} collision risk`);
+
+        const whyNote = d.collision_note || (d.attribution || {}).explanation || 'Candidate handle matched during discovery. Verify before attributing.';
+
         return `
         <div class="cand-item" id="cand-${agEsc(e.id)}">
             <div class="cand-head">
                 <span class="cand-site">${agEsc(e.source_name)}</span>
                 <span class="cand-handle">@${agEsc(e.record_id)}</span>
-                <span class="cand-risk risk-${agEsc(risk)}">${agEsc(risk)} collision risk</span>
+                <span class="cand-risk risk-${agEsc(riskClass)}">${agEsc(riskLabel)}</span>
                 ${d.handle_source ? `<span class="cand-source">from ${agEsc(d.handle_source.replace('_', ' '))}</span>` : ''}
                 ${d.url ? `<a class="cand-link" href="${agEsc(d.url)}" target="_blank" rel="noopener noreferrer">view ↗</a>` : ''}
                 <span class="cand-actions">
@@ -1214,7 +1445,7 @@ function renderCandidates(st) {
                     <button class="cand-btn no"  data-id="${agEsc(e.id)}" data-mine="0">Not me</button>
                 </span>
             </div>
-            <div class="cand-why">${agEsc(d.collision_note || (d.attribution || {}).explanation || '')}</div>
+            <div class="cand-why">${agEsc(whyNote)}</div>
         </div>`;
     }).join('');
 
@@ -1226,17 +1457,339 @@ function renderCandidates(st) {
 async function confirmCandidate(exposureId, isMine, btn) {
     const row = agEl('cand-' + exposureId);
     try {
-        await fetch('/api/agent/confirm', {
+        const resp = await fetch('/api/agent/confirm', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ ...agProfile(), exposure_id: exposureId, is_mine: isMine }),
         });
+        const data = await resp.json();
         if (row) {
             row.querySelectorAll('.cand-btn').forEach(x => { x.disabled = true; x.classList.add('done'); });
-            row.querySelector('.cand-why').textContent = isMine
-                ? '✓ Confirmed as yours — now included in your risk score and removal plan.'
-                : '✗ Marked as someone else — excluded permanently.';
+            if (!isMine) {
+                row.querySelector('.cand-why').textContent = '✗ Marked as someone else — excluded permanently.';
+                row.style.opacity = '0.5';
+                setTimeout(() => {
+                    row.style.transition = 'all 0.3s ease';
+                    row.style.maxHeight = '0px';
+                    row.style.padding = '0px';
+                    row.style.margin = '0px';
+                    row.style.overflow = 'hidden';
+                    setTimeout(() => {
+                        row.remove();
+                        const remaining = document.querySelectorAll('#candidates-list .cand-item').length;
+                        const countEl = agEl('cand-count');
+                        if (countEl) {
+                            countEl.textContent = remaining > 0 ? `${remaining} unconfirmed — not counted as yours` : 'All candidates reviewed ✓';
+                        }
+                        if (remaining === 0) {
+                            setTimeout(() => {
+                                const panel = agEl('candidates-panel');
+                                if (panel) panel.hidden = true;
+                            }, 1000);
+                        }
+                    }, 300);
+                }, 600);
+            } else {
+                row.querySelector('.cand-why').textContent = '✓ Confirmed as yours — added to exposures & removal plan.';
+                row.style.borderColor = 'rgba(16, 185, 129, 0.4)';
+            }
+        }
+        if (data && data.state) {
+            syncAgentToExposuresAndDashboard({ state: data.state });
         }
     } catch (e) {
         if (row) row.querySelector('.cand-why').textContent = 'Could not save that. Try again.';
     }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Sitewide AI Copilot Assistant Module
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+const AIAssistant = {
+    isOpen: false,
+    history: [],
+    currentTab: 'dashboard',
+
+    init() {
+        const trigger = document.getElementById('ai-copilot-trigger');
+        const panel = document.getElementById('ai-copilot-panel');
+        const closeBtn = document.getElementById('copilot-close-btn');
+        const clearBtn = document.getElementById('copilot-clear-btn');
+        const sendBtn = document.getElementById('copilot-send-btn');
+        const input = document.getElementById('copilot-input');
+
+        if (!trigger || !panel) return;
+
+        trigger.addEventListener('click', () => this.toggle());
+        if (closeBtn) closeBtn.addEventListener('click', () => this.toggle(false));
+        if (clearBtn) clearBtn.addEventListener('click', () => this.clearChat());
+
+        if (sendBtn && input) {
+            sendBtn.addEventListener('click', () => {
+                const text = input.value.trim();
+                if (text) {
+                    this.sendMessage(text);
+                    input.value = '';
+                    input.style.height = 'auto';
+                }
+            });
+
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    sendBtn.click();
+                }
+            });
+
+            input.addEventListener('input', () => {
+                input.style.height = 'auto';
+                input.style.height = Math.min(input.scrollHeight, 90) + 'px';
+            });
+        }
+
+        this.fetchModelStatus();
+        this.onTabChange(state.currentSection || 'dashboard');
+    },
+
+    async fetchModelStatus() {
+        try {
+            const resp = await fetch('/api/agent/info');
+            const data = await resp.json();
+            const tag = document.getElementById('copilot-model-tag');
+            if (tag) {
+                if (data.planner === 'openai_compat') {
+                    tag.innerHTML = `<span class="status-dot online"></span> Groq · GPT-OSS Active`;
+                } else if (data.planner === 'anthropic') {
+                    tag.innerHTML = `<span class="status-dot online"></span> Claude 3.5 Active`;
+                } else {
+                    tag.innerHTML = `<span class="status-dot online"></span> AI Sovereign Engine`;
+                }
+            }
+        } catch(e) {}
+    },
+
+    toggle(force) {
+        const panel = document.getElementById('ai-copilot-panel');
+        if (!panel) return;
+        this.isOpen = force !== undefined ? force : !this.isOpen;
+        panel.hidden = !this.isOpen;
+        if (this.isOpen) {
+            this.updateContextStats();
+            const input = document.getElementById('copilot-input');
+            if (input) setTimeout(() => input.focus(), 150);
+        }
+    },
+
+    onTabChange(tab) {
+        this.currentTab = tab;
+        const tabEl = document.getElementById('copilot-active-tab');
+        if (tabEl) tabEl.textContent = tab.replace('-', ' ');
+
+        this.updateContextStats();
+        this.renderChipsForTab(tab);
+    },
+
+    updateContextStats() {
+        const riskEl = document.getElementById('copilot-risk-badge');
+        if (!riskEl) return;
+        const score = state.agentRisk != null
+            ? Math.round(state.agentRisk)
+            : (state.scanResults?.risk_assessment?.overall_score != null
+                ? Math.round(state.scanResults.risk_assessment.overall_score)
+                : null);
+
+        if (score != null) {
+            riskEl.textContent = `Risk: ${score}/100`;
+            riskEl.style.color = score >= 60 ? 'var(--accent-danger)' : (score >= 30 ? 'var(--accent-warning)' : 'var(--accent-success)');
+        } else {
+            riskEl.textContent = 'Risk: Not scanned';
+            riskEl.style.color = 'var(--text-tertiary)';
+        }
+    },
+
+    renderChipsForTab(tab) {
+        const chipsContainer = document.getElementById('copilot-chips');
+        if (!chipsContainer) return;
+
+        const tabChips = {
+            dashboard: [
+                { label: "⚡ Deploy Privacy Agent", prompt: "How does the autonomous Privacy Agent discover and verify my data?" },
+                { label: "📊 Explain Risk Score", prompt: "How is my privacy risk score calculated and what affects it?" },
+                { label: "🇮🇳 India DPDP Act", prompt: "What are my statutory erasure rights under India's DPDP Act 2023?" },
+            ],
+            agent: [
+                { label: "🔍 Explain Attribution", prompt: "How does the agent attribute accounts without false positives?" },
+                { label: "👥 What are Candidates?", prompt: "Why are some handles parked as unconfirmed candidates?" },
+                { label: "🛡️ Verification Proof", prompt: "How does the agent prove that a removal actually occurred?" },
+            ],
+            scanner: [
+                { label: "🎯 Threat Vector Analysis", prompt: "What is the difference between verified breaches and data brokers?" },
+                { label: "🔑 Password Exposure", prompt: "How does k-anonymous password checking protect my credentials?" },
+            ],
+            exposures: [
+                { label: "📞 Remove Truecaller", prompt: "How do I delist my phone number from Truecaller?" },
+                { label: "🏛️ Indian Registry Limits", prompt: "Why can court records and MCA filings not be deleted under DPDP?" },
+                { label: "⚖️ Draft Legal Notice", prompt: "Which exposures should I serve a formal statutory erasure notice to?" },
+            ],
+            legal: [
+                { label: "📜 DPDP Section 12", prompt: "Explain the legal grounds and requirements of DPDP Act 2023 Section 12." },
+                { label: "⏳ 30-Day Deadline", prompt: "What are the legal consequences if a data fiduciary ignores the 30-day deadline?" },
+                { label: "🇪🇺 GDPR vs DPDP", prompt: "How does DPDP Section 12 compare to EU GDPR Article 17?" },
+            ],
+            compliance: [
+                { label: "🏛️ Escalate to DPBI", prompt: "How does escalation to the Data Protection Board of India work?" },
+                { label: "📋 Audit Receipts", prompt: "How do SHA-256 cryptographic audit receipts prove legal compliance?" },
+            ]
+        };
+
+        const chips = tabChips[tab] || tabChips.dashboard;
+        chipsContainer.innerHTML = chips.map(c => `
+            <button class="copilot-chip" data-prompt="${agEsc(c.prompt)}">${agEsc(c.label)}</button>
+        `).join('');
+
+        chipsContainer.querySelectorAll('.copilot-chip').forEach(btn => {
+            btn.addEventListener('click', () => {
+                this.sendMessage(btn.dataset.prompt);
+            });
+        });
+    },
+
+    clearChat() {
+        this.history = [];
+        const msgContainer = document.getElementById('copilot-messages');
+        if (msgContainer) {
+            msgContainer.innerHTML = `
+                <div class="copilot-msg bot">
+                    <div class="copilot-msg-bubble">
+                        Chat cleared. How can I assist you with data privacy and statutory rights?
+                    </div>
+                    <span class="copilot-msg-time">Ready</span>
+                </div>
+            `;
+        }
+    },
+
+    async sendMessage(text) {
+        if (!text || !text.trim()) return;
+        const msgContainer = document.getElementById('copilot-messages');
+        if (!msgContainer) return;
+
+        this.appendMessage('user', text);
+        this.history.push({ role: 'user', content: text });
+
+        const typingEl = document.createElement('div');
+        typingEl.className = 'copilot-typing';
+        typingEl.id = 'copilot-typing-indicator';
+        typingEl.innerHTML = '<span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span>';
+        msgContainer.appendChild(typingEl);
+        msgContainer.scrollTop = msgContainer.scrollHeight;
+
+        const profile = typeof agProfile === 'function' ? agProfile() : {};
+        const score = state.agentRisk != null ? state.agentRisk : (state.scanResults?.risk_assessment?.overall_score || null);
+        const exposuresCount = (state.agentState?.exposures || []).length || (state.scanResults?.summary?.total_breaches || 0);
+
+        try {
+            const resp = await fetch('/api/agent/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    message: text,
+                    history: this.history.slice(-6),
+                    context: {
+                        tab: this.currentTab,
+                        risk_score: score,
+                        exposure_count: exposuresCount,
+                        profile: { name: profile.name || '', email: profile.email || '' },
+                    }
+                })
+            });
+
+            const data = await resp.json();
+            typingEl.remove();
+
+            if (data.reply) {
+                this.history.push({ role: 'assistant', content: data.reply });
+                this.appendMessage('bot', data.reply, data.suggested_actions);
+            } else {
+                this.appendMessage('bot', 'Received empty response. Please try again.');
+            }
+        } catch (e) {
+            typingEl.remove();
+            this.appendMessage('bot', 'Could not contact the assistant. Check server connection.');
+        }
+    },
+
+    appendMessage(role, text, actions = []) {
+        const msgContainer = document.getElementById('copilot-messages');
+        if (!msgContainer) return;
+
+        const msgDiv = document.createElement('div');
+        msgDiv.className = `copilot-msg ${role}`;
+
+        const bubble = document.createElement('div');
+        bubble.className = 'copilot-msg-bubble';
+
+        if (role === 'bot') {
+            bubble.innerHTML = this.formatMarkdown(text);
+            if (actions && actions.length) {
+                const actionsDiv = document.createElement('div');
+                actionsDiv.style.marginTop = '8px';
+                actionsDiv.style.display = 'flex';
+                actionsDiv.style.gap = '6px';
+                actionsDiv.style.flexWrap = 'wrap';
+
+                actions.forEach(act => {
+                    const btn = document.createElement('button');
+                    btn.className = 'copilot-action-btn';
+                    btn.textContent = `→ ${act.label}`;
+                    btn.addEventListener('click', () => {
+                        if (act.action === 'navigate_tab' && act.tab) {
+                            navigateTo(act.tab);
+                        } else if (act.action === 'ask' && act.prompt) {
+                            this.sendMessage(act.prompt);
+                        }
+                    });
+                    actionsDiv.appendChild(btn);
+                });
+                bubble.appendChild(actionsDiv);
+            }
+        } else {
+            bubble.textContent = text;
+        }
+
+        const timeSpan = document.createElement('span');
+        timeSpan.className = 'copilot-msg-time';
+        timeSpan.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+        msgDiv.appendChild(bubble);
+        msgDiv.appendChild(timeSpan);
+        msgContainer.appendChild(msgDiv);
+        msgContainer.scrollTop = msgContainer.scrollHeight;
+    },
+
+    formatMarkdown(text) {
+        if (!text) return '';
+        let s = escapeHtml(text);
+
+        // Bold
+        s = s.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
+        // Inline code
+        s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
+        // Headers
+        s = s.replace(/^### (.*$)/gim, '<h3>$1</h3>');
+        s = s.replace(/^## (.*$)/gim, '<h4>$1</h4>');
+        // Bullets
+        s = s.replace(/^\s*[-•]\s+(.*$)/gim, '<li>$1</li>');
+        s = s.replace(/(<li>.*<\/li>)/gs, '<ul>$1</ul>');
+        // Newlines
+        s = s.replace(/\n\n/g, '<p></p>');
+
+        return s;
+    }
+};
+
+function initAICopilot() {
+    window.AIAssistant = AIAssistant;
+    AIAssistant.init();
+}
+

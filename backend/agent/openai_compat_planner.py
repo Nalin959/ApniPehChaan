@@ -93,10 +93,15 @@ _JSON_TYPES = {str: "string", int: "integer", float: "number", bool: "boolean",
 
 # A discovery run that skipped these did not actually look for anything. Used to
 # detect a model that summarised early rather than finishing the job.
+# Tools whose absence means the phase did not really do its job. Checked only
+# against the toolset actually supplied, so a focused phase is never nagged
+# about a tool it was deliberately not given.
 ESSENTIAL_TOOLS = (
     "build_identity_profile",
     "verify_breach_exposure",
     "assess_exposure_risk",
+    "determine_legal_basis",
+    "plan_removal",
 )
 
 
@@ -266,7 +271,13 @@ def run(ctx, tools: dict, system: str, goal: str, stream, max_steps: int = 25) -
             # and consider the job done, which silently skips most of discovery.
             # Rather than accept a half-finished run, name what has not been
             # done and ask it to continue. Only give up if it stops again.
-            missing = [t for t in ESSENTIAL_TOOLS if t not in called_tools]
+            # Only chase tools the planner was actually GIVEN. The judgement
+            # phase is handed four tools on purpose — gathering already ran
+            # deterministically — so nagging it about build_identity_profile
+            # made it apologise for not calling something it cannot see, and
+            # wasted a round trip doing so.
+            missing = [t for t in ESSENTIAL_TOOLS
+                       if t in tools and t not in called_tools]
             if missing and nudges < 1:
                 nudges += 1
                 messages.append({"role": "assistant", "content": msg.content or ""})
