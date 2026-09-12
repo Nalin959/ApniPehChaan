@@ -1791,13 +1791,13 @@ def build_tools(ctx: ToolContext) -> dict[str, Callable]:
             plan = plan_unsubscribe(list_unsubscribe, list_unsubscribe_post or None)
             pd = plan.to_dict() if hasattr(plan, "to_dict") else {}
             out["unsubscribe_plan"] = pd
-            if ctx.auto_approve and pd.get("method") == "one_click_post":
+            if ctx.auto_approve and pd.get("action") == "one_click_post":
                 ctx.emit("action", "unsubscribe",
                          f"One-click unsubscribing from {exp['source_name']}…",
                          tool_name="self_serve_removal")
                 res = unsubscribe_one_click(list_unsubscribe, list_unsubscribe_post or None)
                 out["unsubscribe_result"] = res.to_dict() if hasattr(res, "to_dict") else {}
-            elif pd.get("method") == "one_click_post":
+            elif pd.get("action") == "one_click_post":
                 ctx.emit("action", "approval",
                          f"{exp['source_name']} supports one-click unsubscribe. Approve to send it.",
                          tool_output=pd, status="awaiting_approval")
