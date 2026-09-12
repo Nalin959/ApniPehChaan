@@ -5,7 +5,7 @@
       "src": "api/index.py",
       "use": "@vercel/python",
       "config": {
-        "includeFiles": ["frontend/**", "data/**"],
+        "includeFiles": ["backend/**", "frontend/**", "data/**", "agent/**"],
         "maxDuration": 60
       }
     }

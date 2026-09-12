@@ -1,0 +1,15 @@
+# SovereignPrivacy AI — Dependencies
+
+# Web layer
+fastapi>=0.100.0
+uvicorn[standard]==0.30.6
+pydantic==2.9.0
+
+# Agent layer. The agent runs without this installed — it falls back to the
+# deterministic planner — but LLM planning requires the SDK and an API key.
+anthropic>=1.5.0
+openai>=1.0.0
+
+# Removed: scikit-learn, httpx, jinja2, aiofiles, python-multipart.
+# None were imported anywhere in the codebase; scikit-learn alone pulled in
+# ~30 MB to be used by nothing.
