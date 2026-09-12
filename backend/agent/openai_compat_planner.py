@@ -43,8 +43,8 @@ PROVIDERS = {
     "gemini": {
         "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
         "key_env": "GEMINI_API_KEY",
-        "default_model": "gemini-2.5-flash",
-        "fallback_models": ["gemini-2.5-flash-lite", "gemini-2.0-flash"],
+        "default_model": "gemini-3.6-flash",
+        "fallback_models": ["gemini-3.5-flash", "gemini-flash-latest"],
         "signup": "https://aistudio.google.com/apikey",
         "note": "Generous free tier; good fallback when another provider throttles.",
     },
