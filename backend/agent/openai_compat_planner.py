@@ -121,7 +121,7 @@ ESSENTIAL_TOOLS = (
 
 def configured() -> str | None:
     """Which OpenAI-compatible provider has a key, if any."""
-    pinned = (os.environ.get("OPENAI_COMPAT_PROVIDER") or "").strip().lower()
+    pinned = (os.environ.get("OPENAI_COMPAT_PROVIDER") or os.environ.get("SOVEREIGN_PLANNER") or "").strip().lower()
     if pinned in PROVIDERS and os.environ.get(PROVIDERS[pinned]["key_env"]):
         return pinned
     for name, spec in PROVIDERS.items():
@@ -371,13 +371,18 @@ def run(ctx, tools: dict, system: str, goal: str, stream, max_steps: int = 25) -
                 continue
             break
 
-        messages.append({
-            "role": "assistant", "content": msg.content,
-            "tool_calls": [{"id": c.id, "type": "function",
-                            "function": {"name": c.function.name,
-                                         "arguments": c.function.arguments}}
-                           for c in msg.tool_calls],
-        })
+        if hasattr(msg, "model_dump"):
+            messages.append(msg.model_dump(exclude_unset=True))
+        else:
+            messages.append({
+                "role": "assistant", "content": msg.content,
+                "tool_calls": [{"id": c.id, "type": "function",
+                                "function": {"name": c.function.name,
+                                             "arguments": c.function.arguments},
+                                **({"extra_content": getattr(c, "extra_content", {})}
+                                   if getattr(c, "extra_content", None) else {})}
+                               for c in msg.tool_calls],
+            })
 
         for call in msg.tool_calls:
             called_tools.add(call.function.name)
