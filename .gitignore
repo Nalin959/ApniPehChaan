@@ -41,3 +41,9 @@ SESSION_EXPORT.txt
 sovereign.db
 data/web_cache/
 data/outbox/
+
+# Node / Frontend build artifacts
+node_modules/
+dist/
+.vercel
+

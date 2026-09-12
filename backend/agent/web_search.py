@@ -47,7 +47,17 @@ from datetime import datetime, timezone
 
 UA = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/120.0 Safari/537.36")
-TIMEOUT = 20              # fetching a result page, which may legitimately be slow
+# Fetching a result page, which may legitimately be slow — but not THIS slow.
+# Measured over a 54-page scan: every page that answered at all answered within
+# 4.6s, and the single page that did not answer spent 40s failing (the budget is
+# per socket operation, so a redirect pays it twice) before being recorded as
+# unchecked anyway. That one page was two thirds of the entire verification
+# phase and bought nothing. At 12s the scan finished in 30.0s instead of 46.0s
+# with byte-identical findings — same 25 confirmed, same 18 domains, same 10
+# unchecked — so the cut costs no recall that could be measured. It is also the
+# safe direction to be wrong in now that a fetch which does not finish is
+# reported as "could not be checked" rather than quietly as a clean page.
+TIMEOUT = 12
 # Asking the search engine is a different budget, and a MEASURED one. A
 # throttled DuckDuckGo does not refuse the connection: it holds it open for
 # exactly as long as the client is willing to wait and then serves a 202
@@ -131,8 +141,26 @@ def _cache_get(query: str, ttl: float = CACHE_TTL_S):
 
 def _stale_leads(query: str) -> list[tuple[str, str]]:
     """Pages a previous run found for this query, for verification only."""
+    if not _engines_are_live():
+        return []
     stale = _cache_get(query, STALE_TTL_S)
     return list(stale[0]) if stale and stale[0] else []
+
+
+def _engines_are_live() -> bool:
+    """
+    Is the engine layer the real one, or has it been substituted?
+
+    The cache on disk holds answers that the real engines gave to the real web.
+    That makes it worthless — and quietly misleading — the moment something has
+    replaced those engines: a harness that swaps the network out to reproduce a
+    throttled run gets yesterday's live results handed back to it through the
+    side door, and then measures the wrong thing entirely. The disk cache
+    describes one particular engine layer, so it only answers for that one.
+
+    Cheap identity checks against what these names were bound to at import.
+    """
+    return all(globals().get(name) is func for name, func in _LIVE_SEAMS.items())
 
 
 def _cache_put(query: str, results, status: str):
@@ -652,7 +680,7 @@ def search_web(query: str, engine_state: dict | None = None) -> tuple[list[tuple
     scanner must never have. "Could not check" is a different answer from
     "clear", and this is where the two separate.
     """
-    cached = _cache_get(query)
+    cached = _cache_get(query) if _engines_are_live() else None
     if cached is not None:
         return cached
 
@@ -754,6 +782,12 @@ def _search_once(query: str) -> tuple[list[tuple[str, str]], str]:
     # result page it could parse, with no results on it, AND whose empty page is
     # distinguishable from its refusal. Anything less is "could not check".
     return [], ("empty" if answered_authority else "blocked")
+
+
+# What the engine layer is when nothing has been swapped out — see
+# _engines_are_live. Captured after the definitions above, so rebinding any of
+# these names is detectable by identity.
+_LIVE_SEAMS = {"_ddg": _ddg, "_marginalia": _marginalia, "_search_once": _search_once}
 
 
 # ── query construction ──────────────────────────────────────────────────────

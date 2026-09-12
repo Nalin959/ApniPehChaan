@@ -18,6 +18,7 @@ import sqlite3
 import threading
 import uuid
 from datetime import datetime, timedelta, timezone
+from typing import Any
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DB_PATH = os.environ.get("SOVEREIGN_DB", os.path.join(PROJECT_ROOT, "data", "sovereign.db"))
@@ -418,11 +419,23 @@ class Memory:
         }
 
 
-_memory: Memory | None = None
+_memory: Any = None
 
 
-def get_memory() -> Memory:
+def get_memory() -> Any:
     global _memory
     if _memory is None:
-        _memory = Memory()
+        supabase_url = os.environ.get("SUPABASE_URL")
+        supabase_key = os.environ.get("SUPABASE_KEY") or os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+        if supabase_url and supabase_key:
+            try:
+                from backend.agent.supabase_memory import SupabaseMemory
+                _memory = SupabaseMemory(supabase_url, supabase_key)
+                print(f"[Supabase] Connected to Supabase Cloud Memory: {supabase_url}")
+            except Exception as e:
+                print(f"[Supabase] Warning: Failed to connect to Supabase ({e}), falling back to SQLite.")
+                _memory = Memory()
+        else:
+            _memory = Memory()
     return _memory
+
