@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="SovereignPrivacy AI — Digital Identity Protection Agent. Monitor breaches, detect exposed PII, and auto-generate statutory erasure notices under DPDP Act 2023, GDPR, and CCPA.">
+    <title>SovereignPrivacy AI — Digital Identity Protection</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <!-- ═══ Ambient Background Particles ═══ -->
+    <canvas id="particles-canvas"></canvas>
+
+    <!-- ═══ Top Navigation ═══ -->
+    <nav class="top-nav" id="top-nav">
+        <div class="nav-brand">
+            <div class="brand-icon">
+                <svg viewBox="0 0 40 40" fill="none"><circle cx="20" cy="20" r="18" stroke="url(#brandGrad)" stroke-width="2.5"/><path d="M20 8v24M12 14l8-6 8 6M12 26l8 6 8-6" stroke="url(#brandGrad)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><defs><linearGradient id="brandGrad" x1="0" y1="0" x2="40" y2="40"><stop stop-color="#6366f1"/><stop offset="1" stop-color="#06b6d4"/></linearGradient></defs></svg>
+            </div>
+            <div class="brand-text">
+                <span class="brand-name">SovereignPrivacy</span>
+                <span class="brand-badge">AI</span>
+            </div>
+        </div>
+        <div class="nav-links">
+            <button class="nav-link active" data-section="dashboard" id="nav-dashboard">
+                <svg viewBox="0 0 20 20" fill="currentColor"><path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z"/></svg>
+                Command Center
+            </button>
+            <button class="nav-link" data-section="scanner" id="nav-scanner">
+                <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd"/></svg>
+                Threat Scanner
+            </button>
+            <button class="nav-link" data-section="exposures" id="nav-exposures">
+                <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>
+                Exposures
+            </button>
+            <button class="nav-link" data-section="legal" id="nav-legal">
+                <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd"/></svg>
+                Legal Studio
+            </button>
+            <button class="nav-link" data-section="compliance" id="nav-compliance">
+                <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.828a1 1 0 101.415-1.414L11 9.586V6z" clip-rule="evenodd"/></svg>
+                Compliance
+            </button>
+            <button class="nav-link" data-section="benchmark" id="nav-benchmark">
+                <svg viewBox="0 0 20 20" fill="currentColor"><path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z"/></svg>
+                Accuracy Lab
+            </button>
+        </div>
+        <div class="nav-status">
+            <div class="status-dot"></div>
+            <span id="system-status-text">System Online</span>
+        </div>
+    </nav>
+
+    <!-- ═══ Main Content Area ═══ -->
+    <main class="main-content">
+
+        <!-- ═══ SECTION: Command Center Dashboard ═══ -->
+        <section class="section active" id="section-dashboard">
+            <div class="section-header">
+                <h1>Command Center</h1>
+                <p class="section-subtitle">Real-time privacy intelligence overview</p>
+            </div>
+
+            <!-- Stats Cards -->
+            <div class="stats-grid" id="dashboard-stats">
+                <div class="stat-card stat-risk" id="stat-risk-score">
+                    <div class="stat-icon risk-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4.5c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z"/></svg>
+                    </div>
+                    <div class="stat-content">
+                        <div class="stat-value" id="risk-score-value">—</div>
+                        <div class="stat-label">Privacy Risk Score</div>
+                    </div>
+                    <div class="stat-badge" id="risk-level-badge">Not Scanned</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon breach-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                    </div>
+                    <div class="stat-content">
+                        <div class="stat-value" id="breach-count">0</div>
+                        <div class="stat-label">Breach Incidents</div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon broker-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
+                    </div>
+                    <div class="stat-content">
+                        <div class="stat-value" id="broker-count">0</div>
+                        <div class="stat-label">Data Brokers</div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon paste-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+                    </div>
+                    <div class="stat-content">
+                        <div class="stat-value" id="paste-count">0</div>
+                        <div class="stat-label">Dark Web Leaks</div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon active-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+                    </div>
+                    <div class="stat-content">
+                        <div class="stat-value" id="active-requests">0</div>
+                        <div class="stat-label">Active Requests</div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon audit-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
+                    </div>
+                    <div class="stat-content">
+                        <div class="stat-value" id="audit-count">0</div>
+                        <div class="stat-label">Audit Receipts</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="quick-actions">
+                <button class="action-btn primary-action" id="btn-quick-scan" onclick="navigateTo('scanner')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                    Initiate Deep Privacy Scan
+                </button>
+                <button class="action-btn" onclick="navigateTo('legal')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                    Generate Legal Notice
+                </button>
+                <button class="action-btn" onclick="navigateTo('benchmark')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+                    Run Accuracy Benchmark
+                </button>
+            </div>
+
+            <!-- Recommendations -->
+            <div class="glass-card" id="recommendations-card" style="display:none;">
+                <h3 class="card-title">
+                    <svg viewBox="0 0 20 20" fill="currentColor" class="title-icon"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/></svg>
+                    Security Recommendations
+                </h3>
+                <div id="recommendations-list" class="recommendations-list"></div>
+            </div>
+        </section>
+
+        <!-- ═══ SECTION: Threat Scanner ═══ -->
+        <section class="section" id="section-scanner">
+            <div class="section-header">
+                <h1>Threat Scanner</h1>
+                <p class="section-subtitle">Configure your identity profile and initiate a deep privacy scan</p>
+            </div>
+
+            <div class="scanner-layout">
+                <!-- Identity Vault (Input Form) -->
+                <div class="glass-card identity-vault" id="identity-vault">
+                    <h3 class="card-title">
+                        <svg viewBox="0 0 20 20" fill="currentColor" class="title-icon"><path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd"/></svg>
+                        Sovereign Identity Vault
+                    </h3>
+                    <p class="vault-note">All data is processed locally. Identifiers are hashed before any external query.</p>
+                    <form id="scan-form" class="vault-form">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="input-name">Full Name</label>
+                                <input type="text" id="input-name" placeholder="Aarav Sharma" autocomplete="off">
+                            </div>
+                            <div class="form-group">
+                                <label for="input-email">Email Address</label>
+                                <input type="email" id="input-email" placeholder="aarav.sharma@example.com" autocomplete="off">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="input-phone">Phone Number</label>
+                                <input type="tel" id="input-phone" placeholder="+91 9876543210" autocomplete="off">
+                            </div>
+                            <div class="form-group">
+                                <label for="input-city">City</label>
+                                <input type="text" id="input-city" placeholder="New Delhi" autocomplete="off">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="input-pan">PAN Card</label>
+                                <input type="text" id="input-pan" placeholder="ABCDE1234F" autocomplete="off" maxlength="10" style="text-transform: uppercase;">
+                            </div>
+                            <div class="form-group">
+                                <label for="input-aadhaar">Aadhaar (Optional)</label>
+                                <input type="text" id="input-aadhaar" placeholder="XXXX XXXX XXXX" autocomplete="off" maxlength="14">
+                            </div>
+                        </div>
+                        <button type="submit" class="scan-btn" id="btn-start-scan">
+                            <span class="scan-btn-content">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                                Initiate Deep Privacy Scan
+                            </span>
+                            <span class="scan-btn-loading" style="display:none;">
+                                <div class="spinner"></div>
+                                Scanning...
+                            </span>
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Scan Progress / Radar -->
+                <div class="glass-card scan-radar" id="scan-radar">
+                    <h3 class="card-title">
+                        <svg viewBox="0 0 20 20" fill="currentColor" class="title-icon"><path fill-rule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd"/></svg>
+                        Live Scan Radar
+                    </h3>
+                    <div class="radar-display" id="radar-display">
+                        <div class="radar-ring radar-ring-1"></div>
+                        <div class="radar-ring radar-ring-2"></div>
+                        <div class="radar-ring radar-ring-3"></div>
+                        <div class="radar-sweep" id="radar-sweep"></div>
+                        <div class="radar-center"></div>
+                    </div>
+                    <div class="scan-progress-bar">
+                        <div class="progress-fill" id="scan-progress-fill" style="width: 0%"></div>
+                    </div>
+                    <div class="scan-log" id="scan-log">
+                        <div class="log-entry log-idle">Awaiting scan initiation...</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ═══ SECTION: Exposure Intelligence ═══ -->
+        <section class="section" id="section-exposures">
+            <div class="section-header">
+                <h1>Exposure Intelligence</h1>
+                <p class="section-subtitle">Detailed view of all detected data exposures</p>
+            </div>
+
+            <div class="exposure-filters" id="exposure-filters">
+                <button class="filter-btn active" data-filter="all">All</button>
+                <button class="filter-btn" data-filter="critical">Critical</button>
+                <button class="filter-btn" data-filter="high">High</button>
+                <button class="filter-btn" data-filter="medium">Medium</button>
+                <button class="filter-btn" data-filter="breach">Breaches</button>
+                <button class="filter-btn" data-filter="broker">Brokers</button>
+                <button class="filter-btn" data-filter="paste">Dark Web</button>
+            </div>
+
+            <div id="exposure-cards" class="exposure-cards-grid">
+                <div class="glass-card empty-state">
+                    <div class="empty-icon">🔍</div>
+                    <h3>No Exposures Detected Yet</h3>
+                    <p>Run a privacy scan to discover data exposures across breach databases, data brokers, and dark web sources.</p>
+                    <button class="action-btn primary-action" onclick="navigateTo('scanner')">Start Scanning</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- ═══ SECTION: Legal Remediation Studio ═══ -->
+        <section class="section" id="section-legal">
+            <div class="section-header">
+                <h1>Legal Remediation Studio</h1>
+                <p class="section-subtitle">Generate and dispatch statutory data erasure notices</p>
+            </div>
+
+            <div class="legal-layout">
+                <div class="glass-card legal-form-card">
+                    <h3 class="card-title">
+                        <svg viewBox="0 0 20 20" fill="currentColor" class="title-icon"><path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd"/></svg>
+                        Notice Configuration
+                    </h3>
+
+                    <div class="jurisdiction-selector" id="jurisdiction-selector">
+                        <button class="jurisdiction-btn active" data-jurisdiction="dpdp" id="btn-jurisdiction-dpdp">
+                            <span class="jurisdiction-flag">🇮🇳</span>
+                            <span class="jurisdiction-name">DPDP Act 2023</span>
+                            <span class="jurisdiction-detail">Sections 12 & 13</span>
+                        </button>
+                        <button class="jurisdiction-btn" data-jurisdiction="gdpr" id="btn-jurisdiction-gdpr">
+                            <span class="jurisdiction-flag">🇪🇺</span>
+                            <span class="jurisdiction-name">GDPR</span>
+                            <span class="jurisdiction-detail">Article 17</span>
+                        </button>
+                        <button class="jurisdiction-btn" data-jurisdiction="ccpa" id="btn-jurisdiction-ccpa">
+                            <span class="jurisdiction-flag">🇺🇸</span>
+                            <span class="jurisdiction-name">CCPA/CPRA</span>
+                            <span class="jurisdiction-detail">§ 1798.105</span>
+                        </button>
+                    </div>
+
+                    <form id="legal-form" class="vault-form">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="legal-company">Target Company / Data Fiduciary</label>
+                                <input type="text" id="legal-company" placeholder="Acme Data Services Pvt. Ltd.">
+                            </div>
+                            <div class="form-group">
+                                <label for="legal-company-email">Privacy Officer Email</label>
+                                <input type="email" id="legal-company-email" placeholder="dpo@company.com">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="legal-company-address">Company Address</label>
+                            <input type="text" id="legal-company-address" placeholder="123 Business Park, Mumbai, Maharashtra 400001">
+                        </div>
+                        <div class="form-group">
+                            <label for="legal-pii-summary">Detected PII Summary</label>
+                            <textarea id="legal-pii-summary" rows="3" placeholder="Email address, phone number, PAN card number detected in breach database..."></textarea>
+                        </div>
+                        <div class="form-actions">
+                            <button type="submit" class="action-btn primary-action" id="btn-generate-notice">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                                Generate Statutory Notice
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="glass-card legal-preview-card" id="legal-preview-card">
+                    <div class="preview-header">
+                        <h3 class="card-title">
+                            <svg viewBox="0 0 20 20" fill="currentColor" class="title-icon"><path d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z"/></svg>
+                            Notice Preview
+                        </h3>
+                        <div class="preview-actions">
+                            <button class="icon-btn" id="btn-copy-notice" title="Copy to Clipboard" style="display:none;">
+                                <svg viewBox="0 0 20 20" fill="currentColor"><path d="M8 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z"/><path d="M6 3a2 2 0 00-2 2v11a2 2 0 002 2h8a2 2 0 002-2V5a2 2 0 00-2-2 3 3 0 01-3 3H9a3 3 0 01-3-3z"/></svg>
+                            </button>
+                            <button class="icon-btn dispatch-btn" id="btn-dispatch-notice" title="Dispatch Notice" style="display:none;">
+                                <svg viewBox="0 0 20 20" fill="currentColor"><path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z"/></svg>
+                                Dispatch
+                            </button>
+                        </div>
+                    </div>
+                    <div class="notice-preview-content" id="notice-preview-content">
+                        <div class="empty-state small">
+                            <div class="empty-icon">📄</div>
+                            <p>Configure a notice and click Generate to preview the statutory letter.</p>
+                        </div>
+                    </div>
+                    <div class="notice-receipt" id="notice-receipt" style="display:none;">
+                        <div class="receipt-header">Cryptographic Receipt</div>
+                        <div class="receipt-row">
+                            <span class="receipt-label">Reference ID:</span>
+                            <span class="receipt-value" id="receipt-ref-id">—</span>
+                        </div>
+                        <div class="receipt-row">
+                            <span class="receipt-label">SHA-256 Hash:</span>
+                            <span class="receipt-value mono" id="receipt-hash">—</span>
+                        </div>
+                        <div class="receipt-row">
+                            <span class="receipt-label">Deadline:</span>
+                            <span class="receipt-value" id="receipt-deadline">—</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ═══ SECTION: Compliance Tracker ═══ -->
+        <section class="section" id="section-compliance">
+            <div class="section-header">
+                <h1>Compliance & Escalation Tracker</h1>
+                <p class="section-subtitle">Track statutory deadlines and manage escalation workflows</p>
+            </div>
+
+            <div id="compliance-content">
+                <div class="glass-card empty-state">
+                    <div class="empty-icon">⏱️</div>
+                    <h3>No Active Requests</h3>
+                    <p>Generate and dispatch a legal notice to begin tracking statutory compliance deadlines.</p>
+                    <button class="action-btn primary-action" onclick="navigateTo('legal')">Go to Legal Studio</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- ═══ SECTION: PII Accuracy Lab ═══ -->
+        <section class="section" id="section-benchmark">
+            <div class="section-header">
+                <h1>PII Accuracy Lab</h1>
+                <p class="section-subtitle">Benchmark the PII detection engine against ground-truth data</p>
+            </div>
+
+            <div class="glass-card">
+                <div class="benchmark-controls">
+                    <button class="action-btn primary-action" id="btn-run-benchmark">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        Run Full Benchmark
+                    </button>
+                    <div class="benchmark-status" id="benchmark-status"></div>
+                </div>
+            </div>
+
+            <div class="benchmark-results" id="benchmark-results" style="display:none;">
+                <div class="stats-grid benchmark-stats">
+                    <div class="stat-card precision-card">
+                        <div class="stat-content">
+                            <div class="stat-value" id="bench-precision">—</div>
+                            <div class="stat-label">Precision</div>
+                        </div>
+                    </div>
+                    <div class="stat-card recall-card">
+                        <div class="stat-content">
+                            <div class="stat-value" id="bench-recall">—</div>
+                            <div class="stat-label">Recall</div>
+                        </div>
+                    </div>
+                    <div class="stat-card f1-card">
+                        <div class="stat-content">
+                            <div class="stat-value" id="bench-f1">—</div>
+                            <div class="stat-label">F1 Score</div>
+                        </div>
+                    </div>
+                    <div class="stat-card samples-card">
+                        <div class="stat-content">
+                            <div class="stat-value" id="bench-samples">—</div>
+                            <div class="stat-label">Samples Tested</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="glass-card">
+                    <h3 class="card-title">Per-Category Breakdown</h3>
+                    <div id="benchmark-categories" class="benchmark-categories"></div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

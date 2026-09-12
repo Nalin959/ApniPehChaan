@@ -1,0 +1,1510 @@
+[
+  {
+    "id": "paste_sql_001",
+    "type": "sql_dump",
+    "source": "dark_forum_charlie",
+    "date_found": "2026-08-06T12:59:11.939413",
+    "content": "-- Leaked SQL dump from pnb_customers_2023.sql\n-- Table: customer_kyc\nINSERT INTO customer_kyc VALUES (1000, 'Aarav Patel', 'aarav.patel24@hotmail.com', '+91 8968483454',\n'955839273023', 'PUBFL1400G', 'Delhi, India', 'PNB', 'BARB027396', '243779336802', 1648808,\n'Active', '2022-12-27');",
+    "ground_truth_pii": {
+      "names": [
+        "Aarav Patel"
+      ],
+      "emails": [
+        "aarav.patel24@hotmail.com"
+      ],
+      "phones": [
+        "+91 8968483454"
+      ],
+      "aadhaar": [
+        "955839273023"
+      ],
+      "pan": [
+        "PUBFL1400G"
+      ],
+      "addresses": [
+        "Delhi, India"
+      ],
+      "bank_accounts": [
+        "243779336802"
+      ],
+      "ifsc_codes": [
+        "BARB027396"
+      ]
+    }
+  },
+  {
+    "id": "paste_sql_002",
+    "type": "sql_dump",
+    "source": "dark_forum_bravo",
+    "date_found": "2025-09-12T12:59:11.939455",
+    "content": "-- Leaked SQL dump from kotak_mahindra_customers_2024.sql\n-- Table: customer_kyc\nINSERT INTO customer_kyc VALUES (1001, 'Aarav Ghosh', 'aarav.ghosh24@yahoo.co.in', '+91 9900862599',\n'924239815711', 'ROWHW2621Z', 'Kolkata, India', 'Kotak Mahindra', 'IDFB096938', '334342740507', 339516,\n'Active', '2024-06-15');",
+    "ground_truth_pii": {
+      "names": [
+        "Aarav Ghosh"
+      ],
+      "emails": [
+        "aarav.ghosh24@yahoo.co.in"
+      ],
+      "phones": [
+        "+91 9900862599"
+      ],
+      "aadhaar": [
+        "924239815711"
+      ],
+      "pan": [
+        "ROWHW2621Z"
+      ],
+      "addresses": [
+        "Kolkata, India"
+      ],
+      "bank_accounts": [
+        "334342740507"
+      ],
+      "ifsc_codes": [
+        "IDFB096938"
+      ]
+    }
+  },
+  {
+    "id": "paste_sql_003",
+    "type": "sql_dump",
+    "source": "dark_forum_bravo",
+    "date_found": "2026-03-01T12:59:11.939484",
+    "content": "-- Leaked SQL dump from hdfc_bank_customers_2019.sql\n-- Table: customer_kyc\nINSERT INTO customer_kyc VALUES (1002, 'Kiara Gupta', 'kiara.gupta90@rediffmail.com', '+91 8893950469',\n'730932354562', 'VEQLU8700F', 'Pune, India', 'HDFC Bank', 'ICIC021684', '494349965240', 616565,\n'Active', '2022-10-05');",
+    "ground_truth_pii": {
+      "names": [
+        "Kiara Gupta"
+      ],
+      "emails": [
+        "kiara.gupta90@rediffmail.com"
+      ],
+      "phones": [
+        "+91 8893950469"
+      ],
+      "aadhaar": [
+        "730932354562"
+      ],
+      "pan": [
+        "VEQLU8700F"
+      ],
+      "addresses": [
+        "Pune, India"
+      ],
+      "bank_accounts": [
+        "494349965240"
+      ],
+      "ifsc_codes": [
+        "ICIC021684"
+      ]
+    }
+  },
+  {
+    "id": "paste_sql_004",
+    "type": "sql_dump",
+    "source": "dark_forum_charlie",
+    "date_found": "2025-09-27T12:59:11.939507",
+    "content": "-- Leaked SQL dump from axis_bank_customers_2021.sql\n-- Table: customer_kyc\nINSERT INTO customer_kyc VALUES (1003, 'Kiara Iyer', 'kiara.iyer33@yahoo.co.in', '+91 8273915220',\n'752277483766', 'ZLSCO5154Q', 'Delhi, India', 'Axis Bank', 'HDFC018839', '425051680890', 423361,\n'Active', '2022-01-11');",
+    "ground_truth_pii": {
+      "names": [
+        "Kiara Iyer"
+      ],
+      "emails": [
+        "kiara.iyer33@yahoo.co.in"
+      ],
+      "phones": [
+        "+91 8273915220"
+      ],
+      "aadhaar": [
+        "752277483766"
+      ],
+      "pan": [
+        "ZLSCO5154Q"
+      ],
+      "addresses": [
+        "Delhi, India"
+      ],
+      "bank_accounts": [
+        "425051680890"
+      ],
+      "ifsc_codes": [
+        "HDFC018839"
+      ]
+    }
+  },
+  {
+    "id": "paste_sql_005",
+    "type": "sql_dump",
+    "source": "dark_forum_bravo",
+    "date_found": "2025-11-08T12:59:11.939529",
+    "content": "-- Leaked SQL dump from pnb_customers_2023.sql\n-- Table: customer_kyc\nINSERT INTO customer_kyc VALUES (1004, 'Neha Menon', 'neha.menon63@gmail.com', '+91 6274756286',\n'702197975499', 'DWZAG6791P', 'Hyderabad, India', 'PNB', 'IDFB065090', '037444227358', 358383,\n'Dormant', '2023-04-10');",
+    "ground_truth_pii": {
+      "names": [
+        "Neha Menon"
+      ],
+      "emails": [
+        "neha.menon63@gmail.com"
+      ],
+      "phones": [
+        "+91 6274756286"
+      ],
+      "aadhaar": [
+        "702197975499"
+      ],
+      "pan": [
+        "DWZAG6791P"
+      ],
+      "addresses": [
+        "Hyderabad, India"
+      ],
+      "bank_accounts": [
+        "037444227358"
+      ],
+      "ifsc_codes": [
+        "IDFB065090"
+      ]
+    }
+  },
+  {
+    "id": "paste_sql_006",
+    "type": "sql_dump",
+    "source": "dark_forum_bravo",
+    "date_found": "2025-10-11T12:59:11.939551",
+    "content": "-- Leaked SQL dump from bank_of_baroda_customers_2019.sql\n-- Table: customer_kyc\nINSERT INTO customer_kyc VALUES (1005, 'Diya Das', 'diya.das99@hotmail.com', '+91 7365642163',\n'702699953274', 'XLZGH1879Z', 'Ahmedabad, India', 'Bank of Baroda', 'BARB001875', '827019636519', 649800,\n'Active', '2026-05-14');",
+    "ground_truth_pii": {
+      "names": [
+        "Diya Das"
+      ],
+      "emails": [
+        "diya.das99@hotmail.com"
+      ],
+      "phones": [
+        "+91 7365642163"
+      ],
+      "aadhaar": [
+        "702699953274"
+      ],
+      "pan": [
+        "XLZGH1879Z"
+      ],
+      "addresses": [
+        "Ahmedabad, India"
+      ],
+      "bank_accounts": [
+        "827019636519"
+      ],
+      "ifsc_codes": [
+        "BARB001875"
+      ]
+    }
+  },
+  {
+    "id": "paste_sql_007",
+    "type": "sql_dump",
+    "source": "dark_forum_alpha",
+    "date_found": "2025-10-18T12:59:11.939577",
+    "content": "-- Leaked SQL dump from axis_bank_customers_2024.sql\n-- Table: customer_kyc\nINSERT INTO customer_kyc VALUES (1006, 'Diya Singh', 'diya.singh95@gmail.com', '+91 8753910836',\n'336566003401', 'PKZBW2210S', 'Jaipur, India', 'Axis Bank', 'KKBK072029', '813171549517', 453627,\n'Dormant', '2024-05-19');",
+    "ground_truth_pii": {
+      "names": [
+        "Diya Singh"
+      ],
+      "emails": [
+        "diya.singh95@gmail.com"
+      ],
+      "phones": [
+        "+91 8753910836"
+      ],
+      "aadhaar": [
+        "336566003401"
+      ],
+      "pan": [
+        "PKZBW2210S"
+      ],
+      "addresses": [
+        "Jaipur, India"
+      ],
+      "bank_accounts": [
+        "813171549517"
+      ],
+      "ifsc_codes": [
+        "KKBK072029"
+      ]
+    }
+  },
+  {
+    "id": "paste_sql_008",
+    "type": "sql_dump",
+    "source": "dark_forum_alpha",
+    "date_found": "2026-08-21T12:59:11.939596",
+    "content": "-- Leaked SQL dump from idfc_first_bank_customers_2020.sql\n-- Table: customer_kyc\nINSERT INTO customer_kyc VALUES (1007, 'Neha Reddy', 'neha.reddy89@yahoo.co.in', '+91 6453864135',\n'600468334685', 'RAJJM8554H', 'Chennai, India', 'IDFC FIRST Bank', 'HDFC089755', '605375454431', 2119730,\n'Dormant', '2024-04-09');",
+    "ground_truth_pii": {
+      "names": [
+        "Neha Reddy"
+      ],
+      "emails": [
+        "neha.reddy89@yahoo.co.in"
+      ],
+      "phones": [
+        "+91 6453864135"
+      ],
+      "aadhaar": [
+        "600468334685"
+      ],
+      "pan": [
+        "RAJJM8554H"
+      ],
+      "addresses": [
+        "Chennai, India"
+      ],
+      "bank_accounts": [
+        "605375454431"
+      ],
+      "ifsc_codes": [
+        "HDFC089755"
+      ]
+    }
+  },
+  {
+    "id": "paste_sql_009",
+    "type": "sql_dump",
+    "source": "dark_forum_delta",
+    "date_found": "2025-10-05T12:59:11.939627",
+    "content": "-- Leaked SQL dump from axis_bank_customers_2022.sql\n-- Table: customer_kyc\nINSERT INTO customer_kyc VALUES (1008, 'Arjun Ghosh', 'arjun.ghosh29@hotmail.com', '+91 7823411846',\n'588269247556', 'JAYJO9532Q', 'Kolkata, India', 'Axis Bank', 'PUNB024695', '108803656236', 909687,\n'Active', '2023-08-30');",
+    "ground_truth_pii": {
+      "names": [
+        "Arjun Ghosh"
+      ],
+      "emails": [
+        "arjun.ghosh29@hotmail.com"
+      ],
+      "phones": [
+        "+91 7823411846"
+      ],
+      "aadhaar": [
+        "588269247556"
+      ],
+      "pan": [
+        "JAYJO9532Q"
+      ],
+      "addresses": [
+        "Kolkata, India"
+      ],
+      "bank_accounts": [
+        "108803656236"
+      ],
+      "ifsc_codes": [
+        "PUNB024695"
+      ]
+    }
+  },
+  {
+    "id": "paste_sql_010",
+    "type": "sql_dump",
+    "source": "dark_forum_alpha",
+    "date_found": "2025-09-13T12:59:11.939660",
+    "content": "-- Leaked SQL dump from hdfc_bank_customers_2020.sql\n-- Table: customer_kyc\nINSERT INTO customer_kyc VALUES (1009, 'Aarav Gupta', 'aarav.gupta86@yahoo.co.in', '+91 9446292666',\n'580305884017', 'BRNFG6493D', 'Chennai, India', 'HDFC Bank', 'SBIN058986', '990844864675', 1558719,\n'Dormant', '2021-11-30');",
+    "ground_truth_pii": {
+      "names": [
+        "Aarav Gupta"
+      ],
+      "emails": [
+        "aarav.gupta86@yahoo.co.in"
+      ],
+      "phones": [
+        "+91 9446292666"
+      ],
+      "aadhaar": [
+        "580305884017"
+      ],
+      "pan": [
+        "BRNFG6493D"
+      ],
+      "addresses": [
+        "Chennai, India"
+      ],
+      "bank_accounts": [
+        "990844864675"
+      ],
+      "ifsc_codes": [
+        "SBIN058986"
+      ]
+    }
+  },
+  {
+    "id": "paste_sql_011",
+    "type": "sql_dump",
+    "source": "dark_forum_bravo",
+    "date_found": "2026-02-15T12:59:11.939682",
+    "content": "-- Leaked SQL dump from kotak_mahindra_customers_2022.sql\n-- Table: customer_kyc\nINSERT INTO customer_kyc VALUES (1010, 'Vihaan Menon', 'vihaan.menon91@protonmail.com', '+91 6387039611',\n'784476368223', 'IBGLA9491L', 'Bangalore, India', 'Kotak Mahindra', 'SBIN070681', '105657911703', 1286720,\n'Active', '2022-03-04');",
+    "ground_truth_pii": {
+      "names": [
+        "Vihaan Menon"
+      ],
+      "emails": [
+        "vihaan.menon91@protonmail.com"
+      ],
+      "phones": [
+        "+91 6387039611"
+      ],
+      "aadhaar": [
+        "784476368223"
+      ],
+      "pan": [
+        "IBGLA9491L"
+      ],
+      "addresses": [
+        "Bangalore, India"
+      ],
+      "bank_accounts": [
+        "105657911703"
+      ],
+      "ifsc_codes": [
+        "SBIN070681"
+      ]
+    }
+  },
+  {
+    "id": "paste_sql_012",
+    "type": "sql_dump",
+    "source": "dark_forum_echo",
+    "date_found": "2026-06-01T12:59:11.939701",
+    "content": "-- Leaked SQL dump from sbi_customers_2019.sql\n-- Table: customer_kyc\nINSERT INTO customer_kyc VALUES (1011, 'Dhruv Mehta', 'dhruv.mehta78@gmail.com', '+91 6406659580',\n'529535687957', 'DWIBL7762U', 'Lucknow, India', 'SBI', 'PUNB013928', '493412916943', 1846638,\n'Active', '2023-08-01');",
+    "ground_truth_pii": {
+      "names": [
+        "Dhruv Mehta"
+      ],
+      "emails": [
+        "dhruv.mehta78@gmail.com"
+      ],
+      "phones": [
+        "+91 6406659580"
+      ],
+      "aadhaar": [
+        "529535687957"
+      ],
+      "pan": [
+        "DWIBL7762U"
+      ],
+      "addresses": [
+        "Lucknow, India"
+      ],
+      "bank_accounts": [
+        "493412916943"
+      ],
+      "ifsc_codes": [
+        "PUNB013928"
+      ]
+    }
+  },
+  {
+    "id": "paste_sql_013",
+    "type": "sql_dump",
+    "source": "dark_forum_bravo",
+    "date_found": "2025-12-17T12:59:11.939724",
+    "content": "-- Leaked SQL dump from idfc_first_bank_customers_2021.sql\n-- Table: customer_kyc\nINSERT INTO customer_kyc VALUES (1012, 'Kabir Kumar', 'kabir.kumar85@rediffmail.com', '+91 9960448772',\n'556022912213', 'SFQJD8881O', 'Kolkata, India', 'IDFC FIRST Bank', 'IDFB063530', '712313780823', 1024518,\n'Active', '2023-11-03');",
+    "ground_truth_pii": {
+      "names": [
+        "Kabir Kumar"
+      ],
+      "emails": [
+        "kabir.kumar85@rediffmail.com"
+      ],
+      "phones": [
+        "+91 9960448772"
+      ],
+      "aadhaar": [
+        "556022912213"
+      ],
+      "pan": [
+        "SFQJD8881O"
+      ],
+      "addresses": [
+        "Kolkata, India"
+      ],
+      "bank_accounts": [
+        "712313780823"
+      ],
+      "ifsc_codes": [
+        "IDFB063530"
+      ]
+    }
+  },
+  {
+    "id": "paste_sql_014",
+    "type": "sql_dump",
+    "source": "dark_forum_echo",
+    "date_found": "2026-08-05T12:59:11.939745",
+    "content": "-- Leaked SQL dump from pnb_customers_2021.sql\n-- Table: customer_kyc\nINSERT INTO customer_kyc VALUES (1013, 'Riya Mehta', 'riya.mehta36@rediffmail.com', '+91 6550647937',\n'942888307297', 'ZCEJN2922M', 'Delhi, India', 'PNB', 'PUNB012972', '946797490772', 2177774,\n'Active', '2025-01-26');",
+    "ground_truth_pii": {
+      "names": [
+        "Riya Mehta"
+      ],
+      "emails": [
+        "riya.mehta36@rediffmail.com"
+      ],
+      "phones": [
+        "+91 6550647937"
+      ],
+      "aadhaar": [
+        "942888307297"
+      ],
+      "pan": [
+        "ZCEJN2922M"
+      ],
+      "addresses": [
+        "Delhi, India"
+      ],
+      "bank_accounts": [
+        "946797490772"
+      ],
+      "ifsc_codes": [
+        "PUNB012972"
+      ]
+    }
+  },
+  {
+    "id": "paste_sql_015",
+    "type": "sql_dump",
+    "source": "dark_forum_bravo",
+    "date_found": "2026-03-09T12:59:11.939779",
+    "content": "-- Leaked SQL dump from idfc_first_bank_customers_2024.sql\n-- Table: customer_kyc\nINSERT INTO customer_kyc VALUES (1014, 'Dhruv Verma', 'dhruv.verma88@hotmail.com', '+91 7825139104',\n'948335702400', 'FPFCP1458T', 'Lucknow, India', 'IDFC FIRST Bank', 'KKBK014338', '788228263448', 826846,\n'Active', '2024-03-18');",
+    "ground_truth_pii": {
+      "names": [
+        "Dhruv Verma"
+      ],
+      "emails": [
+        "dhruv.verma88@hotmail.com"
+      ],
+      "phones": [
+        "+91 7825139104"
+      ],
+      "aadhaar": [
+        "948335702400"
+      ],
+      "pan": [
+        "FPFCP1458T"
+      ],
+      "addresses": [
+        "Lucknow, India"
+      ],
+      "bank_accounts": [
+        "788228263448"
+      ],
+      "ifsc_codes": [
+        "KKBK014338"
+      ]
+    }
+  },
+  {
+    "id": "paste_combo_001",
+    "type": "combo_list",
+    "source": "pastebin_mirror_35",
+    "date_found": "2026-06-15T12:59:11.939827",
+    "content": "# Combo list \u2014 fresh dump\nkiarachatterjee600@gmail.com:2a1187e52eef\njamesmartinez528@hotmail.com:ffc55cb22386\nkiaranair5@rediffmail.com:6b9f8530584b\ncharlottejohnson73@outlook.com:385429754fd4\nananyasingh106@outlook.com:92f768d1b13f\nmiasmith503@protonmail.com:805afa7ddc30\nmyrarao982@gmail.com:4021f11be1c7",
+    "ground_truth_pii": {
+      "emails": [
+        "kiarachatterjee600@gmail.com",
+        "jamesmartinez528@hotmail.com",
+        "kiaranair5@rediffmail.com",
+        "charlottejohnson73@outlook.com",
+        "ananyasingh106@outlook.com",
+        "miasmith503@protonmail.com",
+        "myrarao982@gmail.com"
+      ]
+    }
+  },
+  {
+    "id": "paste_combo_002",
+    "type": "combo_list",
+    "source": "pastebin_mirror_35",
+    "date_found": "2026-07-20T12:59:11.939845",
+    "content": "# Combo list \u2014 fresh dump\nishapillai30@yahoo.co.in:2ed799bfc30e\noliverdavis191@rediffmail.com:28e39832855a\ndhruvnair354@gmail.com:76bd065e7640\nmiagarcia106@protonmail.com:4f24e3b4a965\nmiasmith147@yahoo.co.in:f28c18d5f43d\nnehamenon217@outlook.com:8af86d7773dd",
+    "ground_truth_pii": {
+      "emails": [
+        "ishapillai30@yahoo.co.in",
+        "oliverdavis191@rediffmail.com",
+        "dhruvnair354@gmail.com",
+        "miagarcia106@protonmail.com",
+        "miasmith147@yahoo.co.in",
+        "nehamenon217@outlook.com"
+      ]
+    }
+  },
+  {
+    "id": "paste_combo_003",
+    "type": "combo_list",
+    "source": "pastebin_mirror_12",
+    "date_found": "2026-08-21T12:59:11.939864",
+    "content": "# Combo list \u2014 fresh dump\nmyrapatel702@outlook.com:2fdd2d26b962\njamesbrown20@rediffmail.com:cfa219387e09\nnoahbrown875@hotmail.com:4bc6a9738888\nmiasmith775@outlook.com:bdf3a69460be\nameliajones828@hotmail.com:6555c4b65e22\nsophiasmith327@rediffmail.com:110bfc3380c5\nmiajohnson281@outlook.com:e676f5933f47\nameliajohnson229@protonmail.com:613f46974b82",
+    "ground_truth_pii": {
+      "emails": [
+        "myrapatel702@outlook.com",
+        "jamesbrown20@rediffmail.com",
+        "noahbrown875@hotmail.com",
+        "miasmith775@outlook.com",
+        "ameliajones828@hotmail.com",
+        "sophiasmith327@rediffmail.com",
+        "miajohnson281@outlook.com",
+        "ameliajohnson229@protonmail.com"
+      ]
+    }
+  },
+  {
+    "id": "paste_combo_004",
+    "type": "combo_list",
+    "source": "pastebin_mirror_2",
+    "date_found": "2026-07-20T12:59:11.939881",
+    "content": "# Combo list \u2014 fresh dump\npriyapatel415@protonmail.com:595326f80d8d\nemmawilliams2@outlook.com:6d29e7e434b6\npriyabose508@outlook.com:697cefff84b4\naadhyagupta973@gmail.com:05a3f09a6824\nmyrarao582@rediffmail.com:917a45cdfd12\nsarakumar269@yahoo.co.in:abe986795fcd\nishaverma367@yahoo.co.in:86bc8db15104",
+    "ground_truth_pii": {
+      "emails": [
+        "priyapatel415@protonmail.com",
+        "emmawilliams2@outlook.com",
+        "priyabose508@outlook.com",
+        "aadhyagupta973@gmail.com",
+        "myrarao582@rediffmail.com",
+        "sarakumar269@yahoo.co.in",
+        "ishaverma367@yahoo.co.in"
+      ]
+    }
+  },
+  {
+    "id": "paste_combo_005",
+    "type": "combo_list",
+    "source": "pastebin_mirror_33",
+    "date_found": "2026-05-30T12:59:11.939894",
+    "content": "# Combo list \u2014 fresh dump\nnehaiyer421@gmail.com:3f1f3a62597b\nameliawilliams543@outlook.com:400e88f35897\ncharlottewilliams705@protonmail.com:e4cc1e68d29a\ndiyarao658@hotmail.com:acfa50a71f09\naaravchatterjee659@protonmail.com:a18557a6cde2",
+    "ground_truth_pii": {
+      "emails": [
+        "nehaiyer421@gmail.com",
+        "ameliawilliams543@outlook.com",
+        "charlottewilliams705@protonmail.com",
+        "diyarao658@hotmail.com",
+        "aaravchatterjee659@protonmail.com"
+      ]
+    }
+  },
+  {
+    "id": "paste_combo_006",
+    "type": "combo_list",
+    "source": "pastebin_mirror_44",
+    "date_found": "2026-04-14T12:59:11.939912",
+    "content": "# Combo list \u2014 fresh dump\ncharlottewilliams751@hotmail.com:0dd5354f558d\ncharlottebrown843@yahoo.co.in:ac920224c8ff\nriyanair291@outlook.com:b4532d4b53d4\nwilliammartinez568@protonmail.com:aa610ae05ab9\nananyanair40@hotmail.com:e3df2c012296\nmiabrown197@rediffmail.com:98fd07fae03d\nadityanair550@yahoo.co.in:39d55a897553\ncharlottedavis446@gmail.com:08f44b9d6d37",
+    "ground_truth_pii": {
+      "emails": [
+        "charlottewilliams751@hotmail.com",
+        "charlottebrown843@yahoo.co.in",
+        "riyanair291@outlook.com",
+        "williammartinez568@protonmail.com",
+        "ananyanair40@hotmail.com",
+        "miabrown197@rediffmail.com",
+        "adityanair550@yahoo.co.in",
+        "charlottedavis446@gmail.com"
+      ]
+    }
+  },
+  {
+    "id": "paste_combo_007",
+    "type": "combo_list",
+    "source": "pastebin_mirror_50",
+    "date_found": "2026-05-16T12:59:11.939926",
+    "content": "# Combo list \u2014 fresh dump\nadityagupta161@protonmail.com:5bf251f09058\nriyakumar233@gmail.com:a79161df4573\nreyanshjoshi593@protonmail.com:3841c765977e\nadityaiyer120@gmail.com:f47bb24b6ee2\narnavmehta437@gmail.com:027c7c80f31d\nwilliamgarcia910@hotmail.com:de1893ef70d8",
+    "ground_truth_pii": {
+      "emails": [
+        "adityagupta161@protonmail.com",
+        "riyakumar233@gmail.com",
+        "reyanshjoshi593@protonmail.com",
+        "adityaiyer120@gmail.com",
+        "arnavmehta437@gmail.com",
+        "williamgarcia910@hotmail.com"
+      ]
+    }
+  },
+  {
+    "id": "paste_combo_008",
+    "type": "combo_list",
+    "source": "pastebin_mirror_23",
+    "date_found": "2026-04-23T12:59:11.939946",
+    "content": "# Combo list \u2014 fresh dump\nmyramukherjee711@hotmail.com:089eab08a584\nsaigupta586@yahoo.co.in:576213dca815\nkabirsharma35@yahoo.co.in:fd7e928023a0\nolivermiller685@hotmail.com:cf8238e90882\nkiarakumar395@protonmail.com:ba33998d1715\narnaviyer436@outlook.com:e85fbbcda68c\nishabose782@gmail.com:b43a04ff8966\nkiarapatel66@yahoo.co.in:637f52e9a91b",
+    "ground_truth_pii": {
+      "emails": [
+        "myramukherjee711@hotmail.com",
+        "saigupta586@yahoo.co.in",
+        "kabirsharma35@yahoo.co.in",
+        "olivermiller685@hotmail.com",
+        "kiarakumar395@protonmail.com",
+        "arnaviyer436@outlook.com",
+        "ishabose782@gmail.com",
+        "kiarapatel66@yahoo.co.in"
+      ]
+    }
+  },
+  {
+    "id": "paste_combo_009",
+    "type": "combo_list",
+    "source": "pastebin_mirror_21",
+    "date_found": "2026-04-20T12:59:11.939957",
+    "content": "# Combo list \u2014 fresh dump\nmyrakumar674@rediffmail.com:8e04400aea8b\nemmamartinez715@hotmail.com:a370006337e1\nliamsmith386@gmail.com:a5997d52e0be\ncharlottemartinez72@rediffmail.com:98e7a3bbb29b",
+    "ground_truth_pii": {
+      "emails": [
+        "myrakumar674@rediffmail.com",
+        "emmamartinez715@hotmail.com",
+        "liamsmith386@gmail.com",
+        "charlottemartinez72@rediffmail.com"
+      ]
+    }
+  },
+  {
+    "id": "paste_combo_010",
+    "type": "combo_list",
+    "source": "pastebin_mirror_15",
+    "date_found": "2026-05-19T12:59:11.939977",
+    "content": "# Combo list \u2014 fresh dump\nwilliamsmith308@outlook.com:57cc861bfb76\nsophiajones72@yahoo.co.in:b86b87a1a8c6\nsophiamiller62@yahoo.co.in:7f453fbba519\narjunbose492@yahoo.co.in:194b02cf62e8\nwilliamjones754@hotmail.com:3b278be8f87a\ncharlottejones218@protonmail.com:0c6f8f59efb0\nriyakumar308@gmail.com:b7850e13ad96",
+    "ground_truth_pii": {
+      "emails": [
+        "williamsmith308@outlook.com",
+        "sophiajones72@yahoo.co.in",
+        "sophiamiller62@yahoo.co.in",
+        "arjunbose492@yahoo.co.in",
+        "williamjones754@hotmail.com",
+        "charlottejones218@protonmail.com",
+        "riyakumar308@gmail.com"
+      ]
+    }
+  },
+  {
+    "id": "paste_doxx_001",
+    "type": "doxxing_paste",
+    "source": "telegram_leak_channel_16",
+    "date_found": "2026-09-10T12:59:11.940003",
+    "content": "=== DOXX: Vivaan Agarwal ===\nFull Name: Vivaan Agarwal\nDOB: 16/7/1992\nEmail: vivaan.agarwal@yahoo.co.in\nPhone: +91 6967454652\nAadhaar: 671524707616\nPAN: COBTX6916P\nVoter ID: WB/22/715/141577\nUPI: vivaan.agarwal82@icici\nCredit Card: 4555057735212334\nAddress: 388, FC Road, Kolkata - 823193\nFather: Kiara Agarwal\n=== END DOXX ===",
+    "ground_truth_pii": {
+      "names": [
+        "Vivaan Agarwal"
+      ],
+      "emails": [
+        "vivaan.agarwal@yahoo.co.in"
+      ],
+      "phones": [
+        "+91 6967454652"
+      ],
+      "aadhaar": [
+        "671524707616"
+      ],
+      "pan": [
+        "COBTX6916P"
+      ],
+      "voter_id": [
+        "WB/22/715/141577"
+      ],
+      "upi": [
+        "vivaan.agarwal82@icici"
+      ],
+      "credit_cards": [
+        "4555057735212334"
+      ],
+      "addresses": [
+        "Kolkata"
+      ]
+    }
+  },
+  {
+    "id": "paste_doxx_002",
+    "type": "doxxing_paste",
+    "source": "telegram_leak_channel_10",
+    "date_found": "2026-09-01T12:59:11.940030",
+    "content": "=== DOXX: Vihaan Bose ===\nFull Name: Vihaan Bose\nDOB: 20/11/1977\nEmail: vihaan.bose@outlook.com\nPhone: +91 9830054805\nAadhaar: 753576385645\nPAN: IOUPW6604E\nVoter ID: KA/57/991/960265\nUPI: vihaan.bose61@sbi\nCredit Card: 4496445244853663\nAddress: 13, Anna Salai, Chennai - 373600\nFather: Vivaan Bose\n=== END DOXX ===",
+    "ground_truth_pii": {
+      "names": [
+        "Vihaan Bose"
+      ],
+      "emails": [
+        "vihaan.bose@outlook.com"
+      ],
+      "phones": [
+        "+91 9830054805"
+      ],
+      "aadhaar": [
+        "753576385645"
+      ],
+      "pan": [
+        "IOUPW6604E"
+      ],
+      "voter_id": [
+        "KA/57/991/960265"
+      ],
+      "upi": [
+        "vihaan.bose61@sbi"
+      ],
+      "credit_cards": [
+        "4496445244853663"
+      ],
+      "addresses": [
+        "Chennai"
+      ]
+    }
+  },
+  {
+    "id": "paste_doxx_003",
+    "type": "doxxing_paste",
+    "source": "telegram_leak_channel_7",
+    "date_found": "2026-06-08T12:59:11.940049",
+    "content": "=== DOXX: Dhruv Reddy ===\nFull Name: Dhruv Reddy\nDOB: 14/7/1982\nEmail: dhruv.reddy@gmail.com\nPhone: +91 7816756580\nAadhaar: 380230467190\nPAN: YIPGI6072Q\nVoter ID: TN/33/456/291901\nUPI: dhruv.reddy25@ibl\nCredit Card: 4240930529034959\nAddress: 220, Park Street, Bangalore - 215350\nFather: Riya Reddy\n=== END DOXX ===",
+    "ground_truth_pii": {
+      "names": [
+        "Dhruv Reddy"
+      ],
+      "emails": [
+        "dhruv.reddy@gmail.com"
+      ],
+      "phones": [
+        "+91 7816756580"
+      ],
+      "aadhaar": [
+        "380230467190"
+      ],
+      "pan": [
+        "YIPGI6072Q"
+      ],
+      "voter_id": [
+        "TN/33/456/291901"
+      ],
+      "upi": [
+        "dhruv.reddy25@ibl"
+      ],
+      "credit_cards": [
+        "4240930529034959"
+      ],
+      "addresses": [
+        "Bangalore"
+      ]
+    }
+  },
+  {
+    "id": "paste_doxx_004",
+    "type": "doxxing_paste",
+    "source": "telegram_leak_channel_14",
+    "date_found": "2026-06-13T12:59:11.940067",
+    "content": "=== DOXX: Sara Iyer ===\nFull Name: Sara Iyer\nDOB: 8/1/1991\nEmail: sara.iyer@rediffmail.com\nPhone: +91 9514382843\nAadhaar: 927842158173\nPAN: XYUJI8401A\nVoter ID: DL/79/114/282235\nUPI: sara.iyer44@paytm\nCredit Card: 4162984407907654\nAddress: 46, Anna Salai, Ahmedabad - 554037\nFather: Myra Iyer\n=== END DOXX ===",
+    "ground_truth_pii": {
+      "names": [
+        "Sara Iyer"
+      ],
+      "emails": [
+        "sara.iyer@rediffmail.com"
+      ],
+      "phones": [
+        "+91 9514382843"
+      ],
+      "aadhaar": [
+        "927842158173"
+      ],
+      "pan": [
+        "XYUJI8401A"
+      ],
+      "voter_id": [
+        "DL/79/114/282235"
+      ],
+      "upi": [
+        "sara.iyer44@paytm"
+      ],
+      "credit_cards": [
+        "4162984407907654"
+      ],
+      "addresses": [
+        "Ahmedabad"
+      ]
+    }
+  },
+  {
+    "id": "paste_doxx_005",
+    "type": "doxxing_paste",
+    "source": "telegram_leak_channel_18",
+    "date_found": "2026-06-12T12:59:11.940085",
+    "content": "=== DOXX: Myra Kumar ===\nFull Name: Myra Kumar\nDOB: 14/8/1976\nEmail: myra.kumar@yahoo.co.in\nPhone: +91 7782396812\nAadhaar: 848219998935\nPAN: BLMTB4375Q\nVoter ID: UP/90/625/536581\nUPI: myra.kumar79@paytm\nCredit Card: 4876225745112725\nAddress: 141, Anna Salai, Pune - 498576\nFather: Neha Kumar\n=== END DOXX ===",
+    "ground_truth_pii": {
+      "names": [
+        "Myra Kumar"
+      ],
+      "emails": [
+        "myra.kumar@yahoo.co.in"
+      ],
+      "phones": [
+        "+91 7782396812"
+      ],
+      "aadhaar": [
+        "848219998935"
+      ],
+      "pan": [
+        "BLMTB4375Q"
+      ],
+      "voter_id": [
+        "UP/90/625/536581"
+      ],
+      "upi": [
+        "myra.kumar79@paytm"
+      ],
+      "credit_cards": [
+        "4876225745112725"
+      ],
+      "addresses": [
+        "Pune"
+      ]
+    }
+  },
+  {
+    "id": "paste_doxx_006",
+    "type": "doxxing_paste",
+    "source": "telegram_leak_channel_14",
+    "date_found": "2026-06-22T12:59:11.940102",
+    "content": "=== DOXX: Arnav Kumar ===\nFull Name: Arnav Kumar\nDOB: 28/1/1976\nEmail: arnav.kumar@protonmail.com\nPhone: +91 9420985049\nAadhaar: 483415389869\nPAN: QHUHD6528C\nVoter ID: WB/82/871/899198\nUPI: arnav.kumar66@icici\nCredit Card: 4403916669299820\nAddress: 428, MG Road, Bangalore - 112555\nFather: Kiara Kumar\n=== END DOXX ===",
+    "ground_truth_pii": {
+      "names": [
+        "Arnav Kumar"
+      ],
+      "emails": [
+        "arnav.kumar@protonmail.com"
+      ],
+      "phones": [
+        "+91 9420985049"
+      ],
+      "aadhaar": [
+        "483415389869"
+      ],
+      "pan": [
+        "QHUHD6528C"
+      ],
+      "voter_id": [
+        "WB/82/871/899198"
+      ],
+      "upi": [
+        "arnav.kumar66@icici"
+      ],
+      "credit_cards": [
+        "4403916669299820"
+      ],
+      "addresses": [
+        "Bangalore"
+      ]
+    }
+  },
+  {
+    "id": "paste_doxx_007",
+    "type": "doxxing_paste",
+    "source": "telegram_leak_channel_16",
+    "date_found": "2026-07-10T12:59:11.940119",
+    "content": "=== DOXX: Kiara Rao ===\nFull Name: Kiara Rao\nDOB: 8/4/1991\nEmail: kiara.rao@gmail.com\nPhone: +91 9775843164\nAadhaar: 524852835773\nPAN: GKAJA1046G\nVoter ID: AP/46/636/400588\nUPI: kiara.rao96@ybl\nCredit Card: 4857453905828017\nAddress: 275, Park Street, Ahmedabad - 411199\nFather: Priya Rao\n=== END DOXX ===",
+    "ground_truth_pii": {
+      "names": [
+        "Kiara Rao"
+      ],
+      "emails": [
+        "kiara.rao@gmail.com"
+      ],
+      "phones": [
+        "+91 9775843164"
+      ],
+      "aadhaar": [
+        "524852835773"
+      ],
+      "pan": [
+        "GKAJA1046G"
+      ],
+      "voter_id": [
+        "AP/46/636/400588"
+      ],
+      "upi": [
+        "kiara.rao96@ybl"
+      ],
+      "credit_cards": [
+        "4857453905828017"
+      ],
+      "addresses": [
+        "Ahmedabad"
+      ]
+    }
+  },
+  {
+    "id": "paste_doxx_008",
+    "type": "doxxing_paste",
+    "source": "telegram_leak_channel_5",
+    "date_found": "2026-08-25T12:59:11.940137",
+    "content": "=== DOXX: Kabir Verma ===\nFull Name: Kabir Verma\nDOB: 21/9/1989\nEmail: kabir.verma@protonmail.com\nPhone: +91 9202493060\nAadhaar: 661504993352\nPAN: KDSLK6802M\nVoter ID: TN/30/630/669652\nUPI: kabir.verma19@sbi\nCredit Card: 4358046649775220\nAddress: 408, FC Road, Chennai - 279307\nFather: Vihaan Verma\n=== END DOXX ===",
+    "ground_truth_pii": {
+      "names": [
+        "Kabir Verma"
+      ],
+      "emails": [
+        "kabir.verma@protonmail.com"
+      ],
+      "phones": [
+        "+91 9202493060"
+      ],
+      "aadhaar": [
+        "661504993352"
+      ],
+      "pan": [
+        "KDSLK6802M"
+      ],
+      "voter_id": [
+        "TN/30/630/669652"
+      ],
+      "upi": [
+        "kabir.verma19@sbi"
+      ],
+      "credit_cards": [
+        "4358046649775220"
+      ],
+      "addresses": [
+        "Chennai"
+      ]
+    }
+  },
+  {
+    "id": "paste_doxx_009",
+    "type": "doxxing_paste",
+    "source": "telegram_leak_channel_15",
+    "date_found": "2026-06-17T12:59:11.940155",
+    "content": "=== DOXX: Aadhya Nair ===\nFull Name: Aadhya Nair\nDOB: 12/8/1988\nEmail: aadhya.nair@rediffmail.com\nPhone: +91 6384635679\nAadhaar: 464846392603\nPAN: LNATL8552M\nVoter ID: GJ/74/970/821779\nUPI: aadhya.nair90@ibl\nCredit Card: 4270211616495802\nAddress: 446, Connaught Place, Bangalore - 761017\nFather: Aditya Nair\n=== END DOXX ===",
+    "ground_truth_pii": {
+      "names": [
+        "Aadhya Nair"
+      ],
+      "emails": [
+        "aadhya.nair@rediffmail.com"
+      ],
+      "phones": [
+        "+91 6384635679"
+      ],
+      "aadhaar": [
+        "464846392603"
+      ],
+      "pan": [
+        "LNATL8552M"
+      ],
+      "voter_id": [
+        "GJ/74/970/821779"
+      ],
+      "upi": [
+        "aadhya.nair90@ibl"
+      ],
+      "credit_cards": [
+        "4270211616495802"
+      ],
+      "addresses": [
+        "Bangalore"
+      ]
+    }
+  },
+  {
+    "id": "paste_doxx_010",
+    "type": "doxxing_paste",
+    "source": "telegram_leak_channel_10",
+    "date_found": "2026-08-07T12:59:11.940172",
+    "content": "=== DOXX: Vivaan Reddy ===\nFull Name: Vivaan Reddy\nDOB: 27/11/1976\nEmail: vivaan.reddy@yahoo.co.in\nPhone: +91 8185791896\nAadhaar: 497529638609\nPAN: FLRTR8763T\nVoter ID: MH/59/774/162752\nUPI: vivaan.reddy15@paytm\nCredit Card: 4825798315615669\nAddress: 190, Anna Salai, Pune - 809369\nFather: Reyansh Reddy\n=== END DOXX ===",
+    "ground_truth_pii": {
+      "names": [
+        "Vivaan Reddy"
+      ],
+      "emails": [
+        "vivaan.reddy@yahoo.co.in"
+      ],
+      "phones": [
+        "+91 8185791896"
+      ],
+      "aadhaar": [
+        "497529638609"
+      ],
+      "pan": [
+        "FLRTR8763T"
+      ],
+      "voter_id": [
+        "MH/59/774/162752"
+      ],
+      "upi": [
+        "vivaan.reddy15@paytm"
+      ],
+      "credit_cards": [
+        "4825798315615669"
+      ],
+      "addresses": [
+        "Pune"
+      ]
+    }
+  },
+  {
+    "id": "paste_intl_001",
+    "type": "breach_fragment",
+    "source": "darknet_market_agora",
+    "date_found": "2025-11-25T12:59:11.940185",
+    "content": "[BREACH] Sophia Rodriguez\nContact: sophia.rodriguez54@outlook.com | +1-240-975-4005\nIP: 199.4.193.206\nLocation: Dubai\nLast Login: 2026-01-18 12:59:11",
+    "ground_truth_pii": {
+      "names": [
+        "Sophia Rodriguez"
+      ],
+      "emails": [
+        "sophia.rodriguez54@outlook.com"
+      ],
+      "phones": [
+        "+1-240-975-4005"
+      ],
+      "ip_addresses": [
+        "199.4.193.206"
+      ],
+      "addresses": [
+        "Dubai"
+      ]
+    }
+  },
+  {
+    "id": "paste_intl_002",
+    "type": "breach_fragment",
+    "source": "darknet_market_hydra",
+    "date_found": "2026-03-02T12:59:11.940196",
+    "content": "[BREACH] Charlotte Miller\nContact: charlotte.miller13@yahoo.com | +1-964-585-4436\nIP: 23.222.204.115\nLocation: Toronto\nLast Login: 2025-11-24 12:59:11",
+    "ground_truth_pii": {
+      "names": [
+        "Charlotte Miller"
+      ],
+      "emails": [
+        "charlotte.miller13@yahoo.com"
+      ],
+      "phones": [
+        "+1-964-585-4436"
+      ],
+      "ip_addresses": [
+        "23.222.204.115"
+      ],
+      "addresses": [
+        "Toronto"
+      ]
+    }
+  },
+  {
+    "id": "paste_intl_003",
+    "type": "breach_fragment",
+    "source": "darknet_market_agora",
+    "date_found": "2026-01-17T12:59:11.940206",
+    "content": "[BREACH] William Davis\nContact: william.davis83@outlook.com | +1-518-758-7830\nIP: 82.179.91.85\nLocation: New York\nLast Login: 2025-11-21 12:59:11",
+    "ground_truth_pii": {
+      "names": [
+        "William Davis"
+      ],
+      "emails": [
+        "william.davis83@outlook.com"
+      ],
+      "phones": [
+        "+1-518-758-7830"
+      ],
+      "ip_addresses": [
+        "82.179.91.85"
+      ],
+      "addresses": [
+        "New York"
+      ]
+    }
+  },
+  {
+    "id": "paste_intl_004",
+    "type": "breach_fragment",
+    "source": "darknet_market_hydra",
+    "date_found": "2026-04-14T12:59:11.940214",
+    "content": "[BREACH] Noah Garcia\nContact: noah.garcia14@outlook.com | +1-926-140-1575\nIP: 122.116.218.144\nLocation: New York\nLast Login: 2026-02-01 12:59:11",
+    "ground_truth_pii": {
+      "names": [
+        "Noah Garcia"
+      ],
+      "emails": [
+        "noah.garcia14@outlook.com"
+      ],
+      "phones": [
+        "+1-926-140-1575"
+      ],
+      "ip_addresses": [
+        "122.116.218.144"
+      ],
+      "addresses": [
+        "New York"
+      ]
+    }
+  },
+  {
+    "id": "paste_intl_005",
+    "type": "breach_fragment",
+    "source": "darknet_market_agora",
+    "date_found": "2025-11-26T12:59:11.940223",
+    "content": "[BREACH] Amelia Smith\nContact: amelia.smith56@outlook.com | +1-236-824-7027\nIP: 17.82.26.225\nLocation: Singapore\nLast Login: 2025-11-04 12:59:11",
+    "ground_truth_pii": {
+      "names": [
+        "Amelia Smith"
+      ],
+      "emails": [
+        "amelia.smith56@outlook.com"
+      ],
+      "phones": [
+        "+1-236-824-7027"
+      ],
+      "ip_addresses": [
+        "17.82.26.225"
+      ],
+      "addresses": [
+        "Singapore"
+      ]
+    }
+  },
+  {
+    "id": "paste_intl_006",
+    "type": "breach_fragment",
+    "source": "darknet_market_dream",
+    "date_found": "2026-09-10T12:59:11.940231",
+    "content": "[BREACH] Sophia Johnson\nContact: sophia.johnson20@outlook.com | +1-569-710-1266\nIP: 132.5.103.7\nLocation: Toronto\nLast Login: 2025-11-07 12:59:11",
+    "ground_truth_pii": {
+      "names": [
+        "Sophia Johnson"
+      ],
+      "emails": [
+        "sophia.johnson20@outlook.com"
+      ],
+      "phones": [
+        "+1-569-710-1266"
+      ],
+      "ip_addresses": [
+        "132.5.103.7"
+      ],
+      "addresses": [
+        "Toronto"
+      ]
+    }
+  },
+  {
+    "id": "paste_intl_007",
+    "type": "breach_fragment",
+    "source": "darknet_market_dream",
+    "date_found": "2025-12-06T12:59:11.940240",
+    "content": "[BREACH] Oliver Miller\nContact: oliver.miller10@gmail.com | +1-586-245-8987\nIP: 17.156.147.231\nLocation: Paris\nLast Login: 2026-01-29 12:59:11",
+    "ground_truth_pii": {
+      "names": [
+        "Oliver Miller"
+      ],
+      "emails": [
+        "oliver.miller10@gmail.com"
+      ],
+      "phones": [
+        "+1-586-245-8987"
+      ],
+      "ip_addresses": [
+        "17.156.147.231"
+      ],
+      "addresses": [
+        "Paris"
+      ]
+    }
+  },
+  {
+    "id": "paste_intl_008",
+    "type": "breach_fragment",
+    "source": "darknet_market_hydra",
+    "date_found": "2025-12-04T12:59:11.940248",
+    "content": "[BREACH] William Johnson\nContact: william.johnson14@yahoo.com | +1-277-569-2650\nIP: 189.164.88.113\nLocation: San Francisco\nLast Login: 2025-10-22 12:59:11",
+    "ground_truth_pii": {
+      "names": [
+        "William Johnson"
+      ],
+      "emails": [
+        "william.johnson14@yahoo.com"
+      ],
+      "phones": [
+        "+1-277-569-2650"
+      ],
+      "ip_addresses": [
+        "189.164.88.113"
+      ],
+      "addresses": [
+        "San Francisco"
+      ]
+    }
+  },
+  {
+    "id": "paste_intl_009",
+    "type": "breach_fragment",
+    "source": "darknet_market_agora",
+    "date_found": "2025-12-29T12:59:11.940257",
+    "content": "[BREACH] William Williams\nContact: william.williams40@yahoo.com | +1-810-464-3874\nIP: 39.221.200.9\nLocation: Sydney\nLast Login: 2026-04-02 12:59:11",
+    "ground_truth_pii": {
+      "names": [
+        "William Williams"
+      ],
+      "emails": [
+        "william.williams40@yahoo.com"
+      ],
+      "phones": [
+        "+1-810-464-3874"
+      ],
+      "ip_addresses": [
+        "39.221.200.9"
+      ],
+      "addresses": [
+        "Sydney"
+      ]
+    }
+  },
+  {
+    "id": "paste_intl_010",
+    "type": "breach_fragment",
+    "source": "darknet_market_silk",
+    "date_found": "2026-06-13T12:59:11.940265",
+    "content": "[BREACH] James Williams\nContact: james.williams25@yahoo.com | +1-246-437-7220\nIP: 43.21.18.138\nLocation: London\nLast Login: 2026-07-04 12:59:11",
+    "ground_truth_pii": {
+      "names": [
+        "James Williams"
+      ],
+      "emails": [
+        "james.williams25@yahoo.com"
+      ],
+      "phones": [
+        "+1-246-437-7220"
+      ],
+      "ip_addresses": [
+        "43.21.18.138"
+      ],
+      "addresses": [
+        "London"
+      ]
+    }
+  },
+  {
+    "id": "paste_csv_001",
+    "type": "csv_scrape",
+    "source": "broker_scrape_spokeo",
+    "date_found": "2026-07-16T12:59:11.940290",
+    "content": "# Scraped from data broker site 33\nfull_name,email,phone,city,state\nPriya Rao,priyarao21@gmail.com,+91 6483497640,Ahmedabad,India\nSai Kumar,saikumar53@yahoo.co.in,+91 6532804169,Bangalore,India\nSara Singh,sarasingh24@yahoo.co.in,+91 7773367669,Kolkata,India\nArjun Nair,arjunnair1@rediffmail.com,+91 7375208239,Jaipur,India\nAnanya Sharma,ananyasharma43@rediffmail.com,+91 8558791873,Jaipur,India\nAnanya Patel,ananyapatel62@outlook.com,+91 8159409639,Kolkata,India\nAnanya Joshi,ananyajoshi73@outlook.com,+91 8932039999,Chennai,India\nReyansh Agarwal,reyanshagarwal42@gmail.com,+91 9360599498,Hyderabad,India\nArjun Sharma,arjunsharma82@protonmail.com,+91 9317736979,Chennai,India",
+    "ground_truth_pii": {
+      "names": [
+        "Priya Rao",
+        "Sai Kumar",
+        "Sara Singh",
+        "Arjun Nair",
+        "Ananya Sharma",
+        "Ananya Patel",
+        "Ananya Joshi",
+        "Reyansh Agarwal",
+        "Arjun Sharma"
+      ],
+      "emails": [
+        "priyarao21@gmail.com",
+        "saikumar53@yahoo.co.in",
+        "sarasingh24@yahoo.co.in",
+        "arjunnair1@rediffmail.com",
+        "ananyasharma43@rediffmail.com",
+        "ananyapatel62@outlook.com",
+        "ananyajoshi73@outlook.com",
+        "reyanshagarwal42@gmail.com",
+        "arjunsharma82@protonmail.com"
+      ],
+      "phones": [
+        "+91 6483497640",
+        "+91 6532804169",
+        "+91 7773367669",
+        "+91 7375208239",
+        "+91 8558791873",
+        "+91 8159409639",
+        "+91 8932039999",
+        "+91 9360599498",
+        "+91 9317736979"
+      ],
+      "addresses": [
+        "Ahmedabad",
+        "Bangalore",
+        "Kolkata",
+        "Jaipur",
+        "Jaipur",
+        "Kolkata",
+        "Chennai",
+        "Hyderabad",
+        "Chennai"
+      ]
+    }
+  },
+  {
+    "id": "paste_csv_002",
+    "type": "csv_scrape",
+    "source": "broker_scrape_truepeoplesearch",
+    "date_found": "2026-07-11T12:59:11.940303",
+    "content": "# Scraped from data broker site 35\nfull_name,email,phone,city,state\nDhruv Mukherjee,dhruvmukherjee99@gmail.com,+91 7459920121,Ahmedabad,India\nVivaan Agarwal,vivaanagarwal50@yahoo.co.in,+91 8620145293,Jaipur,India\nAarav Verma,aaravverma61@outlook.com,+91 9461048301,Lucknow,India\nKabir Singh,kabirsingh48@yahoo.co.in,+91 9555399963,Bangalore,India",
+    "ground_truth_pii": {
+      "names": [
+        "Dhruv Mukherjee",
+        "Vivaan Agarwal",
+        "Aarav Verma",
+        "Kabir Singh"
+      ],
+      "emails": [
+        "dhruvmukherjee99@gmail.com",
+        "vivaanagarwal50@yahoo.co.in",
+        "aaravverma61@outlook.com",
+        "kabirsingh48@yahoo.co.in"
+      ],
+      "phones": [
+        "+91 7459920121",
+        "+91 8620145293",
+        "+91 9461048301",
+        "+91 9555399963"
+      ],
+      "addresses": [
+        "Ahmedabad",
+        "Jaipur",
+        "Lucknow",
+        "Bangalore"
+      ]
+    }
+  },
+  {
+    "id": "paste_csv_003",
+    "type": "csv_scrape",
+    "source": "broker_scrape_zabasearch",
+    "date_found": "2026-04-04T12:59:11.940323",
+    "content": "# Scraped from data broker site 7\nfull_name,email,phone,city,state\nArnav Joshi,arnavjoshi94@gmail.com,+91 9860212496,Mumbai,India\nMyra Chatterjee,myrachatterjee87@yahoo.co.in,+91 6352439628,Hyderabad,India\nAditya Menon,adityamenon75@protonmail.com,+91 7962870330,Lucknow,India\nAnanya Singh,ananyasingh27@protonmail.com,+91 8457621023,Pune,India\nKabir Singh,kabirsingh52@yahoo.co.in,+91 7832548193,Hyderabad,India\nMyra Agarwal,myraagarwal60@outlook.com,+91 7303409682,Lucknow,India\nNeha Mukherjee,nehamukherjee23@hotmail.com,+91 7903638349,Jaipur,India\nVihaan Sharma,vihaansharma31@protonmail.com,+91 6597793162,Chennai,India\nAditya Chatterjee,adityachatterjee11@yahoo.co.in,+91 7596815139,Kolkata,India",
+    "ground_truth_pii": {
+      "names": [
+        "Arnav Joshi",
+        "Myra Chatterjee",
+        "Aditya Menon",
+        "Ananya Singh",
+        "Kabir Singh",
+        "Myra Agarwal",
+        "Neha Mukherjee",
+        "Vihaan Sharma",
+        "Aditya Chatterjee"
+      ],
+      "emails": [
+        "arnavjoshi94@gmail.com",
+        "myrachatterjee87@yahoo.co.in",
+        "adityamenon75@protonmail.com",
+        "ananyasingh27@protonmail.com",
+        "kabirsingh52@yahoo.co.in",
+        "myraagarwal60@outlook.com",
+        "nehamukherjee23@hotmail.com",
+        "vihaansharma31@protonmail.com",
+        "adityachatterjee11@yahoo.co.in"
+      ],
+      "phones": [
+        "+91 9860212496",
+        "+91 6352439628",
+        "+91 7962870330",
+        "+91 8457621023",
+        "+91 7832548193",
+        "+91 7303409682",
+        "+91 7903638349",
+        "+91 6597793162",
+        "+91 7596815139"
+      ],
+      "addresses": [
+        "Mumbai",
+        "Hyderabad",
+        "Lucknow",
+        "Pune",
+        "Hyderabad",
+        "Lucknow",
+        "Jaipur",
+        "Chennai",
+        "Kolkata"
+      ]
+    }
+  },
+  {
+    "id": "paste_csv_004",
+    "type": "csv_scrape",
+    "source": "broker_scrape_zabasearch",
+    "date_found": "2026-04-18T12:59:11.940342",
+    "content": "# Scraped from data broker site 16\nfull_name,email,phone,city,state\nArjun Pillai,arjunpillai67@outlook.com,+91 9659712798,Chennai,India\nKabir Ghosh,kabirghosh89@rediffmail.com,+91 8551991064,Hyderabad,India\nPriya Mukherjee,priyamukherjee5@hotmail.com,+91 6993004509,Mumbai,India\nPriya Pillai,priyapillai50@yahoo.co.in,+91 7650776507,Ahmedabad,India\nIsha Verma,ishaverma53@gmail.com,+91 8114367702,Chennai,India\nSara Chatterjee,sarachatterjee92@outlook.com,+91 6773792768,Bangalore,India\nDiya Kumar,diyakumar93@outlook.com,+91 8925039655,Chennai,India\nVihaan Nair,vihaannair52@protonmail.com,+91 8672877791,Mumbai,India\nAarav Gupta,aaravgupta29@yahoo.co.in,+91 8458322214,Ahmedabad,India",
+    "ground_truth_pii": {
+      "names": [
+        "Arjun Pillai",
+        "Kabir Ghosh",
+        "Priya Mukherjee",
+        "Priya Pillai",
+        "Isha Verma",
+        "Sara Chatterjee",
+        "Diya Kumar",
+        "Vihaan Nair",
+        "Aarav Gupta"
+      ],
+      "emails": [
+        "arjunpillai67@outlook.com",
+        "kabirghosh89@rediffmail.com",
+        "priyamukherjee5@hotmail.com",
+        "priyapillai50@yahoo.co.in",
+        "ishaverma53@gmail.com",
+        "sarachatterjee92@outlook.com",
+        "diyakumar93@outlook.com",
+        "vihaannair52@protonmail.com",
+        "aaravgupta29@yahoo.co.in"
+      ],
+      "phones": [
+        "+91 9659712798",
+        "+91 8551991064",
+        "+91 6993004509",
+        "+91 7650776507",
+        "+91 8114367702",
+        "+91 6773792768",
+        "+91 8925039655",
+        "+91 8672877791",
+        "+91 8458322214"
+      ],
+      "addresses": [
+        "Chennai",
+        "Hyderabad",
+        "Mumbai",
+        "Ahmedabad",
+        "Chennai",
+        "Bangalore",
+        "Chennai",
+        "Mumbai",
+        "Ahmedabad"
+      ]
+    }
+  },
+  {
+    "id": "paste_csv_005",
+    "type": "csv_scrape",
+    "source": "broker_scrape_truepeoplesearch",
+    "date_found": "2026-06-27T12:59:11.940358",
+    "content": "# Scraped from data broker site 16\nfull_name,email,phone,city,state\nDhruv Ghosh,dhruvghosh30@hotmail.com,+91 7125515555,Bangalore,India\nVivaan Ghosh,vivaanghosh8@protonmail.com,+91 6728500337,Jaipur,India\nDhruv Mukherjee,dhruvmukherjee57@outlook.com,+91 9980900815,Jaipur,India\nDiya Patel,diyapatel77@gmail.com,+91 9178922161,Mumbai,India\nNeha Mukherjee,nehamukherjee25@yahoo.co.in,+91 6551312089,Bangalore,India\nSai Pillai,saipillai41@yahoo.co.in,+91 9975160452,Ahmedabad,India\nSara Joshi,sarajoshi82@hotmail.com,+91 6833734728,Chennai,India",
+    "ground_truth_pii": {
+      "names": [
+        "Dhruv Ghosh",
+        "Vivaan Ghosh",
+        "Dhruv Mukherjee",
+        "Diya Patel",
+        "Neha Mukherjee",
+        "Sai Pillai",
+        "Sara Joshi"
+      ],
+      "emails": [
+        "dhruvghosh30@hotmail.com",
+        "vivaanghosh8@protonmail.com",
+        "dhruvmukherjee57@outlook.com",
+        "diyapatel77@gmail.com",
+        "nehamukherjee25@yahoo.co.in",
+        "saipillai41@yahoo.co.in",
+        "sarajoshi82@hotmail.com"
+      ],
+      "phones": [
+        "+91 7125515555",
+        "+91 6728500337",
+        "+91 9980900815",
+        "+91 9178922161",
+        "+91 6551312089",
+        "+91 9975160452",
+        "+91 6833734728"
+      ],
+      "addresses": [
+        "Bangalore",
+        "Jaipur",
+        "Jaipur",
+        "Mumbai",
+        "Bangalore",
+        "Ahmedabad",
+        "Chennai"
+      ]
+    }
+  }
+]

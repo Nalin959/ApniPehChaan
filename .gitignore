@@ -1,0 +1,25 @@
+# Virtual Environment
+.venv/
+env/
+venv/
+ENV/
+
+# Python cache & artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Logs & scratch
+*.log
+scratch/
+.system_generated/
+
+# OS files
+.DS_Store
+Thumbs.db
+*.swp
+*~
