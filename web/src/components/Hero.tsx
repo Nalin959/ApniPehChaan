@@ -1,8 +1,6 @@
 import { useId, useState, type FormEvent } from "react";
-import { motion } from "framer-motion";
 import { ArrowRight, Lock, ShieldCheck } from "lucide-react";
 import ScanConsole from "./ScanConsole";
-import { usePrefersReducedMotion } from "../lib/hooks";
 import type { ScanResult } from "../lib/types";
 
 export interface HeroProps {
@@ -19,7 +17,6 @@ export interface HeroProps {
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 export default function Hero({ onScan, scanState, result }: HeroProps) {
-  const reduced = usePrefersReducedMotion();
   const errorId = useId();
   const [email, setEmail] = useState("");
   const [error, setError] = useState("");
@@ -40,13 +37,6 @@ export default function Hero({ onScan, scanState, result }: HeroProps) {
     setError("");
     onScan(value);
   }
-
-  const fade = reduced
-    ? {}
-    : {
-        initial: { opacity: 0, y: 18 },
-        animate: { opacity: 1, y: 0 },
-      };
 
   return (
     <section className="relative isolate overflow-hidden pb-16 pt-12 sm:pb-24 sm:pt-20 lg:pb-28 lg:pt-24">
@@ -70,7 +60,7 @@ export default function Hero({ onScan, scanState, result }: HeroProps) {
       <div className="container-x">
         <div className="grid items-start gap-12 lg:grid-cols-[minmax(0,1fr)_minmax(0,480px)] lg:gap-14">
           {/* ---- Copy + form ---- */}
-          <motion.div {...fade} transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}>
+          <div>
             <div className="mb-7 inline-flex items-center gap-2.5 rounded-pill border border-border bg-surface/60 py-1.5 pl-2 pr-3.5 backdrop-blur-sm">
               <span className="relative inline-flex h-1.5 w-1.5 shrink-0">
                 <span className="absolute inline-flex h-full w-full animate-pulse-dot rounded-full bg-accent opacity-70" />
@@ -146,16 +136,12 @@ export default function Hero({ onScan, scanState, result }: HeroProps) {
                 Encrypted in transit and at rest
               </span>
             </div>
-          </motion.div>
+          </div>
 
           {/* ---- Console. Below the form on mobile by DOM order. ---- */}
-          <motion.div
-            {...fade}
-            transition={{ duration: 0.6, delay: reduced ? 0 : 0.12, ease: [0.22, 1, 0.36, 1] }}
-            className="w-full lg:sticky lg:top-28"
-          >
+          <div className="w-full lg:sticky lg:top-28">
             <ScanConsole state={scanState} result={result} />
-          </motion.div>
+          </div>
         </div>
       </div>
     </section>
