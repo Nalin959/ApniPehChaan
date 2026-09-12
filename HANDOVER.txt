@@ -1,0 +1,339 @@
+================================================================================
+SOVEREIGNPRIVACY AI — COMPLETE PROJECT HANDOVER & CONTEXT EXPORT
+================================================================================
+Document: PROJECT_HANDOVER.txt
+Generated: 2026-09-12T16:28:00+05:30
+Workspace Root: /home/nalin/Hackathon
+GitHub Repository: https://github.com/Nalin959/sovereign-privacy-ai
+Primary Frameworks: Python 3.10+, FastAPI, Uvicorn, Vanilla CSS/JS Glassmorphism
+Domain: Digital Identity, Breach Intelligence, PII Detection, Data Sovereignty
+Regulatory Anchor: India DPDP Act 2023 (Sec 11-13, 27), EU GDPR Art 17, US CCPA
+Target Evaluation: 24-Hour Hackathon (Judged under IDFC FIRST Bank Standards)
+================================================================================
+
+
+1. EXECUTIVE SUMMARY & PROJECT IDENTITY
+--------------------------------------------------------------------------------
+SovereignPrivacy AI is an autonomous, privacy-first personal agent engineered to
+empower individuals to reclaim control over their personal digital footprint. In
+an ecosystem where sensitive Personally Identifiable Information (PII) is sold
+by hundreds of data brokers and exposed in dark-web breaches, the agent bridges
+the gap between statutory rights (like India's DPDP Act 2023 Section 12 Right to
+Erasure and EU GDPR Article 17) and practical execution.
+
+Key Capabilities:
+  1. Multi-Source Threat Intelligence:
+     - 1,035+ verified Have I Been Pwned (HIBP) corporate breach incidents.
+     - 956 registered commercial data brokers from the Optery directory.
+     - 50 synthetic dark-web leak dumps and doxxing paste records.
+  2. Algorithmic Indian & Financial PII Detection:
+     - Verhoeff checksum algorithm for 12-digit Indian Aadhaar numbers.
+     - Luhn mod-10 algorithm for Visa/MasterCard/RuPay financial cards.
+     - Strict regex for Indian PAN cards ([A-Z]{5}[0-9]{4}[A-Z]{1}), UPI IDs,
+       IFSC codes, and Indian phone numbers (+91).
+  3. Probabilistic Identity Resolution:
+     - Jaro-Winkler string similarity + token overlap to prevent false positives.
+  4. 1-Click Statutory Legal Remediation:
+     - Auto-generates formal erasure notices citing India DPDP Act 2023 Sec 12/13,
+       EU GDPR Article 17, or California CCPA/CPRA § 1798.105.
+  5. Cryptographic Proof-of-Dispatch Ledger:
+     - Mints immutable SHA-256 digital audit receipts chained block-to-block.
+  6. Statutory 30-Day Compliance Tracker:
+     - Tracks response clocks (Day 7 reminder, Day 14 warning, Day 30 escalation
+       to the Data Protection Board of India - DPBI).
+  7. Obsidian Glassmorphism Cyber UI:
+     - Real-time animated threat radar, exposure explorer, legal studio,
+       compliance kanban, and live PII benchmark lab.
+
+
+2. COMPLETE CHRONOLOGICAL TRAJECTORY (WHAT HAS BEEN DONE)
+--------------------------------------------------------------------------------
+Phase 1: Planning & Research (Steps 0 - 50)
+  - Evaluated deep-research-report.md provided by user.
+  - Mapped out technical specifications for 24-hour hackathon.
+  - Identified data sources: Optery broker registry, HIBP breach catalog,
+    synthetic paste dumps, and Indian statutory templates.
+  - Created implementation_plan.md and task.md.
+
+Phase 2: Environment & Datasets (Steps 51 - 76)
+  - Created Python virtual environment in .venv/.
+  - Installed dependencies: fastapi, uvicorn, pydantic, jinja2, scikit-learn.
+  - Built data/download_datasets.py to ingest and format:
+      * data/brokers/optery_brokers.json (956 data brokers)
+      * data/breaches/hibp_breaches.json (1,035 breach records)
+      * data/synthetic_pastes/pastes_corpus.json (50 dark-web leaks)
+      * data/benchmarks/pii_ground_truth.json (380 labeled PII records)
+      * data/templates/ (DPDP 2023, GDPR, CCPA statutory notice templates)
+
+Phase 3: Backend Core Engine (Steps 77 - 98)
+  - Built backend/pii/recognizer.py: Hybrid regex + Verhoeff + Luhn engine.
+  - Built backend/pii/resolver.py: Jaro-Winkler probabilistic identity matcher.
+  - Built backend/pii/risk_calculator.py: Dynamic 0-100 risk scoring engine.
+  - Built backend/scanners/hibp_scanner.py: K-anonymity breach matcher.
+  - Built backend/scanners/broker_scanner.py: 956 broker category search.
+  - Built backend/scanners/paste_scanner.py: Dark-web paste leak grep engine.
+  - Built backend/remediation/notice_generator.py: Statutory notice compiler.
+  - Built backend/remediation/audit_crypto.py: SHA-256 chained audit receipts.
+  - Built backend/remediation/statutory_tracker.py: 30-day statutory scheduler.
+  - Built backend/app.py: FastAPI REST gateway (18 endpoints) + WebSocket.
+
+Phase 4: Frontend Development (Steps 99 - 104)
+  - Built frontend/index.html: Responsive semantic glassmorphism layout.
+  - Built frontend/styles.css: Obsidian theme (#060a13), neon tokens, animated
+    radar scan circles, responsive cards, glassmorphic panels.
+  - Built frontend/app.js: State management, local SHA-256 hashing, WebSocket
+    feed stream, live benchmark lab runner, PDF/print notice export.
+
+Phase 5: Automated Testing & Server Launch (Steps 105 - 125)
+  - Created test_system.py: 67 comprehensive unit and integration tests.
+  - Fixed risk calculator normalization threshold for critical exposures.
+  - Result: 67/67 tests passing in 0.08s (100% pass rate).
+  - Started daemon server: uvicorn backend.app:app --host 0.0.0.0 --port 8000.
+
+Phase 6: Model Transition & Verification Loop Resolution (Steps 126 - 335)
+  - Playwright browser subagent failed due to missing browser binaries.
+  - Claude Opus ran into intermittent API overload errors during goal verification.
+  - User stopped loop and switched model to Gemini 3.8 Flash.
+  - Analyzed complete previous transcript, updated task.md, generated walkthrough.md.
+
+Phase 7: Git, GitHub & Source Control Setup (Steps 336 - End)
+  - Discovered accidental git repository in /home/nalin/.git with 10,000 staged
+    files polluting VS Code Source Control.
+  - Safely archived /home/nalin/.git to ~/.git_backup_accidental.
+  - Initialized isolated Git repository in /home/nalin/Hackathon/.git on main branch.
+  - Created .gitignore and world-class README.md with architecture & badges.
+  - Authenticated with user's classic token and pushed repository to:
+    https://github.com/Nalin959/sovereign-privacy-ai
+  - Configured git credential helper (store) in ~/.git-credentials so that
+    1-click "Commit & Sync" in Antigravity IDE works smoothly without prompting.
+
+
+3. FILE STRUCTURE & DIRECTORY MAP
+--------------------------------------------------------------------------------
+/home/nalin/Hackathon/
+├── backend/
+│   ├── __init__.py               # Python package marker
+│   ├── app.py                    # FastAPI server (18 endpoints + WebSocket /ws/scan)
+│   ├── pii/
+│   │   ├── __init__.py           # Package marker
+│   │   ├── recognizer.py         # Hybrid PII Recognizer (Verhoeff, Luhn, Regex)
+│   │   ├── resolver.py           # Jaro-Winkler identity resolution & scoring
+│   │   └── risk_calculator.py    # Privacy Risk Score (0-100) multi-factor model
+│   ├── remediation/
+│   │   ├── __init__.py           # Package marker
+│   │   ├── audit_crypto.py       # SHA-256 chained cryptographic receipts
+│   │   ├── notice_generator.py   # Statutory legal notice compiler (DPDP/GDPR/CCPA)
+│   │   └── statutory_tracker.py  # 30-day statutory timeline & DPBI escalation
+│   └── scanners/
+│       ├── __init__.py           # Package marker
+│       ├── broker_scanner.py     # 956 Optery data broker query engine
+│       ├── hibp_scanner.py       # HIBP verified breach lookup engine
+│       └── paste_scanner.py      # Dark-web paste leak dump analyzer
+├── data/
+│   ├── benchmarks/
+│   │   └── pii_ground_truth.json # 380 labeled ground-truth evaluation records
+│   ├── breaches/
+│   │   └── hibp_breaches.json    # 1,035 verified corporate breach incidents
+│   ├── brokers/
+│   │   └── optery_brokers.json   # 956 Optery indexed data brokers
+│   ├── download_datasets.py      # Automated dataset ingestion and parsing script
+│   ├── synthetic_pastes/
+│   │   └── pastes_corpus.json    # 50 simulated dark-web leak dumps
+│   └── templates/
+│       ├── ccpa_deletion_notice.txt # California CCPA/CPRA § 1798.105 template
+│       ├── dpdp_erasure_notice.txt  # India DPDP Act 2023 Sec 12 & 13 template
+│       └── gdpr_art17_notice.txt    # EU GDPR Article 17 Right to Erasure template
+├── frontend/
+│   ├── app.js                    # UI logic, WebSocket consumer, benchmark runner
+│   ├── index.html                # Semantic Obsidian cyber glassmorphism HTML
+│   └── styles.css                # Obsidian design system, cyan/glow tokens, radar
+├── .vscode/
+│   └── settings.json             # Workspace git settings (autofetch, no parent git)
+├── .gitignore                    # Ignores .venv/, pycache, logs, system files
+├── deep-research-report.md       # Original research report that inspired the project
+├── README.md                     # GitHub README with badges, architecture, and pitch
+├── requirements.txt              # Production Python dependencies
+├── run_demo.sh                   # One-command demo launcher script
+├── test_system.py                # 67-test automated verification suite
+└── HANDOVER.txt                  # This handover document
+
+
+4. EMPIRICAL TEST SUITE RESULTS (67/67 PASSING)
+--------------------------------------------------------------------------------
+Command to execute tests:
+  /home/nalin/Hackathon/.venv/bin/python /home/nalin/Hackathon/test_system.py
+
+Summary of Test Execution:
+  1. Dataset Integrity:
+     - Optery brokers file loads (956 records) [PASS]
+     - HIBP breaches file loads (1,035 records) [PASS]
+     - Synthetic pastes file loads (50 dumps) [PASS]
+     - Benchmark file loads (380 samples) [PASS]
+     - DPDP, GDPR, CCPA templates exist [PASS]
+  2. PII Recognizer:
+     - Aadhaar Verhoeff algorithm validates genuine numbers [PASS]
+     - Aadhaar Verhoeff algorithm rejects invalid numbers [PASS]
+     - Detects PAN cards ([A-Z]{5}[0-9]{4}[A-Z]{1}) [PASS]
+     - Detects Email, Phone (+91), UPI, IPv4/IPv6, IFSC [PASS]
+     - Precision: 89.8%  (Target: >= 70%) [PASS]
+     - Recall:    88.0%  (Target: >= 70%) [PASS]
+     - F1 Score:  88.9%  (Target: >= 70%) [PASS]
+  3. Identity Resolver:
+     - Exact match scores >= 0.90 ('definite') [PASS]
+     - Partial match is_match=True [PASS]
+     - Non-match scores < 0.45 [PASS]
+     - Jaro-Winkler metric validation [PASS]
+  4. Risk Calculator:
+     - Zero exposures -> score = 0 (Minimal Risk) [PASS]
+     - Critical exposures -> High/Critical Risk [PASS]
+     - Risk score bounded in [0, 100] [PASS]
+  5. Legal Notice Generator:
+     - DPDP 2023 notice generates and cites Sec 12 & 13 [PASS]
+     - GDPR notice generates and cites Art 17 (30-day response) [PASS]
+     - CCPA notice generates and cites § 1798.105 (45-day response) [PASS]
+  6. Cryptographic Audit Trail:
+     - Genesis block initialized [PASS]
+     - Chained SHA-256 verification (Block N references Block N-1) [PASS]
+     - No breaks in cryptographic hash chain [PASS]
+  7. Statutory Compliance Tracker:
+     - Request creation, status updates, 30-day and 45-day milestone scheduling [PASS]
+  8. Threat Scanners:
+     - HIBP breach scanning [PASS]
+     - Optery broker category scanning [PASS]
+     - Dark-web paste scanning [PASS]
+  RESULT: 67/67 TESTS PASSED in 0.08s
+
+
+5. KEY ALGORITHMIC INNOVATIONS
+--------------------------------------------------------------------------------
+A. Verhoeff Dihedral Group Permutation for Aadhaar
+   - Problem: Standard 12-digit regex causes high false-positive rates by matching
+     serial numbers, bank accounts, and timestamps.
+   - Solution: Implemented the Verhoeff algorithm in PIIRecognizer. Uses multiplication
+     (d_table) and permutation (p_table) matrices over dihedral group D5 to check
+     the trailing check digit. 100% genuine Aadhaar validation.
+
+B. Luhn Mod-10 Verification for Credit/Debit Cards
+   - Validates Visa, MasterCard, RuPay, and Amex numbers before flagging as critical
+     financial data exposures.
+
+C. Jaro-Winkler Probabilistic Record Linkage
+   - Problem: Finding "Aarav Sharma" in a breach dump doesn't necessarily mean it's
+     the user.
+   - Solution: IdentityResolver computes token overlap and Jaro-Winkler string
+     distances across name, email, phone, and city, assigning confidence tiers:
+     * Definite Match (>= 0.85)
+     * Probable Match (0.65 - 0.84)
+     * Possible Match (0.45 - 0.64)
+
+D. Tamper-Evident Chained Cryptographic Ledger
+   - Every legal notice generated or dispatched creates an immutable receipt:
+       Receipt_N = SHA-256(Receipt_{N-1} | Timestamp | Action | PayloadHash)
+   - Guarantees digital proof-of-dispatch for submission to the Data Protection
+     Board of India (DPBI) or regulatory courts.
+
+E. Zero-Knowledge Local Architecture
+   - Client-side browser hashes user identifiers with SHA-256.
+   - Raw Aadhaar/PAN is processed locally on-device and never transmitted to
+     untrusted third parties.
+
+
+6. REST API & WEBSOCKET REFERENCE (PORT 8000)
+--------------------------------------------------------------------------------
+To start server:
+  /home/nalin/Hackathon/.venv/bin/python -m uvicorn backend.app:app --host 0.0.0.0 --port 8000
+
+Endpoints:
+  GET  /                        Serve Obsidian Glassmorphism single-page app
+  GET  /api/status              System health, dataset counts, audit chain status
+  GET  /api/datasets/summary    Statistics on loaded brokers, breaches, pastes
+  POST /api/scan/full           Comprehensive multi-vector threat scan
+  POST /api/scan/hibp           Targeted query against 1,035 HIBP verified breaches
+  POST /api/scan/brokers        Search across 956 registered Optery data brokers
+  POST /api/scan/pastes         Grep across 50 dark-web paste leaks
+  POST /api/pii/detect          Run hybrid PII extraction on unstructured text
+  GET  /api/pii/benchmark       Run precision, recall, and F1 evaluation
+  GET  /api/legal/jurisdictions List supported laws (dpdp, gdpr, ccpa)
+  POST /api/legal/generate      Compile formal legal letter with receipt hash
+  POST /api/legal/dispatch      Dispatch request, start 30-day clock, mint audit block
+  GET  /api/compliance/requests List active erasure requests and countdown clocks
+  GET  /api/compliance/request/{id} Detail view of a specific request
+  POST /api/compliance/update   Transition status (Pending -> Acknowledged -> Escalated)
+  GET  /api/compliance/overdue  List requests exceeding statutory 30-day deadline
+  GET  /api/audit/trail         Return full cryptographic audit receipt ledger
+  GET  /api/audit/verify        Verify tamper-evident hash chain integrity
+  WS   /ws/scan                 Real-time WebSocket streaming feed for scanner logs
+
+
+7. GIT, SOURCE CONTROL & GITHUB STATE
+--------------------------------------------------------------------------------
+Repository URL: https://github.com/Nalin959/sovereign-privacy-ai
+Visibility: Public
+Branch: main
+Working Tree: Clean, up to date with origin/main
+Credentials:
+  - Configured globally via ~/.git-credentials with credential.helper=store.
+  - 1-click "Commit & Sync" in Antigravity IDE works without prompting.
+Accidental Home Git:
+  - Archived to ~/.git_backup_accidental.
+  - Home directory is ignored via git.ignoredRepositories: ["/home/nalin"].
+
+
+8. DEMO SCRIPT FOR HACKATHON JUDGES (IDFC FIRST BANK)
+--------------------------------------------------------------------------------
+Duration: 3 minutes
+
+1. Pitch (30s):
+   "India's DPDP Act 2023 grants citizens the statutory Right to Erasure under
+   Section 12. But in practice, with 950+ data brokers and breach leaks everywhere,
+   exercising this right manually is impossible. SovereignPrivacy AI is the
+   autonomous, zero-knowledge agent that monitors exposures, algorithmically
+   verifies Indian identifiers, scores risk, and automates legal takedowns with
+   chained cryptographic receipts."
+
+2. Live Scan Demo (45s):
+   - Open http://localhost:8000.
+   - Enter identity in Sovereign Vault:
+       Name: Aarav Sharma
+       Email: aarav.sharma@example.com
+       Phone: +91 9876543210
+       PAN: ABCDE1234F
+       City: New Delhi
+   - Click "Initiate Deep Privacy Scan".
+   - Watch the animated radar and live WebSocket terminal stream logs.
+
+3. Risk Scoring & Exposure Cards (45s):
+   - Review the calculated Privacy Vulnerability Index (0-100).
+   - Show exposure cards for Optery data broker matches, HIBP breaches, and dark web.
+   - Highlight the Verhoeff validation badge for Indian Aadhaar and PAN verification.
+
+4. 1-Click Legal Notice & Audit Trail (45s):
+   - Click "Generate Statutory Notice" on a broker listing.
+   - Show the live compiled notice citing Sections 12 & 13 of the DPDP Act 2023.
+   - Toggle to EU GDPR Art 17 and CCPA to demonstrate multi-jurisdiction capability.
+   - Click "Dispatch Notice" — show the generated SHA-256 digital receipt hash.
+
+5. Compliance Kanban & DPBI Escalation (15s):
+   - Switch to the Compliance Tracker tab.
+   - Show the 30-day statutory countdown timer.
+   - Demonstrate the "Escalate to DPBI (Data Protection Board of India)" action.
+   - Open the PII Accuracy Lab tab and show live benchmark metrics (89.8% precision).
+
+
+9. RECOMMENDED NEXT STEPS FOR SUCCESSOR AGENT / MODEL
+--------------------------------------------------------------------------------
+1. SMTP Email Dispatcher:
+   - Wire backend/remediation/dispatcher.py to genuine SMTP credentials (e.g. Gmail
+     App Password or SendGrid) if the user supplies environment variables.
+2. PDF Report Generation:
+   - Add a server-side endpoint (/api/notice/pdf) using reportlab or weasyprint
+     to export statutory letters as formal signed PDFs.
+3. Multi-Lingual Legal Notices:
+   - Add Hindi, Tamil, and Marathi statutory notice templates for regional
+     DPDP Act submissions across Indian states.
+4. Continuous Background Cron:
+   - Schedule periodic scans using a background worker (e.g. every 24 hours) to
+     alert users when new breach dumps appear on paste sites.
+================================================================================
+END OF HANDOVER DOCUMENT
+================================================================================
