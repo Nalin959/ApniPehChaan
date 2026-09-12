@@ -119,6 +119,15 @@ class AuditTrail:
         self._receipts.append(genesis)
         self._persist(genesis)
 
+    def _reload(self):
+        if self._store is not None:
+            try:
+                rows = self._store.load_receipts()
+                if rows:
+                    self._receipts = [AuditReceipt.from_dict(r) for r in rows]
+            except Exception:
+                pass
+
     def _persist(self, receipt: "AuditReceipt"):
         if self._store is None:
             return
@@ -138,6 +147,7 @@ class AuditTrail:
         Returns:
             The newly created AuditReceipt
         """
+        self._reload()
         previous_hash = self._receipts[-1].hash if self._receipts else "0" * 64
         receipt = AuditReceipt(action=action, details=details, previous_hash=previous_hash)
         self._receipts.append(receipt)
@@ -146,10 +156,12 @@ class AuditTrail:
 
     def get_all(self) -> list[dict]:
         """Return all receipts as dicts."""
+        self._reload()
         return [r.to_dict() for r in self._receipts]
 
     def get_latest(self, n: int = 10) -> list[dict]:
         """Return the last N receipts."""
+        self._reload()
         return [r.to_dict() for r in self._receipts[-n:]]
 
     def verify_chain(self) -> dict:
@@ -159,6 +171,7 @@ class AuditTrail:
         Returns:
             Dict with verification status and any breaks found.
         """
+        self._reload()
         breaks = []
         for i, receipt in enumerate(self._receipts):
             # Verify individual hash
