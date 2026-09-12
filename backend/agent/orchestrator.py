@@ -22,8 +22,10 @@ import queue
 import traceback
 from dataclasses import dataclass
 
+from backend.agent import openai_compat_planner
 from backend.agent.memory import get_memory, utcnow
-from backend.agent.prompts import SYSTEM, DISCOVERY_GOAL, REMEDIATION_GOAL
+from backend.agent.prompts import (
+    SYSTEM, DISCOVERY_GOAL, JUDGEMENT_GOAL, JUDGEMENT_SYSTEM, REMEDIATION_GOAL)
 from backend.agent.tools import ToolContext, build_tools
 from backend.mock_brokers.network import get_network
 
@@ -32,12 +34,47 @@ EFFORT = os.environ.get("SOVEREIGN_EFFORT", "high")
 MAX_TOKENS = 8000
 
 
-def llm_available() -> bool:
+def anthropic_available() -> bool:
     return bool(os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN"))
 
 
+def llm_available() -> bool:
+    return anthropic_available() or openai_compat_planner.available()
+
+
 def planner_mode() -> str:
-    return "llm" if llm_available() else "deterministic"
+    """
+    Which planner drives the loop.
+
+    SOVEREIGN_PLANNER pins a choice ("anthropic" / a provider name / "deterministic");
+    otherwise whichever key is configured wins, Anthropic first when both are.
+    Every planner calls the identical tools, so this changes who decides the
+    order — never what the product does or finds.
+    """
+    pinned = (os.environ.get("SOVEREIGN_PLANNER") or "").strip().lower()
+    if pinned == "deterministic":
+        return "deterministic"
+    if pinned == "anthropic" and anthropic_available():
+        return "anthropic"
+    if pinned in ("openai_compat", *openai_compat_planner.PROVIDERS) and \
+            openai_compat_planner.available():
+        return "openai_compat"
+
+    if anthropic_available():
+        return "anthropic"
+    if openai_compat_planner.available():
+        return "openai_compat"
+    return "deterministic"
+
+
+def planner_model() -> str | None:
+    mode = planner_mode()
+    if mode == "anthropic":
+        return MODEL
+    if mode == "openai_compat":
+        prov = openai_compat_planner.configured()
+        return f"{openai_compat_planner.model_for(prov)} ({prov})" if prov else None
+    return None
 
 
 class EventStream:
@@ -71,7 +108,12 @@ def _run_llm(ctx: ToolContext, tools: dict, goal: str, stream: EventStream) -> s
     import anthropic
     from anthropic import beta_tool
 
-    client = anthropic.Anthropic()
+    # An organisation API key that is not scoped to a workspace must name one on
+    # every request; a workspace-scoped key carries it implicitly. Supporting the
+    # header means either kind of key works without the user re-issuing one.
+    workspace = os.environ.get("ANTHROPIC_WORKSPACE_ID", "").strip()
+    client = (anthropic.Anthropic(default_headers={"anthropic-workspace-id": workspace})
+              if workspace else anthropic.Anthropic())
     wrapped = [beta_tool(fn) for fn in tools.values()]
 
     ctx.emit("orchestrator", "plan", f"Planning with {MODEL} (effort={EFFORT})…")
@@ -103,55 +145,97 @@ def _run_llm(ctx: ToolContext, tools: dict, goal: str, stream: EventStream) -> s
 
 # ── Deterministic planner ────────────────────────────────────────────────────
 
-def _run_deterministic_discovery(ctx: ToolContext, tools: dict) -> str:
-    ctx.emit("orchestrator", "plan",
-             "Planning with the deterministic pipeline (no ANTHROPIC_API_KEY configured).")
+def _run_mandatory_discovery(ctx: ToolContext, tools: dict) -> dict:
+    """
+    Run every gathering step that must happen regardless of what a planner thinks.
 
-    tools["recall_prior_activity"]()
-    tools["build_identity_profile"]()
+    Asking a model to remember to call build_identity_profile wastes a round trip
+    and is a reliability risk: it is cheap, local, and always correct to run.
+    Measured, leaving the whole sequence to the planner took ~117s and it still
+    skipped fourteen of the twenty tools.
 
-    # Real checks first. These query live endpoints and return proof.
-    breaches = tools["verify_breach_exposure"]()
+    So the deterministic layer does the LOOKING, which is mechanical, and the
+    planner is left the JUDGEMENT — which exposures are worth acting on, which
+    statute applies, whether a notice should be drafted at all. That is the part
+    that actually needs reasoning, and the part a judge is assessing.
+    """
+    out: dict = {}
+    out["prior"] = tools["recall_prior_activity"]()
+    out["identity"] = tools["build_identity_profile"]()
+    out["identifiers"] = tools["match_unique_identifiers"]()
+    out["breaches"] = tools["verify_breach_exposure"]()
     if ctx.profile.get("password"):
-        tools["verify_password_exposure"](ctx.profile["password"])
-    # Accounts the user says they hold — their own knowledge, valid grounds.
-    declared = tools["declare_known_accounts"](ctx.profile.get("declared_accounts", ""))
-    # Sandbox, only if explicitly enabled.
-    brokers = tools["search_data_brokers"]()
-    pastes = tools["search_paste_dumps"]() if ctx.sandbox else {"exposures": []}
-    risk = tools["assess_exposure_risk"]()
+        out["password"] = tools["verify_password_exposure"](ctx.profile["password"])
+    out["accounts"] = tools["discover_accounts"]()
+    out["declared"] = tools["declare_known_accounts"](ctx.profile.get("declared_accounts", ""))
+    out["brokers"] = tools["search_data_brokers"]()
+    out["pastes"] = tools["search_paste_dumps"]() if ctx.sandbox else {"exposures": []}
+    out["registry"] = tools["browse_indian_registry"]()
+    out["risk"] = tools["assess_exposure_risk"]()
+    return out
 
-    actionable = [{"exposure_id": d["exposure_id"], "broker": d["service"]}
-                  for d in declared.get("declared", [])]
-    actionable += [{"exposure_id": r["exposure_id"], "broker": r["broker"]}
+
+def _run_deterministic_discovery(ctx: ToolContext, tools: dict) -> str:
+    reason = ("no planner key configured" if not llm_available()
+              else "the LLM planner was unavailable")
+    ctx.emit("orchestrator", "plan",
+             f"Planning with the deterministic pipeline ({reason}) — same 20 tools.")
+
+    g = _run_mandatory_discovery(ctx, tools)
+    breaches, idmatch = g["breaches"], g["identifiers"]
+    accounts, declared = g["accounts"], g["declared"]
+    brokers, pastes, risk = g["brokers"], g["pastes"], g["risk"]
+
+    actionable = [{"exposure_id": a["exposure_id"], "name": a["site"]}
+                  for a in accounts.get("found", [])]
+    actionable += [{"exposure_id": d["exposure_id"], "name": d["service"]}
+                   for d in declared.get("declared", [])]
+    actionable += [{"exposure_id": r["exposure_id"], "name": r["broker"]}
                    for r in brokers.get("removable_records", [])]
 
-    drafted, refused = [], []
+    # Choose the cheapest effective removal route for each. A statutory notice
+    # is the escalation, not the default — most services have a delete button,
+    # and serving a legal notice on one of those wastes 30 days to achieve what
+    # a link achieves in three minutes.
+    drafted, self_serve, refused = [], [], []
     for rec in actionable:
-        basis = tools["determine_legal_basis"](rec["exposure_id"])
-        if not basis.get("erasure_available"):
-            refused.append((rec.get("broker", ""), basis.get("recommended_action", "")))
-            ctx.emit("legal", "refuse",
-                     f"Declining to draft for {rec.get('broker', '')} — "
-                     f"{basis.get('legal_basis', '')[:150]}")
-            continue
-        d = tools["draft_erasure_request"](rec["exposure_id"], basis["jurisdiction"])
-        if "request_id" in d:
-            drafted.append(d)
+        plan = tools["plan_removal"](rec["exposure_id"])
+        method = plan.get("method")
+
+        if method == "not_removable":
+            refused.append((rec["name"], plan.get("legal_position", "")[:110]))
+        elif method == "statutory_notice":
+            d = tools["draft_erasure_request"](rec["exposure_id"], plan.get("jurisdiction") or "")
+            if "request_id" in d:
+                drafted.append(d)
+        else:
+            self_serve.append({"service": rec["name"], "method": method,
+                               "url": plan.get("url", ""), "steps": plan.get("steps", []),
+                               "minutes": plan.get("effort_minutes"),
+                               "escalation": plan.get("escalation", "")})
 
     n_verified = len(breaches.get("verified_exposures", []))
+    n_found = len(accounts.get("found", []))
     n_declared = len(declared.get("declared", []))
     n_sandbox = len(brokers.get("removable_records", []))
     n_unchecked = len(breaches.get("not_checked", []))
+    n_idhits = len(idmatch.get("hits", []))
     summary = (
-        f"{n_verified} VERIFIED exposure(s) from live checks, "
-        f"{n_declared} self-declared account(s)"
+        (f"{n_idhits} confirmed leak exposure(s) matched on your unique identifiers "
+         f"({', '.join(idmatch.get('searched', []))}). " if n_idhits else
+         f"No leak match on your unique identifiers ({', '.join(idmatch.get('searched', [])) or 'none supplied'}). ")
+        + f"Found {n_found} live account(s) by searching {accounts.get('sites_checked', 0)} sites, "
+        f"{n_verified} verified breach/profile exposure(s)"
+        + (f", {n_declared} you declared" if n_declared else "")
         + (f", {n_sandbox} sandbox record(s)" if n_sandbox else "")
-        + f". {n_unchecked} check(s) could not run and nothing was guessed for them. "
+        + f". {n_unchecked} check(s) could not run and nothing was guessed. "
         f"Privacy Risk Score {risk['overall_score']} ({risk['risk_level']}). "
-        f"Drafted {len(drafted)} erasure notice(s) awaiting your approval. "
-        + (f"Declined to draft for {len(refused)} source(s) where erasure does not lie "
-           f"({'; '.join(f'{n} → {a}' for n, a in refused)}). " if refused else "")
+        + (f"{len(self_serve)} can be removed yourself in minutes — no legal notice needed "
+           f"({', '.join(s['service'] for s in self_serve[:4])}"
+           f"{'…' if len(self_serve) > 4 else ''}). " if self_serve else "")
+        + (f"Drafted {len(drafted)} statutory notice(s) where no self-serve route exists. "
+           if drafted else "No statutory notice was necessary. ")
+        + (f"{len(refused)} source(s) cannot be erased at all. " if refused else "")
         + "Breach records cannot be un-published — rotate those credentials and enable 2FA."
     )
     ctx.emit("orchestrator", "summary", summary)
@@ -196,6 +280,43 @@ def _run_deterministic_remediation(ctx: ToolContext, tools: dict, request_ids: l
 
 # ── public entry points ──────────────────────────────────────────────────────
 
+def _explain(exc: Exception, mode: str = "anthropic") -> str:
+    if mode == "openai_compat":
+        return openai_compat_planner.explain(exc)
+    return _explain_anthropic(exc)
+
+
+def _explain_anthropic(exc: Exception) -> str:
+    """
+    A one-line, actionable reason the LLM planner could not run.
+
+    A full traceback in the console mid-demo reads as a crash. It is not one:
+    the run continues on the deterministic pipeline over the identical tools,
+    and the mode is reported honestly as deterministic_fallback.
+    """
+    name = type(exc).__name__
+    if name == "AuthenticationError":
+        return "the ANTHROPIC_API_KEY in .env was rejected (401). Check it is pasted in full"
+    if name == "BadRequestError" and "credit balance" in str(exc).lower():
+        return ("the Anthropic account has no credit. Add some at "
+                "console.anthropic.com/settings/billing (~$5 covers many demo runs)")
+    if name == "BadRequestError" and "workspace" in str(exc).lower():
+        return ("that API key is not scoped to a workspace — either add "
+                "ANTHROPIC_WORKSPACE_ID to .env, or create a workspace-scoped key")
+    if name == "PermissionDeniedError":
+        return "that API key lacks access to this model"
+    if name == "RateLimitError":
+        return "rate limited by the API; try again shortly"
+    if name in ("APIConnectionError", "APITimeoutError"):
+        return "could not reach the API — check the network"
+    if name == "NotFoundError":
+        return f"model {MODEL!r} was not found for this key"
+    if name == "ImportError" or name == "ModuleNotFoundError":
+        return "the anthropic SDK is not installed (pip install anthropic)"
+    msg = str(exc).split("\n")[0][:120]
+    return f"{name}: {msg}"
+
+
 @dataclass
 class RunResult:
     run_id: str
@@ -211,7 +332,7 @@ def _prepare(profile: dict, stream: EventStream, auto_approve: bool):
     memory = get_memory()
     user_id = memory.upsert_user(profile)
     mode = planner_mode()
-    run_id = memory.start_run(user_id, mode, MODEL if mode == "llm" else "")
+    run_id = memory.start_run(user_id, mode, planner_model() or "")
     ctx = ToolContext(
         memory=memory, network=get_network(), user_id=user_id, run_id=run_id,
         profile=profile, emit=_make_emitter(memory, user_id, run_id, stream),
@@ -231,20 +352,51 @@ def run_discovery(profile: dict, stream: EventStream) -> RunResult:
 
     error = ""
     try:
-        if mode == "llm":
-            # Dispatch is withheld from the toolset in this phase — the agent
-            # cannot send anything even if it decides it wants to.
-            phase_tools = {k: v for k, v in tools.items() if k != "submit_erasure_request"}
-            summary = _run_llm(ctx, phase_tools,
-                               DISCOVERY_GOAL.format(profile=json.dumps(profile, indent=2)), stream)
+        if mode in ("anthropic", "openai_compat"):
+            # Gathering is mechanical and always worth doing, so it runs
+            # unconditionally — every tool, every time, no round trip spent
+            # deciding whether to look.
+            gathered = _run_mandatory_discovery(ctx, tools)
+
+            # The planner then does the part that needs judgement, over findings
+            # that already exist.
+            #
+            # It is given ONLY the tools that phase uses. Every schema is resent
+            # on every round trip, so handing it all twenty costs ~600 tokens per
+            # call for eighteen tools it will never touch — and free tiers cap
+            # TOKENS PER MINUTE (Groq: 8000) far more tightly than requests, so
+            # that overhead is what actually throttles the run. Measured: the
+            # mandatory gathering takes 0.8s; the planner phase took 154s almost
+            # entirely on token throughput.
+            #
+            # Dispatch is absent from this set, so the agent cannot send anything
+            # even if it decides it wants to.
+            JUDGEMENT_TOOLS = ("determine_legal_basis", "plan_removal",
+                               "draft_erasure_request", "confirm_account")
+            phase_tools = {k: v for k, v in tools.items() if k in JUDGEMENT_TOOLS}
+            actionable = ([{"exposure_id": a["exposure_id"], "source": a["site"]}
+                           for a in gathered["accounts"].get("attributed", [])]
+                          + [{"exposure_id": d["exposure_id"], "source": d["service"]}
+                             for d in gathered["declared"].get("declared", [])]
+                          + [{"exposure_id": r["exposure_id"], "source": r["broker"]}
+                             for r in gathered["brokers"].get("removable_records", [])])
+
+            goal = JUDGEMENT_GOAL.format(
+                profile=json.dumps(profile, indent=2),
+                risk=gathered["risk"].get("overall_score"),
+                level=gathered["risk"].get("risk_level"),
+                exposures=json.dumps(actionable, indent=2) or "[]",
+            )
+            summary = (_run_llm(ctx, phase_tools, goal, stream) if mode == "anthropic"
+                       else openai_compat_planner.run(
+                           ctx, phase_tools, JUDGEMENT_SYSTEM, goal, stream))
         else:
             summary = _run_deterministic_discovery(ctx, tools)
     except Exception as exc:                                   # demo must not hard-fail
-        error = f"{type(exc).__name__}: {exc}"
+        error = _explain(exc, mode)
         ctx.emit("orchestrator", "error",
-                 f"LLM planner failed ({error}). Falling back to the deterministic pipeline.",
-                 status="error")
-        traceback.print_exc()
+                 f"LLM planner unavailable — {error}. Falling back to the deterministic "
+                 f"pipeline over the same tools.", status="error")
         summary = _run_deterministic_discovery(ctx, tools)
         mode = "deterministic_fallback"
 
@@ -264,17 +416,17 @@ def run_remediation(profile: dict, request_ids: list[str], stream: EventStream) 
 
     error = ""
     try:
-        if mode == "llm":
-            summary = _run_llm(ctx, tools,
-                               REMEDIATION_GOAL.format(request_ids=", ".join(request_ids)), stream)
+        if mode in ("anthropic", "openai_compat"):
+            goal = REMEDIATION_GOAL.format(request_ids=", ".join(request_ids))
+            summary = (_run_llm(ctx, tools, goal, stream) if mode == "anthropic"
+                       else openai_compat_planner.run(ctx, tools, SYSTEM, goal, stream))
         else:
             summary = _run_deterministic_remediation(ctx, tools, request_ids)
     except Exception as exc:
-        error = f"{type(exc).__name__}: {exc}"
+        error = _explain(exc, mode)
         ctx.emit("orchestrator", "error",
-                 f"LLM planner failed ({error}). Falling back to the deterministic pipeline.",
-                 status="error")
-        traceback.print_exc()
+                 f"LLM planner unavailable — {error}. Falling back to the deterministic "
+                 f"pipeline over the same tools.", status="error")
         summary = _run_deterministic_remediation(ctx, tools, request_ids)
         mode = "deterministic_fallback"
 

@@ -1,0 +1,177 @@
+"""
+gemini_planner.py — Google Gemini as the agent's planner.
+
+WHY THIS EXISTS
+---------------
+The planner decides which of the agent's 20 tools to call next and why. Claude
+does that via the Anthropic tool runner, but that requires paid API credit. The
+Gemini Flash free tier does the same job at no cost, which matters when the
+alternative is shipping with no live reasoning at all.
+
+The tools themselves are untouched. Every planner drives the identical Python
+functions in tools.py — regexes, checksums, HTTPS fetches, SQL — so switching
+planner changes who chooses the order, never what the product does or finds.
+
+Gemini's SDK can call Python functions directly (automatic function calling),
+so the same closures handed to Claude are handed to Gemini unchanged.
+"""
+
+import os
+import random
+import time
+
+MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.6-flash")
+
+# Flash models are free-tier eligible and fast enough for a live demo. Pro is
+# not free, so it is never selected implicitly.
+# Measured on a free key, single tool-calling round trip:
+#   gemini-3.6-flash   3.1s     <- default; fast enough for a live trace
+#   gemini-flash-latest 7.6s
+#   gemini-3.7-flash  16.9s
+#   gemini-3.8-flash  30.1s, and returns 503 under load
+# The newest model is not the best choice here. The planner's job is picking the
+# next of 20 tools and honouring three refusal rules — 3.6 does that, and a
+# ten-minute run in front of a judge is a failed demo whatever the model scored.
+# The free-tier quota is GenerateRequestsPerDayPerProjectPerModel = 20/day,
+# and it is PER MODEL. One agent run costs 15-20 requests, so a single model
+# affords roughly one run per day — but rotating across models multiplies that,
+# because each carries its own independent daily allowance.
+#
+# Ordered fastest-first (measured, single tool-calling round trip):
+#   gemini-3.6-flash    3.1s
+#   gemini-flash-latest 7.6s
+#   gemini-3.5-flash     ~
+#   gemini-3.7-flash   16.9s
+#   gemini-3.8-flash   30.1s  and 503s under load
+FREE_TIER_MODELS = (
+    "gemini-3.6-flash",
+    "gemini-flash-latest",
+    "gemini-3.5-flash",
+    "gemini-3.7-flash",
+    "gemini-3.8-flash",
+)
+
+
+def rotation() -> list[str]:
+    """Models to try in order. The configured one first, then the rest."""
+    first = MODEL
+    return [first] + [m for m in FREE_TIER_MODELS if m != first]
+
+
+def available() -> bool:
+    return bool(os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY"))
+
+
+def _api_key() -> str:
+    return os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY") or ""
+
+
+def explain(exc: Exception) -> str:
+    """One actionable line for why the Gemini planner could not run."""
+    name = type(exc).__name__
+    msg = str(exc)
+    low = msg.lower()
+    if "api key not valid" in low or "api_key_invalid" in low:
+        return "the GEMINI_API_KEY in .env was rejected — check it is pasted in full"
+    if "quota" in low or "resource_exhausted" in low or "429" in msg:
+        return "the Gemini free-tier rate limit was hit; wait a minute and retry"
+    if "503" in msg or "unavailable" in low or "high demand" in low:
+        return ("that Gemini model is capacity-throttled right now (503). "
+                "gemini-3.6-flash is more reliable than the newest models")
+    if "permission" in low or "403" in msg:
+        return "that Gemini key lacks access to this model"
+    if "not found" in low or "404" in msg:
+        return f"model {MODEL!r} was not found for this key"
+    if name in ("ImportError", "ModuleNotFoundError"):
+        return "the google-genai SDK is not installed (pip install google-genai)"
+    return f"{name}: {msg.splitlines()[0][:120]}"
+
+
+def run(ctx, tools: dict, system: str, goal: str, stream) -> str:
+    """
+    Drive the agent loop with Gemini.
+
+    Returns the model's closing summary. Raises on failure so the caller can
+    fall back to the deterministic pipeline — a planner outage must never take
+    the product down with it.
+    """
+    from google import genai
+    from google.genai import types
+    from backend.agent.memory import utcnow
+
+    client = genai.Client(api_key=_api_key())
+
+    ctx.emit("orchestrator", "plan", f"Planning with {MODEL} (Gemini free tier)…")
+
+    # Hand Gemini the same callables Claude gets. The SDK reads each function's
+    # signature and docstring to build the declaration, so the docstrings in
+    # tools.py are load-bearing for both planners.
+    config = types.GenerateContentConfig(
+        system_instruction=system,
+        tools=list(tools.values()),
+        automatic_function_calling=types.AutomaticFunctionCallingConfig(
+            maximum_remote_calls=40,     # enough for a full discovery pass
+        ),
+        temperature=0.2,                 # planning, not prose
+    )
+
+    # 503 (capacity) and 429 (free-tier rate limit) are transient and common on
+    # a free tier. Retrying with backoff turns most of them into a slightly
+    # slower run rather than a silent drop to the deterministic pipeline —
+    # which, mid-demo, is the difference between live reasoning and none.
+    # Try each model in turn. A daily-quota 429 is not retryable on that model
+    # — waiting will not help until tomorrow — so move straight to the next one,
+    # which has its own separate allowance. A 503 or a per-minute limit IS worth
+    # a short backoff before giving up on that model.
+    response = None
+    used_model = None
+    last_exc = None
+
+    for model_name in rotation():
+        chat = client.chats.create(model=model_name, config=config)
+        for attempt in range(3):
+            try:
+                response = chat.send_message(goal)
+                used_model = model_name
+                break
+            except Exception as exc:
+                last_exc = exc
+                text = str(exc)
+                daily = "PerDay" in text or "quota" in text.lower() and "day" in text.lower()
+                transient = ("503" in text or "UNAVAILABLE" in text
+                             or "high demand" in text.lower()
+                             or ("429" in text and not daily))
+                if daily or not transient or attempt == 2:
+                    break
+                wait = (2 ** attempt) + random.uniform(0, 1)
+                ctx.emit("orchestrator", "plan",
+                         f"{model_name}: transient error — retrying in {wait:.0f}s…",
+                         status="running")
+                time.sleep(wait)
+        if response is not None:
+            break
+        ctx.emit("orchestrator", "plan",
+                 f"{model_name} unavailable (daily free quota is 20 requests per model) — "
+                 f"trying the next model…", status="running")
+
+    if response is None:
+        raise last_exc
+
+    if used_model != MODEL:
+        ctx.emit("orchestrator", "plan",
+                 f"Planning with {used_model} — {MODEL} had exhausted its daily free quota.")
+
+    # Surface the model's own narration so the trace shows real reasoning
+    # rather than log lines we wrote.
+    final_text = ""
+    for candidate in (response.candidates or []):
+        for part in (candidate.content.parts or []):
+            text = getattr(part, "text", None)
+            if text and text.strip():
+                final_text = text.strip()
+                stream.put({"type": "agent_reasoning", "run_id": ctx.run_id,
+                            "ts": utcnow(), "text": final_text})
+
+    if final_text:
+        ctx.emit("orchestrator", "reasoning", final_text)
+    return final_text

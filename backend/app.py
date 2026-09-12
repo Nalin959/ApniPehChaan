@@ -22,6 +22,11 @@ from pydantic import BaseModel, Field
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, PROJECT_ROOT)
 
+# Load .env before any module reads an environment variable — the LLM planner
+# and the HIBP check both switch on purely by variable presence.
+from backend.agent.env import load_env, status as env_status  # noqa: E402
+load_env()
+
 from backend.scanners.hibp_scanner import HIBPScanner
 from backend.scanners.broker_scanner import BrokerScanner
 from backend.scanners.paste_scanner import PasteScanner
@@ -86,6 +91,15 @@ async def lifespan(app: FastAPI):
     print(f"  Data brokers:      {broker_scanner.get_broker_count()}")
     print(f"  Paste corpus:      {paste_scanner.get_paste_count()}")
     print(f"  Jurisdictions:     {len(notice_generator.get_jurisdictions())}")
+    _env = env_status()
+    print("-" * 60)
+    from backend.agent.orchestrator import planner_mode as _pm, planner_model as _pmod
+    _mode = _pm()
+    print(f"  Planner:           {_mode}"
+          + (f" ({_pmod()})" if _pmod() else
+             "  (set ANTHROPIC_API_KEY or GEMINI_API_KEY in .env)"))
+    print(f"  Breach checks:     {_env['breach_checks']}"
+          + ("" if _env["breach_checks"] == "ENABLED" else "  (set HIBP_API_KEY in .env)"))
     print("=" * 60)
     yield
     # Shutdown
@@ -696,7 +710,7 @@ import threading as _threading
 
 from backend.agent.memory import get_memory
 from backend.agent.orchestrator import (
-    EventStream, run_discovery, run_remediation, planner_mode, MODEL,
+    EventStream, run_discovery, run_remediation, planner_mode, planner_model, MODEL,
 )
 from backend.mock_brokers.network import get_network
 
@@ -719,6 +733,29 @@ class AgentScanRequest(BaseModel):
     # which must never be mistaken for real findings.
     sandbox: bool = False
 
+    # ── Optional corroborating identifiers ──
+    # All optional. Each one lets more candidate profiles be resolved in either
+    # direction, which is the whole trade: more identifiers, fewer strangers
+    # misattributed to you.
+    alt_emails: str = ""         # other addresses you use
+    alt_phones: str = ""         # other numbers you use
+    known_usernames: str = ""    # handles you know are yours; "site:handle" scopes one
+    date_of_birth: str = ""      # YYYY-MM-DD
+    upi_id: str = ""             # e.g. yourname@okaxis
+    websites: str = ""           # personal sites that link back to you
+    # Guess handles from the email local-part and the legal name. Off by
+    # default: neither is unique. nalinchamp@gmail.com and nalinchamp@yahoo.com
+    # are different people, and a name is shared by thousands — so every guessed
+    # hit stays an unconfirmed candidate for ever.
+    search_guessed_handles: bool = False
+    # Never stored or transmitted in the clear — hashed on arrival and used only
+    # to match against local leak corpora. No public profile displays these, so
+    # they do nothing for account attribution.
+    pan: str = ""
+    aadhaar: str = ""
+    passport: str = ""
+    card_last4: str = ""
+
 
 class AgentApproveRequest(AgentScanRequest):
     request_ids: list[str] = Field(default_factory=list)
@@ -728,7 +765,13 @@ def _profile_of(req: AgentScanRequest) -> dict:
     return {"name": req.name, "email": req.email, "phone": req.phone,
             "city": req.city, "country": req.country or "IN",
             "declared_accounts": req.declared_accounts, "password": req.password,
-            "sandbox": bool(req.sandbox)}
+            "sandbox": bool(req.sandbox),
+            "alt_emails": req.alt_emails, "alt_phones": req.alt_phones,
+            "known_usernames": req.known_usernames, "date_of_birth": req.date_of_birth,
+            "upi_id": req.upi_id, "websites": req.websites,
+            "search_guessed_handles": bool(req.search_guessed_handles),
+            "pan": req.pan, "aadhaar": req.aadhaar, "passport": req.passport,
+            "card_last4": req.card_last4}
 
 
 def _dashboard_state(user_id: str) -> dict:
@@ -746,28 +789,108 @@ def _dashboard_state(user_id: str) -> dict:
         "exposures": exposures,
         "requests": requests,
         "identities": _memory.get_identities(user_id),
+        "removal_plan": _removal_plan(user_id, exposures),
     }
+
+
+def _removal_plan(user_id: str, exposures: list[dict]) -> dict:
+    """
+    The action plan, grouped by how the data actually comes down.
+
+    This is the part the user acts on. Most entries are a link and three steps,
+    not a legal notice — because most services have a delete button, and serving
+    a statutory notice on one of those wastes a month to achieve what a link
+    achieves in three minutes.
+    """
+    from backend.agent.tools import find_playbook, load_playbooks
+
+    info = load_playbooks().get("method_info", {})
+    order = load_playbooks().get("method_order", [])
+    groups: dict[str, list] = {}
+
+    for e in exposures:
+        # Unconfirmed candidates and rejected profiles never enter the plan —
+        # acting on them would mean requesting deletion of someone else's data.
+        if e["status"] in ("removed", "unconfirmed", "not_mine"):
+            continue
+        pb = find_playbook(e["source_name"], (e["source_id"] or "").split(":")[-1])
+        method = (pb or {}).get("method")
+        if not method:
+            method = "statutory_notice" if e["source_type"] == "data_broker" else "not_removable"
+        groups.setdefault(method, []).append({
+            "exposure_id": e["id"],
+            "source": e["source_name"],
+            "evidence_class": e["evidence_class"],
+            "url": (pb or {}).get("url", "") or (e["detail"] or {}).get("url", ""),
+            "profile_url": (e["detail"] or {}).get("url", ""),
+            "effort_minutes": (pb or {}).get("effort_minutes"),
+            "steps": (pb or {}).get("steps", []),
+            "escalation": (pb or {}).get("escalation", ""),
+            "status": e["status"],
+        })
+
+    total_minutes = sum(
+        (item.get("effort_minutes") or 0)
+        for m in ("self_serve", "privacy_form", "email_request")
+        for item in groups.get(m, [])
+    )
+    return {
+        "groups": [
+            {"method": m, **info.get(m, {}), "items": groups[m]}
+            for m in order if m in groups
+        ],
+        "self_serve_count": len(groups.get("self_serve", [])),
+        "needs_notice_count": len(groups.get("statutory_notice", [])),
+        "not_removable_count": len(groups.get("not_removable", [])),
+        "estimated_minutes": total_minutes,
+        "principle": ("A statutory notice is the escalation, not the opening move. "
+                      "Where a service offers deletion directly, that is the route."),
+    }
+
+
+def _live_tool_names() -> list[str]:
+    """Names straight from build_tools, so this can never drift from reality."""
+    from unittest.mock import MagicMock
+    from backend.agent.tools import ToolContext, build_tools
+    probe = ToolContext(memory=MagicMock(), network=MagicMock(), user_id="", run_id="",
+                        profile={}, emit=lambda *a, **k: None)
+    return sorted(build_tools(probe).keys())
 
 
 @app.get("/api/agent/info")
 async def agent_info():
     """Which planner is driving the agent, and what it can do."""
     mode = planner_mode()
+    notes = {
+        "anthropic": "Claude is planning each step and choosing tools.",
+        "openai_compat": "The configured model is planning each step and choosing tools.",
+        "deterministic": ("No planner key configured — running the deterministic pipeline "
+                          "over the identical tools. Set ANTHROPIC_API_KEY or GEMINI_API_KEY "
+                          "in .env to enable live planning."),
+    }
     return {
         "planner": mode,
-        "model": MODEL if mode == "llm" else None,
-        "llm_active": mode == "llm",
-        "note": ("Claude is planning each step and choosing tools."
-                 if mode == "llm" else
-                 "No ANTHROPIC_API_KEY configured — running the deterministic "
-                 "pipeline over the identical tools. Set the key to enable LLM planning."),
-        "tools": [
-            "build_identity_profile", "recall_prior_activity", "search_breach_databases",
-            "search_data_brokers", "search_paste_dumps", "detect_pii_in_text",
-            "assess_exposure_risk", "determine_legal_basis", "draft_erasure_request",
-            "submit_erasure_request", "check_request_status", "verify_removal",
-            "escalate_to_regulator",
-        ],
+        "model": planner_model(),
+        "llm_active": mode in ("anthropic", "openai_compat"),
+        "note": notes.get(mode, ""),
+        # Derived from the live registry, not hand-maintained — a stale hardcoded
+        # list here previously reported 13 tools when 16 were registered.
+        "tools": _live_tool_names(),
+        "evidence_policy": {
+            "rule": ("No source is reported as holding your data unless a live check returned "
+                     "a hit, or you declared the account yourself."),
+            "classes": {
+                "verified": "A live endpoint was queried and returned a positive hit; proof attached.",
+                "self_declared": "You stated you hold this account. Valid grounds under DPDP s.12.",
+                "sandbox": "Synthetic demo record. Off by default and labelled wherever it appears.",
+            },
+            "free_checks": ["hibp_pwned_passwords (k-anonymous)", "gravatar", "hibp_breach_catalog"],
+            "needs_key": {"hibp_breached_account": "Set HIBP_API_KEY (~$3.95/mo). "
+                                                   "Reported as not_checked without it — never guessed."},
+            "not_attempted": ("Indian people-search sites publish no API for this, and probing "
+                              "signup or password-reset endpoints to enumerate accounts would "
+                              "breach their terms. The tool asks the user instead."),
+        },
         "human_in_the_loop": "submit_erasure_request is withheld until the user approves.",
     }
 
@@ -955,4 +1078,122 @@ async def indian_sources():
                                "(cf. Delhi HC, Jorawer Singh Mundy v. Union of India, 2021).",
         },
         "by_class": by_class,
+    }
+
+
+# ── Identifier verification ───────────────────────────────────────────────────
+# Attribution is only as trustworthy as the identifiers it starts from. An email
+# somebody mistyped, or does not own, poisons everything downstream: accounts get
+# attributed to the wrong person and the tool then helps demand deletion of a
+# stranger's data. So ownership must be demonstrated before an identifier is
+# allowed to corroborate anything.
+
+from backend.agent.verification import get_verifier
+
+_verifier = get_verifier()
+
+
+class VerifyRequest(BaseModel):
+    name: str = ""
+    email: str = ""
+    kind: str = "email"          # email | phone
+    value: str = ""
+
+
+class VerifySubmit(VerifyRequest):
+    code: str = ""
+
+
+def _uid_for(req) -> str:
+    return _memory.upsert_user({"name": req.name, "email": req.email})
+
+
+@app.get("/api/verify/status")
+async def verify_status(name: str = "", email: str = "", phone: str = ""):
+    uid = _memory.upsert_user({"name": name, "email": email})
+    graded = _verifier.attribution_grade(uid)
+    return {
+        "user_id": uid,
+        "status": _verifier.status_for(uid, email, phone),
+        "attribution_grade": graded,
+        "can_attribute": bool(graded["emails"] or graded["phones"]),
+        "channels": {"email": _verifier.email_channel(), "sms": _verifier.sms_channel()},
+        "policy": ("Only identifiers proven by a delivered one-time code are used to attribute "
+                   "an account to you. Unverified ones can still be searched with, but a match "
+                   "yields a candidate you must confirm — never a finding."),
+    }
+
+
+@app.post("/api/verify/request")
+async def verify_request(req: VerifyRequest):
+    """Issue a one-time code. Checks MX first, so typos fail before anything is sent."""
+    uid = _uid_for(req)
+    return _verifier.request_code(uid, req.kind, req.value)
+
+
+@app.post("/api/verify/submit")
+async def verify_submit(req: VerifySubmit):
+    """Check a code and, on success, mark the identifier as owned."""
+    uid = _uid_for(req)
+    return _verifier.submit_code(uid, req.kind, req.value, req.code)
+
+
+class ConfirmRequest(AgentScanRequest):
+    exposure_id: str = ""
+    is_mine: bool = True
+
+
+@app.post("/api/agent/confirm")
+async def agent_confirm(req: ConfirmRequest):
+    """
+    Resolve a parked candidate.
+
+    A candidate is a profile whose handle matched but which nothing tied to the
+    user. Until this call it is excluded from the ledger, the risk score and the
+    removal plan — because acting on it would mean requesting deletion of
+    somebody else's account.
+    """
+    if not req.exposure_id:
+        raise HTTPException(status_code=400, detail="exposure_id is required.")
+    user_id = _memory.upsert_user(_profile_of(req))
+    exp = _memory.get_exposure(req.exposure_id)
+    if not exp or exp["user_id"] != user_id:
+        raise HTTPException(status_code=404, detail="Unknown exposure for this identity.")
+
+    if req.is_mine:
+        _memory.set_exposure_status(req.exposure_id, "exposed")
+        _memory._exec("UPDATE exposures SET evidence_class=?, match_tier=? WHERE id=?",
+                      ("self_declared", "user_confirmed", req.exposure_id))
+    else:
+        _memory.set_exposure_status(req.exposure_id, "not_mine")
+
+    return {"exposure_id": req.exposure_id,
+            "status": "exposed" if req.is_mine else "not_mine",
+            "state": _dashboard_state(user_id)}
+
+
+@app.get("/api/config/status")
+async def config_status():
+    """
+    Which capabilities are switched on, without ever revealing a key value.
+
+    Both the LLM planner and real breach-membership checks are gated purely on
+    the presence of an environment variable, so it must be possible to see at a
+    glance which one is live — restarting in a fresh shell is an easy way to
+    demo the deterministic pipeline by accident and not notice.
+    """
+    from backend.agent.env import status as _status
+    st = _status()
+    return {
+        **st,
+        "how_to_enable": {
+            "llm_planner": ("Put ANTHROPIC_API_KEY in .env (copy .env.example), then restart. "
+                            "Key from https://console.anthropic.com/settings/keys — under $1 "
+                            "for a full demo run."),
+            "breach_checks": ("Put HIBP_API_KEY in .env, then restart. "
+                              "Key from https://haveibeenpwned.com/API/Key — about $3.95/month."),
+        },
+        "without_them": ("The product still runs end to end: a deterministic pipeline drives the "
+                         "identical 20 tools, and breach membership reports 'not checked' rather "
+                         "than guessing."),
     }

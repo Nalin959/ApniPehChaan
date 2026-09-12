@@ -14,6 +14,7 @@ Tests all core components:
 
 import json
 import os
+import os
 import sys
 import time
 from datetime import datetime
@@ -402,6 +403,279 @@ def test_scanners():
     test(f"Paste loaded {paste.get_paste_count()} entries", paste.get_paste_count() >= 40)
 
 
+def test_evidence_policy():
+    """
+    Guards the single most important promise this product makes: it does not
+    claim a source holds your data unless it actually checked, or you said so.
+
+    An earlier build synthesised breach membership — it picked real breach
+    names at random and told the user they were in them. If that ever comes
+    back, these fail.
+    """
+    section("9. Evidence Policy (anti-fabrication guarantees)")
+
+    import backend.agent.tools as _tools_mod
+    from backend.agent import verifiers
+
+    test("Fabricated breach membership helper is gone",
+         not hasattr(_tools_mod, "_simulated_breach_membership"))
+
+    src = open(os.path.join(PROJECT_ROOT, "backend", "agent", "tools.py")).read()
+    test("tools.py contains no simulated-membership code",
+         "_simulated_breach_membership" not in src)
+
+    # Without a subscription key the tool must say "not checked", never guess.
+    ev = verifiers.check_hibp_account("someone@example.com", api_key="")
+    test("HIBP account check without a key returns not_checked",
+         ev.result == "not_checked")
+    test("HIBP account check without a key claims nothing",
+         ev.result != "hit" and "NOT CHECKED" in ev.interpretation)
+
+    # k-anonymity: only a 5-character SHA-1 prefix may ever be transmitted.
+    import hashlib as _h
+    pw = "correct horse battery staple"
+    full = _h.sha1(pw.encode()).hexdigest().upper()
+    ev_url = f"https://api.pwnedpasswords.com/range/{full[:5]}"
+    test("Password check transmits only a 5-char SHA-1 prefix",
+         ev_url.rsplit("/", 1)[-1] == full[:5] and len(full[:5]) == 5)
+    test("Password check never puts the full hash in the URL",
+         full[5:] not in ev_url)
+
+    # Every Evidence record must be able to justify itself.
+    e = verifiers.Evidence("t", "x", "http://e", "now", 200, "hit", "p", "i", "cmd")
+    d = e.to_dict()
+    test("Evidence carries endpoint, proof and interpretation",
+         all(k in d for k in ("endpoint", "proof", "interpretation", "queried_at",
+                              "http_status", "result", "reproduce")))
+
+    # A blank input must not produce a finding.
+    test("Empty email yields not_checked, not a finding",
+         verifiers.check_gravatar("").result == "not_checked")
+    test("Empty password yields not_checked, not a finding",
+         verifiers.check_password_pwned("").result == "not_checked")
+
+    # A domain-level breach fact must never be phrased as a personal finding.
+    cat = [{"name": "Adobe", "domain": "adobe.com"}]
+    dom = verifiers.check_email_domain_breached("someone@adobe.com", cat)
+    test("Domain breach is flagged as a hit on the DOMAIN",
+         dom.result == "hit")
+    test("Domain breach explicitly disclaims personal membership",
+         "does not prove" in dom.interpretation.lower())
+
+    # Re-scanning must not mint a second notice for the same record — that
+    # would serve a controller two identical demands.
+    import tempfile as _tf
+    from backend.agent.memory import Memory as _Mem
+    with _tf.TemporaryDirectory() as _d:
+        _m = _Mem(os.path.join(_d, "t.db"))
+        _uid = _m.upsert_user({"email": "dupe@example.com"})
+        _rid = _m.create_request(_uid, "exp_1", {"jurisdiction": "dpdp", "deadline_days": 30,
+                                                 "status": "awaiting_approval"})
+        test("Open request is found for an exposure",
+             (_m.open_request_for("exp_1") or {}).get("id") == _rid)
+        _m.update_request(_rid, status="completed")
+        test("Completed request no longer blocks a new draft",
+             _m.open_request_for("exp_1") is None)
+
+    # ── Removal strategy: a legal notice is the escalation, not the default ──
+    from backend.agent.tools import find_playbook, load_playbooks
+    from backend.agent import account_discovery as _ad
+
+    pbs = load_playbooks()
+    test("Removal playbooks load", len(pbs.get("playbooks", [])) >= 15)
+
+    # Services with a delete button must NOT be routed to a statutory notice.
+    for svc in ("Truecaller", "Naukri.com", "GitHub", "Chess.com"):
+        pb = find_playbook(svc)
+        test(f"{svc} routes to self-serve, not a legal notice",
+             pb is not None and pb["method"] == "self_serve")
+
+    # Every self-serve playbook must give the user somewhere to go and something to do.
+    ss = [x for x in pbs["playbooks"] if x["method"] == "self_serve"]
+    test("Every self-serve playbook has a URL and steps",
+         all(x.get("url") and x.get("steps") for x in ss))
+    test("Most services are self-serve, not litigation",
+         len(ss) > len([x for x in pbs["playbooks"] if x["method"] == "statutory_notice"]))
+
+    # Court records and statutory registers must never be routed to self-serve.
+    for svc in ("Indian Kanoon", "MCA21 / Director Registry"):
+        pb = find_playbook(svc)
+        test(f"{svc} is marked not removable",
+             pb is not None and pb["method"] == "not_removable")
+
+    # ── Account discovery: no false positives ──
+    test("Discovery site list is non-empty", len(_ad.SITES) >= 10)
+    test("Every discovery site has a URL template and category",
+         all("{u}" in v["url"] and v.get("category") for v in _ad.SITES.values()))
+
+    # Sites that soft-404 would produce false positives; they must be excluded.
+    for bad in ("Instagram", "Pinterest", "Medium", "PyPI"):
+        test(f"{bad} is excluded from discovery (soft 404)",
+             bad in _ad.EXCLUDED and bad not in _ad.SITES)
+    test("Every exclusion records a reason",
+         all(isinstance(v, str) and len(v) > 20 for v in _ad.EXCLUDED.values()))
+
+    # Only handles the user CLAIMS are searched by default. Nothing else about a
+    # person is unique enough to search on: nalinchamp@gmail.com and
+    # nalinchamp@yahoo.com are different people, and a legal name is shared by
+    # thousands. The full email is searched separately, by identifier-keyed
+    # services — no username search accepts one.
+    profile = {"name": "Nalin Sharma", "email": "nalinchamp@gmail.com"}
+
+    test("Nothing is searched when no handle is declared",
+         _ad.derive_usernames(profile) == [])
+    test("No handle derived from an empty profile", _ad.derive_usernames({}) == [])
+
+    d = _ad.derive_usernames({**profile, "known_usernames": "darkknight92, github:realhandle"})
+    sources = {h: src for h, src in d}
+    test("Declared handles are searched", sources.get("darkknight92") == "declared")
+    test("Site-scoped handle is searched by its bare handle",
+         sources.get("realhandle") == "declared")
+    test("Only declared handles are searched by default",
+         all(src == "declared" for _, src in d))
+    test("Email local-part is NOT searched by default", "nalinchamp" not in sources)
+    test("Name-derived handle is NOT searched by default", "nalinsharma" not in sources)
+
+    # Guesses are opt-in, and are tagged so they can never be promoted.
+    opt = _ad.derive_usernames(profile, include_guessed=True)
+    opt_src = {h: src for h, src in opt}
+    test("Guessed handles appear only when requested", len(opt) > 0)
+    test("Email local-part is tagged as a guess", opt_src.get("nalinchamp") == "email_local")
+    test("Name handle is tagged as a guess", opt_src.get("nalinsharma") == "name_derived")
+    test("Every guessed source is in the permanent-candidate set",
+         all(src in _ad.GUESSED_SOURCES for _, src in opt))
+    test("Handle count is bounded", len(opt) <= 8)
+    test("Derived handles are plausible", all(3 <= len(h) <= 39 for h, _ in opt))
+
+    # The Indian registry is a directory, not a set of findings.
+    indian = _tools_mod.load_indian_sources()
+    test("Indian source registry loads", len(indian) >= 20)
+    test("Every Indian source carries a legal classification",
+         all(s_.get("legal_class") for s_ in indian))
+    test("Registry includes non-servable classes",
+         any(s_["legal_class"] in ("judicial_record", "statutory_publication")
+             for s_ in indian))
+
+
+def test_attribution():
+    """
+    Guards against the worst failure this tool can have: telling someone a
+    stranger's account is theirs, and then helping them demand its deletion.
+
+    Measured before this layer existed: three common Indian names each produced
+    THIRTEEN "your accounts", essentially none of them the right person.
+    """
+    section("10. Attribution (no stranger's account flagged as yours)")
+
+    from backend.agent.attribution import (
+        Identifiers, attribute_profile, username_risk, GENERIC_HANDLES)
+
+    common = {"name": "Rahul Sharma", "email": "rahul.sharma@gmail.com",
+              "phone": "+91 9876543210"}
+    ident = Identifiers.from_profile(common)
+
+    # A bare username match is a guess, never a finding.
+    a = attribute_profile("rahulsharma", "a generic profile page", ident, site="GitHub")
+    test("Username-only match is NOT attributed", not a.is_mine)
+    test("Username-only match is a candidate", a.tier == "candidate")
+
+    # Name on the page is still not enough — that is what collides.
+    a = attribute_profile("rahulsharma", "Profile of Rahul Sharma", ident, site="GitHub")
+    test("Full name on page alone is NOT attributed", not a.is_mine)
+
+    # An UNVERIFIED identifier cannot promote a candidate on its own.
+    a = attribute_profile("rahulsharma", "mail: rahul.sharma@gmail.com", ident, site="GitHub")
+    test("Unverified email on page is NOT conclusive", not a.is_mine)
+
+    # A VERIFIED identifier settles it.
+    vid = Identifiers.from_profile(common, verified={"emails": ["rahul.sharma@gmail.com"],
+                                                     "phones": []})
+    a = attribute_profile("rahulsharma", "mail: rahul.sharma@gmail.com", vid, site="GitHub")
+    test("Verified email on page IS attributed", a.is_mine)
+    test("Verified email yields 'corroborated'", a.tier == "corroborated")
+
+    vph = Identifiers.from_profile(common, verified={"emails": [], "phones": ["9876543210"]})
+    a = attribute_profile("rahulsharma", "call 9876543210", vph, site="GitHub")
+    test("Verified phone on page IS attributed", a.is_mine)
+
+    # Generic handles identify nobody.
+    g = attribute_profile("admin", "anything", ident, site="GitHub")
+    test("Generic handle is rejected outright", g.tier == "rejected")
+    test("Generic handle list is populated", len(GENERIC_HANDLES) >= 10)
+
+    # A declared handle is a claim about a habit, not about every namespace.
+    bare = Identifiers.from_profile({**common, "known_usernames": "rahulsharma"})
+    a = attribute_profile("rahulsharma", "page", bare, site="SoundCloud")
+    test("Declared common-name handle is NOT auto-attributed", not a.is_mine)
+
+    scoped = Identifiers.from_profile({**common, "known_usernames": "github:rahulsharma"})
+    a = attribute_profile("rahulsharma", "page", scoped, site="GitHub")
+    test("Site-scoped handle IS attributed on that site", a.is_mine and a.tier == "proven")
+    a = attribute_profile("rahulsharma", "page", scoped, site="SoundCloud")
+    test("Site-scoped handle does NOT carry to other sites", not a.is_mine)
+
+    # A distinctive declared handle is safe to accept.
+    dist = Identifiers.from_profile({"name": "Linus Torvalds", "email": "t@x.com",
+                                     "known_usernames": "torvalds"})
+    a = attribute_profile("torvalds", "page", dist, site="GitHub")
+    test("Distinctive declared handle IS attributed", a.is_mine)
+
+    # Collision risk must flag name-derived handles.
+    test("Name-derived handle is high collision risk",
+         username_risk("rahulsharma", ident) == "high")
+    test("Handle with digits is low collision risk",
+         username_risk("rahulsharma92", ident) == "low")
+    test("Generic handle is flagged generic",
+         username_risk("admin", ident) == "generic")
+
+    # Sensitive values are hashed, never stored raw.
+    si = Identifiers.from_profile({**common, "pan": "ABCPE1234F", "passport": "Z1234567"})
+    test("Sensitive identifiers are hashed, not stored raw",
+         all(len(h) == 64 for h in si.sensitive_hashes.values()))
+    test("Raw sensitive values are absent from the object",
+         "ABCPE1234F" not in str(si.__dict__))
+
+
+def test_verification():
+    """An identifier is not attribution-grade until ownership is demonstrated."""
+    section("11. Identifier verification")
+
+    from backend.agent.verification import Verifier, check_mx, normalise_phone
+    import tempfile
+
+    # MX check is real and catches typos / non-mail domains.
+    test("Real domain is deliverable", check_mx("gmail.com")["deliverable"] is True)
+    test("Invented domain is not deliverable",
+         check_mx("nonexistent-zzqq123.invalid")["deliverable"] is False)
+    test("Null-MX domain is not deliverable", check_mx("example.com")["deliverable"] is False)
+
+    with tempfile.TemporaryDirectory() as d:
+        v = Verifier(os.path.join(d, "v.db"))
+        uid = "usr_attrib_test"
+
+        test("Malformed email is rejected",
+             v.request_code(uid, "email", "not-an-email")["status"] == "invalid")
+        test("Undeliverable domain is rejected before sending",
+             v.request_code(uid, "email", "x@nonexistent-zzqq123.invalid")["status"]
+             == "undeliverable")
+
+        r = v.request_code(uid, "email", "someone@gmail.com")
+        test("Code is issued for a deliverable address", r["status"] in ("sent", "dev_mode"))
+        test("Wrong code is refused",
+             v.submit_code(uid, "email", "someone@gmail.com", "000000")["status"] == "incorrect")
+        ok = v.submit_code(uid, "email", "someone@gmail.com", r["dev_code"])
+        test("Correct code verifies the identifier", ok["status"] == "verified")
+
+        # dev_mode delivered nothing, so it must NOT count as proof of ownership.
+        test("dev_mode is NOT attribution-grade", ok["attribution_grade"] is False)
+        test("dev_mode identifier is excluded from attribution set",
+             v.attribution_grade(uid)["emails"] == [])
+
+        test("Phone normalisation keeps 10 digits",
+             normalise_phone("+91 98765 43210") == "9876543210")
+
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # Main
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -421,6 +695,9 @@ if __name__ == "__main__":
     test_audit_trail()
     test_statutory_tracker()
     test_scanners()
+    test_evidence_policy()
+    test_attribution()
+    test_verification()
 
     elapsed = time.time() - start
 
@@ -430,6 +707,7 @@ if __name__ == "__main__":
         print(f"  {GREEN}{BOLD}ALL {total} TESTS PASSED{RESET} in {elapsed:.2f}s")
     else:
         print(f"  {GREEN}{passed} passed{RESET}  {RED}{failed} failed{RESET}  ({total} total) in {elapsed:.2f}s")
+
     print(f"{BOLD}{'═' * 60}{RESET}\n")
 
     sys.exit(1 if failed > 0 else 0)

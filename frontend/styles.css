@@ -1492,3 +1492,98 @@ body {
     font-family: var(--font-mono); font-size: .69rem; line-height: 1.65;
     color: var(--text-secondary); white-space: pre-wrap; word-break: break-word; }
 .proof-box b { color: var(--text-primary) }
+
+/* Removal plan — the part the user actually acts on */
+.plan-effort { font-family: var(--font-mono); font-size: .74rem; color: var(--accent-secondary); font-weight: 600; }
+.plan-group { margin-bottom: 18px; }
+.plan-group-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+    padding: 9px 12px; border-radius: var(--radius-sm) var(--radius-sm) 0 0; }
+.plan-group-head h4 { margin: 0; font-family: var(--font-display); font-size: .92rem; font-weight: 700; }
+.plan-group-why { font-size: .74rem; color: var(--text-tertiary); flex: 1 1 260px; }
+.plan-group-count { font-family: var(--font-mono); font-size: .74rem; font-weight: 700; }
+.pg-self_serve      .plan-group-head { background: rgba(16,185,129,.1);  border-left: 3px solid var(--accent-success) }
+.pg-self_serve      h4, .pg-self_serve .plan-group-count { color: #6ee7b7 }
+.pg-privacy_form    .plan-group-head { background: rgba(59,130,246,.1);  border-left: 3px solid var(--accent-info) }
+.pg-privacy_form    h4, .pg-privacy_form .plan-group-count { color: #93c5fd }
+.pg-email_request   .plan-group-head { background: rgba(6,182,212,.1);   border-left: 3px solid var(--accent-secondary) }
+.pg-email_request   h4, .pg-email_request .plan-group-count { color: #67e8f9 }
+.pg-statutory_notice .plan-group-head { background: rgba(245,158,11,.12); border-left: 3px solid var(--accent-warning) }
+.pg-statutory_notice h4, .pg-statutory_notice .plan-group-count { color: #fcd34d }
+.pg-not_removable   .plan-group-head { background: rgba(148,163,184,.09); border-left: 3px solid var(--text-tertiary) }
+.pg-not_removable   h4, .pg-not_removable .plan-group-count { color: var(--text-secondary) }
+
+.plan-item { padding: 11px 14px; border: 1px solid var(--border-subtle); border-top: none;
+    background: rgba(6,11,22,.4); }
+.plan-item:last-child { border-radius: 0 0 var(--radius-sm) var(--radius-sm) }
+.plan-item-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap }
+.plan-src { font-weight: 700; color: var(--text-primary); font-size: .9rem }
+.plan-min { font-family: var(--font-mono); font-size: .7rem; color: var(--text-tertiary) }
+.plan-link { margin-left: auto; padding: 5px 12px; border-radius: var(--radius-sm);
+    background: linear-gradient(120deg, var(--accent-primary), var(--accent-secondary));
+    color: #fff; font-size: .76rem; font-weight: 700; text-decoration: none; white-space: nowrap }
+.plan-link:hover { filter: brightness(1.12) }
+.plan-steps { margin: 9px 0 0 18px; padding: 0; color: var(--text-secondary);
+    font-size: .79rem; line-height: 1.65 }
+.plan-steps li { margin-bottom: 4px }
+.plan-escalation { margin-top: 8px; padding: 8px 11px; border-radius: 6px;
+    background: rgba(245,158,11,.07); border: 1px solid rgba(245,158,11,.2);
+    font-size: .73rem; color: var(--text-secondary) }
+.plan-escalation b { color: #fcd34d }
+
+/* Identifier verification */
+.verify-row { display: flex; gap: 8px; align-items: stretch }
+.verify-row input { flex: 1 }
+.verify-btn { padding: 0 14px; border-radius: var(--radius-sm); cursor: pointer;
+    background: rgba(99,102,241,.14); border: 1px solid var(--border-glow);
+    color: var(--text-accent); font-size: .74rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .05em; white-space: nowrap }
+.verify-btn:hover:not(:disabled) { background: rgba(99,102,241,.24); color: #fff }
+.verify-btn:disabled { opacity: .5; cursor: not-allowed }
+.verify-state { font-size: .71rem; font-weight: 600; text-transform: none;
+    letter-spacing: normal; margin-top: 4px; display: block; line-height: 1.5 }
+.vs-verified { color: var(--accent-success) }
+.vs-dev      { color: var(--accent-warning) }
+.vs-error    { color: var(--accent-danger) }
+.vs-info     { color: var(--text-tertiary) }
+
+.ident-more { margin-top: 4px; border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm); padding: 10px 12px; background: rgba(6,11,22,.35) }
+.ident-more > summary { cursor: pointer; font-size: .74rem; font-weight: 700;
+    color: var(--text-secondary); text-transform: uppercase; letter-spacing: .06em }
+.ident-more > summary span { font-weight: 500; color: var(--text-tertiary);
+    text-transform: none; letter-spacing: normal }
+.ident-more > label, .ident-more .agent-form-row { margin-top: 11px; display: flex;
+    flex-direction: column; gap: 6px; font-size: .72rem; font-weight: 600;
+    color: var(--text-secondary); text-transform: uppercase; letter-spacing: .06em }
+.ident-more .agent-form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 11px }
+.ident-more code { font-family: var(--font-mono); font-size: .92em;
+    background: rgba(99,102,241,.12); padding: 1px 5px; border-radius: 3px; color: var(--text-accent) }
+
+/* Candidates */
+.candidates-panel { border-color: rgba(99,102,241,.3) }
+.cand-count { font-family: var(--font-mono); font-size: .74rem; color: var(--accent-warning) }
+.cand-item { padding: 12px 14px; border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm); margin-bottom: 9px; background: rgba(6,11,22,.45) }
+.cand-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap }
+.cand-site { font-weight: 700; color: var(--text-primary) }
+.cand-handle { font-family: var(--font-mono); font-size: .78rem; color: var(--text-secondary) }
+.cand-risk { padding: 2px 8px; border-radius: 999px; font-size: .64rem; font-weight: 800;
+    text-transform: uppercase; letter-spacing: .05em }
+.risk-high { background: rgba(239,68,68,.16); color: #fca5a5 }
+.risk-medium { background: rgba(245,158,11,.16); color: #fcd34d }
+.risk-low { background: rgba(16,185,129,.16); color: #6ee7b7 }
+.risk-generic { background: rgba(148,163,184,.16); color: var(--text-secondary) }
+.cand-why { font-size: .76rem; color: var(--text-tertiary); margin-top: 6px; line-height: 1.55 }
+.cand-actions { display: flex; gap: 8px; margin-left: auto }
+.cand-btn { padding: 5px 13px; border-radius: var(--radius-sm); cursor: pointer;
+    font-size: .74rem; font-weight: 700; border: 1px solid var(--border-subtle);
+    background: transparent; color: var(--text-secondary) }
+.cand-btn.yes:hover { border-color: var(--accent-success); color: var(--accent-success) }
+.cand-btn.no:hover  { border-color: var(--accent-danger); color: var(--accent-danger) }
+.cand-btn.done { opacity: .55; cursor: default }
+.cand-link { font-size: .74rem; color: var(--accent-primary); text-decoration: underline }
+
+/* The handles field is the one that actually finds your accounts */
+.primary-field input { border-color: var(--border-glow) !important;
+    box-shadow: 0 0 0 3px rgba(var(--accent-primary-rgb), .08) }
+.cand-source { font-family: var(--font-mono); font-size: .66rem; color: var(--text-tertiary) }

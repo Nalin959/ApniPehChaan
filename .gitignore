@@ -29,3 +29,6 @@ Thumbs.db
 data/sovereign.db
 data/sovereign.db-wal
 data/sovereign.db-shm
+
+# API keys — never commit
+.env

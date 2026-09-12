@@ -165,6 +165,186 @@ catalog has 41 real Indian breaches (BigBasket 24.5M, RailYatri 23.2M, Domino's 
 22.5M, IndiaMART 20.2M, boAt, Paytm, Dunzo), and an Indian user gets those rather than
 a list of American companies.
 
+### Removal follows a ladder, not a reflex
+
+**A statutory notice is the escalation, not the opening move.** Truecaller has an unlisting
+page. GitHub has a Delete Account button. Naukri lets you delete your profile from settings.
+Serving a DPDP Section 12 notice on a company that offers two-click deletion is theatre — it
+takes 30 days to achieve what a link achieves in three minutes.
+
+So every source is routed to the cheapest effective route:
+
+| Route | When | Typical time |
+|---|---|---|
+| **Delete it yourself** | The service has a delete/unlist page | minutes |
+| **Privacy request form** | A data-subject-request portal exists | days |
+| **Write to the privacy contact** | No portal, but a DPO/grievance officer is published | 1–4 weeks |
+| **Statutory notice** | Nothing simpler exists, **or** the above were tried and ignored | 30–45 days |
+| **Erasure does not apply** | Court records, statutory registers — the real route is stated instead | n/a |
+
+Each entry carries a direct link, concrete steps, an effort estimate, and an `escalation` —
+what to do when the cheap route fails. A real run on a developer identity produced **14
+self-serve removals totalling ~50 minutes and zero legal notices**. The previous build would
+have drafted 16.
+
+`data/removal_playbooks.json` holds the routes; `plan_removal` is the tool that chooses.
+
+### A stranger's account is never flagged as yours
+
+Searching for a username is a guess. `github.com/rahulsharma` belongs to one specific person,
+not to every Rahul Sharma in India. Measured before this layer existed: **three common Indian
+names each produced 13 "your accounts"**, essentially none of them the right person. The tool
+would then have helped demand deletion of a stranger's data.
+
+So a username match is a **candidate**, never a finding:
+
+| Tier | Meaning | Counted as yours? |
+|---|---|---|
+| `proven` | Lookup key is a unique identifier, or you named the handle *for that site* | Yes |
+| `corroborated` | The page carries a **verified** identifier of yours | Yes |
+| `candidate` | Handle matched, nothing ties it to you | **No** — parked for confirmation |
+| `rejected` | Generic handle (`admin`, `test`) that identifies nobody | No |
+
+Candidates are excluded from the ledger, the risk score **and** the removal plan until you
+confirm them. Result on a common name: **0 attributed, 13 held back.**
+
+**The subtle case:** declaring "my handle is rahulsharma" is a claim about a habit, not about
+every namespace on the internet — someone else may hold it on SoundCloud. So a distinctive
+declared handle is accepted, a name-derived one still needs confirmation, and
+`github:rahulsharma` proves it on GitHub only.
+
+### Identifiers are trusted as typed (OTP is built but unwired)
+
+The email and phone you type are used for corroboration directly. That is safe because
+corroboration requires the identifier to **actually appear on the profile page** — a mistyped
+address simply matches nothing, so the failure mode is fewer attributions, never wrong ones.
+The protection that matters, that a shared name can never attribute a stranger's account, does
+not depend on proving ownership; it depends on requiring corroboration at all.
+
+A full one-time-code flow (MX pre-check, hashed codes, expiry, attempt limits, SMTP delivery)
+lives in `backend/agent/verification.py` with endpoints under `/api/verify/*`. It is not wired
+into the UI: without SMTP configured it can only show the code on screen, which proves nothing
+and clutters the flow. Configure `SMTP_HOST`/`SMTP_USER`/`SMTP_PASS` and re-enable it to raise
+typed identifiers to proven ownership.
+
+Optional extras — alternate emails and phones, site-scoped handles, date of birth, UPI ID,
+websites — each resolve more candidates. PAN, passport and card digits are SHA-256 hashed on
+arrival, never stored raw, and used only for local leak matching; no public profile displays
+them, so they do nothing for attribution and the UI says so.
+
+### Only unique identifiers are searched. Never a name.
+
+A name identifies nobody. Thousands of people share "Rahul Sharma", and most people's handles
+have nothing to do with their legal name — real accounts look like `nalinchamp`, `pp2024work`,
+`dark_knight_92`. Searching a name-shaped handle finds strangers, not you.
+
+**What actually has one owner:**
+
+| Identifier | What it can do |
+|---|---|
+| Full email address | Identifier-keyed lookups (Gravatar by MD5, HIBP), leak matching, corroborating a page |
+| Phone number | Leak matching, corroborating a page |
+| UPI ID | Leak matching, corroborating a page |
+| Aadhaar / PAN / passport | **Leak matching only** — no public profile displays one |
+| Legal name | **Nothing.** Never used as a search key |
+
+Aadhaar and PAN are checksum-validated before being searched — a mistyped Aadhaar would look
+for someone else's number — then matched only against leak corpora held locally. They are
+SHA-256 hashed and never stored or transmitted in the clear.
+
+**The trap that catches most tools:** an email's *local part* is not unique either.
+`nalinchamp@gmail.com`, `nalinchamp@yahoo.com` and `nalinchamp@hotmail.com` are three different
+people, and `github.com/nalinchamp` belongs to at most one of them. So the **full** address is
+searched wherever a service accepts one — but username search cannot take an email, so every
+handle we could invent is a guess.
+
+Therefore only handles **you declare** are searched by default. Guessing from your email
+local-part or your name is opt-in, and any guessed hit stays an unconfirmed candidate for ever,
+whatever else matches.
+
+### Removal follows a ladder, not a reflex
+
+**A statutory notice is the escalation, not the opening move.** Truecaller has an unlisting
+page. GitHub has a Delete Account button. Naukri lets you delete your profile from settings.
+Serving a DPDP Section 12 notice on a company that offers two-click deletion is theatre — it
+takes 30 days to achieve what a link achieves in three minutes.
+
+So every source is routed to the cheapest effective route:
+
+| Route | When | Typical time |
+|---|---|---|
+| **Delete it yourself** | The service has a delete/unlist page | minutes |
+| **Privacy request form** | A data-subject-request portal exists | days |
+| **Write to the privacy contact** | No portal, but a DPO/grievance officer is published | 1–4 weeks |
+| **Statutory notice** | Nothing simpler exists, **or** the above were tried and ignored | 30–45 days |
+| **Erasure does not apply** | Court records, statutory registers — the real route is stated instead | n/a |
+
+Each entry carries a direct link, concrete steps, an effort estimate, and an `escalation` —
+what to do when the cheap route fails. A real run on a developer identity produced **14
+self-serve removals totalling ~50 minutes and zero legal notices**. The previous build would
+have drafted 16.
+
+`data/removal_playbooks.json` holds the routes; `plan_removal` is the tool that chooses.
+
+### A stranger's account is never flagged as yours
+
+Searching for a username is a guess. `github.com/rahulsharma` belongs to one specific person,
+not to every Rahul Sharma in India. Measured before this layer existed: **three common Indian
+names each produced 13 "your accounts"**, essentially none of them the right person. The tool
+would then have helped demand deletion of a stranger's data.
+
+So a username match is a **candidate**, never a finding:
+
+| Tier | Meaning | Counted as yours? |
+|---|---|---|
+| `proven` | Lookup key is a unique identifier, or you named the handle *for that site* | Yes |
+| `corroborated` | The page carries a **verified** identifier of yours | Yes |
+| `candidate` | Handle matched, nothing ties it to you | **No** — parked for confirmation |
+| `rejected` | Generic handle (`admin`, `test`) that identifies nobody | No |
+
+Candidates are excluded from the ledger, the risk score **and** the removal plan until you
+confirm them. Result on a common name: **0 attributed, 13 held back.**
+
+**The subtle case:** declaring "my handle is rahulsharma" is a claim about a habit, not about
+every namespace on the internet — someone else may hold it on SoundCloud. So a distinctive
+declared handle is accepted, a name-derived one still needs confirmation, and
+`github:rahulsharma` proves it on GitHub only.
+
+### Identifiers are trusted as typed (OTP is built but unwired)
+
+The email and phone you type are used for corroboration directly. That is safe because
+corroboration requires the identifier to **actually appear on the profile page** — a mistyped
+address simply matches nothing, so the failure mode is fewer attributions, never wrong ones.
+The protection that matters, that a shared name can never attribute a stranger's account, does
+not depend on proving ownership; it depends on requiring corroboration at all.
+
+A full one-time-code flow (MX pre-check, hashed codes, expiry, attempt limits, SMTP delivery)
+lives in `backend/agent/verification.py` with endpoints under `/api/verify/*`. It is not wired
+into the UI: without SMTP configured it can only show the code on screen, which proves nothing
+and clutters the flow. Configure `SMTP_HOST`/`SMTP_USER`/`SMTP_PASS` and re-enable it to raise
+typed identifiers to proven ownership.
+
+Optional extras — alternate emails and phones, site-scoped handles, date of birth, UPI ID,
+websites — each resolve more candidates. PAN, passport and card digits are SHA-256 hashed on
+arrival, never stored raw, and used only for local leak matching; no public profile displays
+them, so they do nothing for attribution and the UI says so.
+
+### Finding accounts, rather than asking for them
+
+The agent actively searches for accounts by fetching **public profile URLs** — the method
+Sherlock and Maigret use. No login, no scraping of private data, no probing of password-reset
+endpoints to enumerate accounts.
+
+**The false-positive problem is the hard part.** Instagram, Pinterest, Medium and PyPI all
+return HTTP 200 for usernames that do not exist — they serve a login wall or a soft-404. A
+tool that trusted the status code would tell you that you have an Instagram account when you
+do not. So every site was verified empirically against **both** a username known to exist and
+one known not to exist, and only sites that cleanly separated the two were kept. The rest are
+listed in `EXCLUDED` with the reason and are never queried — silence beats a false claim.
+
+12 sites verified, 12 excluded. Re-run `verify_site_reliability()` if results start looking
+wrong; sites change their 404 behaviour.
+
 ### Evidence, not assertions
 
 **Nothing appears as a finding unless it was actually checked or you declared it.**

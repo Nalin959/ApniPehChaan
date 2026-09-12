@@ -1077,6 +1077,239 @@ Q5. "Your benchmark says 99.6%. That looks too good."
 
 
 ================================================================================
+12a. SEARCH KEYS — only unique identifiers, never a name
+================================================================================
+
+  A NAME IDENTIFIES NOBODY
+  ------------------------
+  Thousands of people share "Rahul Sharma", and most handles have nothing to do
+  with a legal name — real accounts look like nalinchamp, pp2024work,
+  dark_knight_92. Searching a name-shaped handle finds strangers.
+
+  WHAT HAS EXACTLY ONE OWNER
+      full email      identifier-keyed lookups (Gravatar by MD5, HIBP),
+                      leak matching, corroborating a page
+      phone           leak matching, corroborating a page
+      UPI ID          leak matching, corroborating a page
+      Aadhaar/PAN/    LEAK MATCHING ONLY — no public profile displays one
+      passport
+      legal name      NOTHING. Never a search key.
+
+  Aadhaar and PAN are checksum-validated (Verhoeff / PAN holder-type character)
+  BEFORE being searched — a mistyped Aadhaar would hunt for somebody else's
+  number. They are SHA-256 hashed and never stored or sent in the clear.
+
+  THE TRAP: AN EMAIL LOCAL-PART IS NOT UNIQUE
+  -------------------------------------------
+  nalinchamp@gmail.com, nalinchamp@yahoo.com and nalinchamp@hotmail.com are
+  three different people. github.com/nalinchamp belongs to at most one of them.
+  So the FULL address is searched wherever a service accepts one — but no
+  username search accepts an email, which means every handle the tool could
+  invent is a guess.
+
+  HANDLE SOURCES
+      declared      The user told us. Searched by default — the only source
+                    where ownership is being asserted.
+                    "site:handle" proves it for that namespace only.
+      email_local   Guessed. OPT-IN. Permanently a candidate.
+      upi_local     Guessed. OPT-IN. Permanently a candidate.
+      name_derived  Guessed. OPT-IN. Worst of all.
+
+  Any handle from GUESSED_SOURCES can never be promoted above `candidate`,
+  whatever else on the page matches.
+
+  MEASURED
+      Nalin Sharma <nalinchamp@gmail.com>, nothing declared
+          -> searches the FULL email (Gravatar hit, definitive)
+          -> searches NO handles
+          -> 1 attributed, 0 candidates, 0 false positives
+
+      With "github:torvalds, nalinchamp" declared
+          -> GitHub proven (scoped), Gravatar corroborated
+          -> torvalds on 5 other sites held as candidates, since somebody else
+             may own that handle there
+
+================================================================================
+12b. ATTRIBUTION — why a stranger's account is never flagged as yours
+================================================================================
+
+  THE FAILURE THIS PREVENTS
+  -------------------------
+  Searching for a username is a guess. github.com/rahulsharma exists, but it
+  belongs to one specific human being — not to every Rahul Sharma in India.
+
+  MEASURED BEFORE THIS LAYER EXISTED:
+
+      Rahul Sharma  <rahul.sharma@gmail.com>  ->  13 "your accounts"
+      Priya Patel   <priya.patel@gmail.com>   ->  13 "your accounts"
+      Amit Kumar    <amit.kumar@gmail.com>    ->  13 "your accounts"
+
+  Essentially none of those belonged to the person searching. The tool would
+  then have helped them demand deletion of a stranger's data. That is not a
+  cosmetic bug — it is the tool causing the harm it claims to prevent.
+
+  THE RULE
+  --------
+  A username match is a CANDIDATE, never a finding. It becomes a finding only
+  when something independent ties it to this person.
+
+  FOUR TIERS (backend/agent/attribution.py)
+      proven        The lookup key IS a unique identifier (Gravatar by MD5 of
+                    email; HIBP by email), or the user named the handle FOR
+                    THAT SITE ("github:rahulsharma").
+      corroborated  The profile page itself carries a VERIFIED identifier of
+                    theirs — email, phone, UPI — or a distinctive declared handle.
+      candidate     A handle matched, nothing ties it to them. Parked for
+                    confirmation and EXCLUDED from the ledger, the risk score
+                    and the removal plan.
+      rejected      Generic handle (admin, test, info...) that identifies nobody.
+
+  THE SUBTLE ONE: A DECLARED HANDLE IS A CLAIM ABOUT A HABIT
+  ----------------------------------------------------------
+  Saying "my handle is rahulsharma" does NOT mean every rahulsharma on the
+  internet is you — somebody else may have registered it on SoundCloud years
+  earlier. So:
+      bare handle, distinctive (torvalds)     -> corroborated, accepted
+      bare handle, name-derived (rahulsharma) -> candidate, needs confirmation
+      site-scoped ("github:rahulsharma")      -> proven on GitHub ONLY
+
+  COLLISION RISK
+  --------------
+  It is tempting to treat "the handle equals the email local-part" as
+  reassuring. It is not. Owning rahul.sharma@gmail.com tells you nothing about
+  who owns github.com/rahulsharma — unrelated namespaces. What predicts
+  collision is whether the handle is just a common human name with the
+  punctuation removed.
+      high     name-derived (rahulsharma, r.sharma, rsharma)
+      low      carries digits or is unusually long
+      generic  admin / test / info / support
+      confirmed declared by the user
+
+  MEASURED AFTER
+  --------------
+      SCENARIO                                 ATTRIBUTED  CANDIDATES
+      Common name, nothing else                     0          13
+      + unverified phone and UPI                    0          13
+      + bare name-derived handle declared           0          13
+      + site-scoped handle (github:, keybase:)      2          11
+      Distinctive handle declared                   6           6
+
+================================================================================
+12c. IDENTIFIER VERIFICATION — the gate under all of it
+================================================================================
+
+  Attribution is only as trustworthy as the identifiers it starts from. An
+  address somebody mistyped, or does not own, poisons everything downstream.
+
+  STATUS: BUILT BUT UNWIRED FROM THE UI.
+  Typed identifiers are trusted for corroboration instead. That is safe because
+  corroboration requires the identifier to APPEAR ON THE PAGE — a mistyped
+  address matches nothing, so the failure mode is fewer attributions, never
+  wrong ones. The name-collision protection does not depend on this layer.
+  Configure SMTP_HOST/SMTP_USER/SMTP_PASS and re-enable to raise typed
+  identifiers to proven ownership.
+
+  THREE TIERS (backend/agent/verification.py)
+      syntactic    Well-formed. Proves nothing.
+      deliverable  The domain publishes MX records. Real, free, catches typos
+                   and invented domains. Still proves no ownership.
+                   (example.com publishes a NULL MX — it accepts no mail.)
+      verified     A one-time code sent there was returned. Proves control.
+
+  ONLY `verified` IDENTIFIERS CORROBORATE.
+      page shows a VERIFIED email  -> +0.60, settles it on its own
+      page shows an UNVERIFIED one -> +0.25, contributes but cannot promote
+
+  DELIVERY
+      Email  SMTP when SMTP_HOST/SMTP_USER/SMTP_PASS are set.
+      SMS    needs a paid gateway; none is wired in.
+      dev    When a channel is unconfigured the code is logged, not delivered,
+             and recorded as method=dev_mode. dev_mode is EXCLUDED from the
+             attribution-grade set — a code that was never sent proves nothing,
+             and the UI says so.
+
+  OPTIONAL IDENTIFIERS (all optional; each resolves more candidates)
+      alternate emails / phones, known usernames (site-scoped), date of birth,
+      UPI ID, personal websites.
+
+      PAN, passport and card digits are hashed with SHA-256 on arrival and never
+      stored or transmitted in the clear. They are accepted only for local
+      matching against leak corpora — no public profile displays them, so they
+      contribute nothing to account attribution, and the UI says that too.
+
+================================================================================
+13a. REMOVAL LADDER — why most findings never become a legal notice
+================================================================================
+
+  THE MISTAKE THIS FIXES
+  ----------------------
+  The earlier build drafted a formal statutory erasure notice for every source.
+  That is the wrong first move almost every time. Truecaller has an unlisting
+  page; GitHub has a Delete Account button; Naukri deletes a profile from
+  settings. A DPDP s.12 notice against any of those takes 30 days to achieve
+  what a link achieves in three minutes.
+
+  THE LADDER (cheapest effective route first)
+      self_serve        Service offers deletion directly. Link + steps. Minutes.
+      privacy_form      A DSR portal exists. Submit through it. Days.
+      email_request     No portal, but a DPO/grievance officer is published.
+                        A plain written request, not a legal threat. 1-4 weeks.
+      statutory_notice  Nothing simpler exists, OR the above were tried and
+                        ignored. Cites the statute, starts the clock. 30-45 days.
+      not_removable     Erasure does not lie at all. State the real route.
+
+  Every playbook also carries `escalation` — what to do when the cheap route
+  fails. That is the difference between a tool that helps and a tool that
+  performs helpfulness.
+
+  MEASURED ON A REAL RUN
+      14 self-serve removals, ~50 minutes total, ZERO legal notices drafted.
+      2 sources genuinely not removable (Indian Kanoon, CIBIL).
+      The previous build would have drafted 16 notices, 14 of them pointless.
+
+  Data: data/removal_playbooks.json (20 playbooks: 15 self-serve, 2 email,
+  3 not-removable). Tool: plan_removal(exposure_id).
+
+================================================================================
+13c. ACCOUNT DISCOVERY — finding accounts instead of asking for them
+================================================================================
+
+  METHOD
+  Fetch the PUBLIC profile URL for a candidate username and see whether the site
+  serves a profile or a 404. The Sherlock/Maigret approach. No login, no private
+  data, no probing of password-reset endpoints to enumerate accounts.
+
+  THE FALSE-POSITIVE PROBLEM — THE HARD PART
+  Naive status-code checking is worthless. Measured directly:
+
+      Instagram   fake username -> HTTP 200  (login wall)
+      Pinterest   fake username -> HTTP 200  (soft 404)
+      Medium      fake username -> HTTP 200  (soft 404)
+      PyPI        fake username -> HTTP 200  (soft 404)
+
+  A tool trusting the status code would report an Instagram account that does
+  not exist. So every site was verified against BOTH a username known to exist
+  AND one known not to, and only clean separators were kept.
+
+      VERIFIED (12)  GitHub, Docker Hub, Replit, Dev.to, Keybase, Gravatar,
+                     About.me, Linktree, Behance, SoundCloud, Chess.com,
+                     Buy Me a Coffee
+      EXCLUDED (12)  Instagram, Pinterest, Medium, PyPI (soft 404);
+                     GitLab, npm, CodePen (403 to automation);
+                     HackerNews (429); Telegram (inconsistent);
+                     Twitter/X, LinkedIn, Facebook (auth required)
+
+  Each exclusion records its reason. Silence beats a false claim.
+
+  CAVEAT CARRIED IN THE OUTPUT
+  A username match is not proof of identity — somebody else may hold the same
+  handle. The payload says so and the agent is told to confirm before acting.
+
+  RE-VERIFICATION
+  Sites change their 404 behaviour. account_discovery.verify_site_reliability()
+  re-runs the real/fake test across the list.
+
+================================================================================
 13b. EVIDENCE MODEL — the rule that governs every claim
 ================================================================================
 

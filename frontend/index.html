@@ -105,6 +105,37 @@
                                 </select>
                             </label>
                         </div>
+                        <label class="primary-field">Usernames you actually use
+                            <input type="text" id="ag-usernames" placeholder="nalinchamp, github:yourhandle, darkknight92" autocomplete="off">
+                        </label>
+                        <p class="agent-hint agent-hint-tight">
+                            This is the field that matters. Your <strong>full email</strong> is
+                            already checked against every service that accepts one — but no
+                            username search does, and nothing else about you is unique.
+                            <code>nalinchamp@gmail.com</code> and <code>nalinchamp@yahoo.com</code>
+                            are different people, so we will not guess <code>nalinchamp</code> is
+                            you. Write <code>site:handle</code> to claim one namespace outright.
+                        </p>
+                        <details class="ident-more">
+                            <summary>More identifiers <span>(optional — each one stops strangers being flagged as you)</span></summary>
+                            <label>Other emails<input type="text" id="ag-altemails" placeholder="old@work.com, me@college.edu" autocomplete="off"></label>
+                            <label>Other phones<input type="text" id="ag-altphones" placeholder="+91 98200 11223" autocomplete="off"></label>
+                            <div class="agent-form-row">
+                                <label>Date of birth<input type="date" id="ag-dob"></label>
+                                <label>UPI ID<input type="text" id="ag-upi" placeholder="you@okaxis" autocomplete="off"></label>
+                            </div>
+                            <label>Your websites<input type="text" id="ag-websites" placeholder="yoursite.com" autocomplete="off"></label>
+                            <div class="agent-form-row">
+                                <label>Aadhaar<input type="text" id="ag-aadhaar" placeholder="12 digits" autocomplete="off"></label>
+                                <label>PAN<input type="text" id="ag-pan" placeholder="ABCPE1234F" autocomplete="off"></label>
+                            </div>
+                            <p class="agent-hint agent-hint-tight">
+                                Aadhaar and PAN are checked for a valid checksum, then searched
+                                <strong>only</strong> against leak dumps held on this machine. No
+                                public profile displays them, so they cannot identify a web
+                                account — and they are never stored or sent anywhere in the clear.
+                            </p>
+                        </details>
                         <label>Services you hold an account with
                             <textarea id="ag-declared" rows="3" placeholder="Truecaller, Naukri.com, Shaadi.com, JustDial"></textarea>
                         </label>
@@ -122,6 +153,10 @@
                         The password never leaves this machine: only the first 5 characters of its
                         SHA-1 are sent, and the match is done locally.
                     </p>
+                    <label class="agent-toggle">
+                        <input type="checkbox" id="ag-guessed">
+                        <span>Also guess handles from my email and name <em>(neither is unique — every hit stays unconfirmed)</em></span>
+                    </label>
                     <label class="agent-toggle">
                         <input type="checkbox" id="ag-sandbox">
                         <span>Enable demo sandbox <em>(adds synthetic records — not real findings)</em></span>
@@ -170,6 +205,31 @@
                 </p>
                 <div id="approval-list"></div>
                 <button class="agent-btn primary" id="ag-approve">Approve &amp; Dispatch Selected</button>
+            </div>
+
+            <!-- Candidates: matched a handle, but nothing ties them to you -->
+            <div class="agent-panel candidates-panel" id="candidates-panel" hidden>
+                <h3 class="agent-panel-title">
+                    Is this you?
+                    <span class="cand-count" id="cand-count"></span>
+                </h3>
+                <p class="agent-hint">
+                    These profiles use a handle that matches your name pattern, but nothing on
+                    them ties them to you. Names and handles are shared by thousands of people,
+                    so they are <strong>not counted as yours</strong> and are kept out of your
+                    risk score and removal plan until you say otherwise.
+                </p>
+                <div id="candidates-list"></div>
+            </div>
+
+            <!-- Action plan: how the data actually comes down -->
+            <div class="agent-panel" id="plan-panel" hidden>
+                <h3 class="agent-panel-title">
+                    Your Removal Plan
+                    <span class="plan-effort" id="plan-effort"></span>
+                </h3>
+                <p class="agent-hint" id="plan-principle"></p>
+                <div id="plan-groups"></div>
             </div>
 
             <!-- Exposure ledger -->

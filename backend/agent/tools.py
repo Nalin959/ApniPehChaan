@@ -24,7 +24,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Callable
 
-from backend.agent import verifiers
+from backend.agent import account_discovery, verifiers
+from backend.agent.verification import get_verifier
 from backend.agent.memory import Memory, utcnow
 from backend.mock_brokers.network import (
     BrokerNetwork, BROKERS, NON_SERVABLE_CLASSES, subject_key)
@@ -108,6 +109,32 @@ def load_indian_sources() -> list[dict]:
         return []
 
 
+def load_playbooks() -> dict:
+    """How to actually get data removed, per service."""
+    path = os.path.join(PROJECT_ROOT, "data", "removal_playbooks.json")
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {"playbooks": [], "method_order": [], "method_info": {}}
+
+
+def find_playbook(*names: str) -> dict | None:
+    """Match a service to its removal playbook by id or name."""
+    pbs = load_playbooks().get("playbooks", [])
+    for raw in names:
+        needle = (raw or "").strip().lower()
+        if not needle:
+            continue
+        for pb in pbs:
+            if needle in (pb["id"].lower(), pb["service"].lower()):
+                return pb
+        for pb in pbs:
+            if needle in pb["service"].lower() or pb["id"].lower() in needle:
+                return pb
+    return None
+
+
 def find_source(slug_or_name: str) -> dict | None:
     """Look up a source in the Indian registry by id or name (case-insensitive)."""
     needle = (slug_or_name or "").strip().lower()
@@ -128,7 +155,8 @@ def build_tools(ctx: ToolContext) -> dict[str, Callable]:
     def build_identity_profile() -> dict:
         """Normalise the user's identity and derive likely aliases with confidence
         scores. Run this first: later searches use the aliases it produces."""
-        ctx.emit("identity", "profile", "Normalising identity and deriving aliases…")
+        ctx.emit("identity", "profile", "Normalising identity and deriving aliases…",
+                 tool_name="build_identity_profile")
         p = ctx.profile
         name = (p.get("name") or "").strip()
         email = (p.get("email") or "").strip()
@@ -176,7 +204,8 @@ def build_tools(ctx: ToolContext) -> dict[str, Callable]:
     def recall_prior_activity() -> dict:
         """Recall what was already found and done for this user in earlier runs.
         Use this to avoid re-requesting removals that are already in flight."""
-        ctx.emit("orchestrator", "memory", "Recalling prior runs for this identity…")
+        ctx.emit("orchestrator", "memory", "Recalling prior runs for this identity…",
+                 tool_name="recall_prior_activity")
         prior = ctx.memory.last_run_before(ctx.user_id, ctx.run_id)
         exposures = ctx.memory.get_exposures(ctx.user_id)
         requests = ctx.memory.get_requests(ctx.user_id)
@@ -348,7 +377,8 @@ def build_tools(ctx: ToolContext) -> dict[str, Callable]:
         if not ctx.sandbox:
             ctx.emit("discovery", "broker",
                      "Skipping the broker sandbox — it contains synthetic records, not real "
-                     "findings. Use declare_known_accounts for services you actually hold.")
+                     "findings. Use declare_known_accounts for services you actually hold.",
+                     tool_name="search_data_brokers")
             return {"removable_records": [],
                     "sandbox_enabled": False,
                     "note": ("The simulated broker network is OFF. No Indian people-search site "
@@ -459,6 +489,335 @@ def build_tools(ctx: ToolContext) -> dict[str, Callable]:
                  f"Paste scan complete: {len(recorded)} attributable leak(s).",
                  tool_output={"count": len(recorded)})
         return {"corpus_size": res.get("stats", {}).get("total_pastes_checked", 0), "exposures": recorded}
+
+    def discover_accounts() -> dict:
+        """Search the web for accounts belonging to this identity, then decide
+        which are genuinely theirs. A username match alone is never enough."""
+        handles = account_discovery.derive_usernames(
+            ctx.profile, bool(ctx.profile.get("search_guessed_handles")))
+        if not handles:
+            ctx.emit("discovery", "accounts",
+                     "No handles to search. Your full email was already checked against every "
+                     "service that accepts one — but no username search accepts an email, so "
+                     "handle discovery needs the usernames you actually use.",
+                     status="awaiting_approval")
+        else:
+            by_src: dict = {}
+            for h, src in handles:
+                by_src.setdefault(src, []).append(h)
+            desc = "; ".join(f"{src.replace('_', ' ')}: {', '.join(v)}" for src, v in by_src.items())
+            ctx.emit("discovery", "accounts",
+                     f"Searching handles — {desc}", tool_name="discover_accounts")
+        # Identifiers the user typed are trusted for corroboration.
+        #
+        # This is safe because corroboration requires the identifier to ACTUALLY
+        # APPEAR on the profile page. A mistyped address simply matches nothing,
+        # so the failure mode is fewer attributions — never wrong ones. The
+        # protection that matters, that a shared name can never attribute a
+        # stranger's account, does not depend on proving ownership at all; it
+        # depends on requiring corroboration in the first place.
+        #
+        # An OTP flow exists in backend/agent/verification.py and can be
+        # re-enabled to raise this to proven-ownership; it is unwired for now.
+        graded = {
+            "emails": [e.strip().lower() for e in
+                       re.split(r"[,\n;]+", str(ctx.profile.get("email") or "") + "," +
+                                str(ctx.profile.get("alt_emails") or "")) if e.strip()],
+            "phones": [d for d in
+                       ("".join(c for c in x if c.isdigit())[-10:] for x in
+                        re.split(r"[,\n;]+", str(ctx.profile.get("phone") or "") + "," +
+                                 str(ctx.profile.get("alt_phones") or ""))) if len(d) == 10],
+        }
+        res = account_discovery.discover_accounts(
+            ctx.profile, verified=graded,
+            include_guessed=bool(ctx.profile.get('search_guessed_handles')))
+
+        def _record(hit: dict, mine: bool):
+            pb = find_playbook(hit["site"])
+            att = hit.get("attribution", {})
+            ev = {
+                "check": "public_profile_fetch",
+                "target": f"{hit['site']}/{hit['username']}",
+                "endpoint": hit["url"], "queried_at": hit["checked_at"],
+                "http_status": hit["http_status"], "result": "hit",
+                "proof": f"HTTP {hit['http_status']} — a public profile is served at {hit['url']}",
+                "interpretation": (
+                    f"ATTRIBUTION: {att.get('tier', '?')} — {att.get('explanation', '')} "
+                    f"Signals: {'; '.join(att.get('signals', [])) or 'none'}. "
+                    f"Handle collision risk: {hit.get('collision_risk', '?')}."),
+                "reproduce": hit["reproduce"],
+            }
+            exp = {
+                "source_type": "public_profile", "source_name": hit["site"],
+                "source_id": "profile:" + hit["site"].lower().replace(" ", "-"),
+                "record_id": hit["username"],
+                "data_found": ["username", "public_profile"],
+                "detail": {"url": hit["url"], "category": hit["category"],
+                           "username": hit["username"], "playbook": pb or {},
+                           "attribution": att,
+                           "collision_risk": hit.get("collision_risk", ""),
+                           "collision_note": hit.get("collision_note", ""),
+                           "handle_source": hit.get("handle_source", "")},
+                "match_confidence": att.get("score", 0.0),
+                "match_tier": att.get("tier", ""),
+                "severity": "medium" if mine else "low",
+                "risk_score": 0.0,
+                "evidence_class": "verified" if mine else "candidate",
+                "evidence": [ev],
+            }
+            exp_id, is_new = ctx.memory.record_exposure(ctx.user_id, ctx.run_id, exp)
+            # A candidate is parked. It is kept out of the ledger, the risk
+            # score and the removal plan until the user confirms it is theirs.
+            if not mine:
+                ctx.memory.set_exposure_status(exp_id, "unconfirmed")
+            return {"exposure_id": exp_id, "site": hit["site"], "username": hit["username"],
+                    "url": hit["url"], "tier": att.get("tier"),
+                    "collision_risk": hit.get("collision_risk"),
+                    "why": att.get("explanation", ""),
+                    "signals": att.get("signals", []),
+                    "removal_method": (pb or {}).get("method", "unknown"), "is_new": is_new}
+
+        def _key(source_id: str) -> str:
+            # "gravatar" (email-keyed) and "profile:gravatar" (username-keyed)
+            # are the same service; compare on the bare name.
+            return (source_id or "").split(":", 1)[-1].lower()
+
+        # A service already settled by an identifier-keyed check needs no handle
+        # guess at all. Gravatar is looked up by MD5 of the email — that answer
+        # is about that exact address, and is strictly better evidence than any
+        # username match. Listing the service twice invites the user to
+        # re-decide something already proven.
+        settled = {
+            _key(e["source_id"]) for e in ctx.memory.get_exposures(ctx.user_id)
+            if e["evidence_class"] == "verified" and e["status"] != "unconfirmed"
+        }
+
+        def _fresh(hits):
+            return [h for h in hits
+                    if h["site"].lower().replace(" ", "-") not in settled]
+
+        attributed = [_record(h, True) for h in _fresh(res.get("attributed", []))]
+        candidates = [_record(h, False) for h in _fresh(res.get("candidates", []))]
+
+        ctx.emit("discovery", "accounts",
+                 f"Account discovery: {len(attributed)} attributed to you, "
+                 f"{len(candidates)} unconfirmed candidate(s) held back. "
+                 f"{res.get('checks_performed', 0)} checks across "
+                 f"{res.get('sites_checked', 0)} sites.",
+                 tool_output={"attributed": len(attributed), "candidates": len(candidates)})
+
+        if candidates:
+            ctx.emit("discovery", "accounts",
+                     f"{len(candidates)} handle(s) exist but nothing on those pages ties them "
+                     f"to you. Confirm each, or add a site-scoped handle "
+                     f"(e.g. 'github:yourhandle') to settle them automatically.",
+                     status="awaiting_approval")
+
+        return {"attributed": attributed, "candidates": candidates,
+                "usernames_tried": res.get("usernames_tried", []),
+                "username_risks": res.get("username_risks", {}),
+                "identifier_strength": res.get("identifier_strength", 0),
+                "sites_checked": res.get("sites_checked", 0),
+                "excluded_sites": res.get("excluded", {}),
+                "why_candidates": res.get("why_candidates", ""),
+                "improve_accuracy": res.get("improve_accuracy", "")}
+
+    def confirm_account(exposure_id: str, is_mine: bool = True) -> dict:
+        """Resolve a parked candidate: the user says whether it is theirs."""
+        exp = ctx.memory.get_exposure(exposure_id)
+        if not exp:
+            return {"error": f"No exposure {exposure_id}"}
+        if is_mine:
+            ctx.memory.set_exposure_status(exposure_id, "exposed")
+            ctx.memory._exec("UPDATE exposures SET evidence_class=?, match_tier=? WHERE id=?",
+                             ("self_declared", "user_confirmed", exposure_id))
+            ctx.emit("discovery", "confirm",
+                     f"You confirmed {exp['source_name']} ({exp['record_id']}) is yours.")
+            return {"exposure_id": exposure_id, "status": "exposed", "confirmed": True}
+        ctx.memory.set_exposure_status(exposure_id, "not_mine")
+        ctx.emit("discovery", "confirm",
+                 f"You rejected {exp['source_name']} ({exp['record_id']}) — belongs to someone else.")
+        return {"exposure_id": exposure_id, "status": "not_mine", "confirmed": False}
+
+    def plan_removal(exposure_id: str) -> dict:
+        """Choose the cheapest effective way to get this data removed.
+
+        A statutory notice is the ESCALATION, not the opening move. If the
+        service has a delete button, the answer is the delete button."""
+        exp = ctx.memory.get_exposure(exposure_id)
+        if not exp:
+            return {"error": f"No exposure {exposure_id}"}
+
+        basis = determine_legal_basis(exposure_id)
+        pb = find_playbook(exp["source_name"], exp["source_id"].split(":")[-1])
+        info = load_playbooks().get("method_info", {})
+
+        # A playbook is concrete knowledge about how this service actually works,
+        # so it outranks the generic legal branch. Only a playbook that itself
+        # says "not_removable", or the absence of any erasure right with no
+        # playbook to contradict it, blocks removal.
+        if pb:
+            method = pb["method"]
+        elif basis.get("erasure_available"):
+            method = "statutory_notice"
+        else:
+            method = "not_removable"
+
+        plan = {
+            "exposure_id": exposure_id,
+            "source": exp["source_name"],
+            "method": method,
+            "label": info.get(method, {}).get("label", method),
+            "why_this_method": info.get(method, {}).get("why", ""),
+            "typical_time": info.get(method, {}).get("typical_time", ""),
+            "url": (pb or {}).get("url", ""),
+            "effort_minutes": (pb or {}).get("effort_minutes"),
+            "steps": (pb or {}).get("steps", []),
+            "escalation": (pb or {}).get("escalation", ""),
+            "legal_position": basis.get("legal_basis", ""),
+            "jurisdiction": basis.get("jurisdiction", ""),
+            "statute": basis.get("statute", ""),
+            "needs_legal_notice": method == "statutory_notice",
+        }
+
+        if method == "self_serve":
+            msg = (f"{exp['source_name']}: self-serve deletion available "
+                   f"(~{plan['effort_minutes']} min) — no legal notice needed.")
+        elif method == "not_removable":
+            msg = f"{exp['source_name']}: erasure does not apply — {basis.get('recommended_action')}."
+        elif method == "statutory_notice":
+            msg = f"{exp['source_name']}: no self-serve route — a statutory notice is warranted."
+        else:
+            msg = f"{exp['source_name']}: {plan['label'].lower()} ({plan['typical_time']})."
+
+        ctx.emit("legal", "plan", msg,
+                 tool_name="plan_removal", tool_output={"method": method})
+        return plan
+
+    def match_unique_identifiers() -> dict:
+        """Search leak corpora for the user's UNIQUE identifiers — email, phone,
+        Aadhaar, PAN, UPI, card. A match on one of these IS proof of identity,
+        unlike a name, which thousands of people share."""
+        from backend.pii.recognizer import verhoeff_validate, luhn_validate
+
+        p = ctx.profile
+        # Each identifier, with whether it can be validated and where it can help.
+        raw = [
+            ("email",    p.get("email", ""),    None,                "unique"),
+            ("phone",    p.get("phone", ""),    None,                "unique"),
+            ("aadhaar",  p.get("aadhaar", ""),  "verhoeff",          "unique"),
+            ("pan",      p.get("pan", ""),      "pan_format",        "unique"),
+            ("upi",      p.get("upi_id", ""),   None,                "unique"),
+            ("passport", p.get("passport", ""), None,                "unique"),
+        ]
+
+        checked, invalid, supplied = [], [], []
+        for kind, value, validator, _ in raw:
+            v = (value or "").strip()
+            if not v:
+                continue
+            supplied.append(kind)
+
+            # Validate before searching: a mistyped Aadhaar would search for a
+            # number belonging to someone else entirely.
+            if validator == "verhoeff":
+                digits = "".join(c for c in v if c.isdigit())
+                if len(digits) != 12 or not verhoeff_validate(digits):
+                    invalid.append({"kind": kind,
+                                    "why": "Fails the Verhoeff checksum — not a valid Aadhaar. "
+                                           "Check for a typo; searching it would look for "
+                                           "somebody else's number."})
+                    continue
+                v = digits
+            elif validator == "pan_format":
+                if not re.fullmatch(r"[A-Z]{3}[PCHABFTGJL][A-Z]\d{4}[A-Z]", v.upper()):
+                    invalid.append({"kind": kind,
+                                    "why": "Not a valid PAN structure (4th character encodes "
+                                           "holder type). Check for a typo."})
+                    continue
+                v = v.upper()
+            checked.append((kind, v))
+
+        if not checked:
+            ctx.emit("discovery", "identifiers",
+                     "No unique identifier supplied to search. Name alone cannot identify you — "
+                     "add an email, phone, Aadhaar or PAN.",
+                     status="awaiting_approval")
+            return {"searched": [], "hits": [], "invalid": invalid,
+                    "note": "Nothing unique to search on."}
+
+        ctx.emit("discovery", "identifiers",
+                 f"Searching leak corpora for {len(checked)} unique identifier(s): "
+                 f"{', '.join(k for k, _ in checked)}…",
+                 tool_name="match_unique_identifiers")
+
+        _pastes._load()
+        corpus = getattr(_pastes, "_pastes", []) or []
+        hits = []
+        for kind, value in checked:
+            needle = value.lower()
+            digits = "".join(c for c in value if c.isdigit())
+            for entry in corpus:
+                blob = json.dumps(entry, default=str).lower()
+                blob_digits = "".join(c for c in blob if c.isdigit())
+                found = (needle in blob) or (len(digits) >= 10 and digits in blob_digits)
+                if not found:
+                    continue
+                title = entry.get("title") or entry.get("paste_id") or "leak dump"
+                ev = {
+                    "check": "unique_identifier_in_leak", "target": f"{kind}",
+                    "endpoint": f"(local corpus) {title}",
+                    "queried_at": utcnow(), "http_status": None, "result": "hit",
+                    "proof": f"Your {kind} appears verbatim in '{title}'.",
+                    "interpretation": (
+                        f"CONFIRMED: {kind} is unique to you, so a verbatim match is proof "
+                        f"this record concerns you — unlike a name match, which is not."),
+                    "reproduce": f"grep -i '{value[:4]}…' data/synthetic_pastes/pastes_corpus.json",
+                }
+                exp = {
+                    "source_type": "paste", "source_name": title,
+                    "source_id": "leak:" + str(title), "record_id": kind,
+                    "data_found": [kind], "detail": {"identifier": kind, "source": title},
+                    "match_confidence": 1.0, "match_tier": "definite",
+                    "severity": "critical" if kind in ("aadhaar", "pan", "passport") else "high",
+                    "risk_score": 0.0,
+                    "evidence_class": "verified", "evidence": [ev],
+                }
+                exp_id, is_new = ctx.memory.record_exposure(ctx.user_id, ctx.run_id, exp)
+                hits.append({"exposure_id": exp_id, "identifier": kind,
+                             "source": title, "is_new": is_new})
+                break   # one hit per identifier is enough to establish exposure
+
+        for bad in invalid:
+            ctx.emit("discovery", "identifiers",
+                     f"{bad['kind'].upper()} rejected: {bad['why']}", status="error")
+
+        ctx.emit("discovery", "identifiers",
+                 f"Identifier search complete: {len(hits)} confirmed exposure(s) across "
+                 f"{len(corpus)} leak record(s).",
+                 tool_output={"hits": len(hits)})
+
+        return {
+            "searched": [k for k, _ in checked],
+            "supplied": supplied,
+            "invalid": invalid,
+            "hits": hits,
+            "corpus_size": len(corpus),
+            "where_each_helps": {
+                "email": "Identifier-keyed lookups (Gravatar, HIBP), leak matching, and "
+                         "corroborating a profile page.",
+                "phone": "Leak matching and corroborating a profile page.",
+                "upi": "Leak matching and corroborating a profile page.",
+                "aadhaar": "Leak matching ONLY. No public profile displays an Aadhaar, so it "
+                           "cannot corroborate a web account.",
+                "pan": "Leak matching ONLY, for the same reason.",
+                "passport": "Leak matching ONLY, for the same reason.",
+            },
+            "why_unique_matters": (
+                "These identifiers have exactly one owner, so a verbatim match proves the "
+                "record concerns you. A name does not — it is shared by thousands, which is "
+                "why a name is never used as a search key here."),
+        }
 
     def detect_pii_in_text(text: str) -> dict:
         """Run the hybrid PII recogniser (Verhoeff/Luhn-validated) over raw text."""
@@ -575,6 +934,15 @@ def build_tools(ctx: ToolContext) -> dict[str, Callable]:
                      "is not available for the retention period; dispute and correction are.")
             confidence = 0.80
 
+        elif exp["source_type"] == "public_profile":
+            removable = True
+            action = "request_erasure"
+            basis = ("Your own account on a commercial service. The controller processes this "
+                     "on consent, so you may withdraw it and require erasure. In practice "
+                     "almost every such service offers self-serve deletion, which is faster "
+                     "and just as final as a statutory notice.")
+            confidence = 0.92
+
         elif exp["source_type"] == "data_broker":
             removable = True
             action = "request_erasure"
@@ -637,6 +1005,23 @@ def build_tools(ctx: ToolContext) -> dict[str, Callable]:
         if exp["source_type"] != "data_broker":
             return {"error": "Erasure notices are only servable on an identified controller.",
                     "exposure_id": exposure_id}
+
+        # Re-scanning must not mint a duplicate notice for the same record.
+        existing = ctx.memory.open_request_for(exposure_id)
+        if existing:
+            ctx.emit("action", "draft",
+                     f"A notice for {exp['source_name']} is already open "
+                     f"({existing['reference_id']}, status {existing['status']}) — reusing it.",
+                     tool_output={"request_id": existing["id"]})
+            return {
+                "request_id": existing["id"], "exposure_id": exposure_id,
+                "broker": exp["source_name"], "jurisdiction": existing["jurisdiction"],
+                "statute": existing["statute"], "reference_id": existing["reference_id"],
+                "receipt_hash": existing["receipt_hash"],
+                "deadline_days": existing["deadline_days"],
+                "request_text": existing["request_text"], "status": existing["status"],
+                "already_existed": True,
+            }
 
         spec = BROKERS.get(exp["source_id"], {}) or {}
         if not spec and exp["source_id"].startswith("declared:"):
@@ -839,8 +1224,12 @@ def build_tools(ctx: ToolContext) -> dict[str, Callable]:
         "verify_password_exposure": verify_password_exposure,
         "declare_known_accounts": declare_known_accounts,
         "browse_indian_registry": browse_indian_registry,
+        "discover_accounts": discover_accounts,
+        "confirm_account": confirm_account,
+        "plan_removal": plan_removal,
         "search_data_brokers": search_data_brokers,
         "search_paste_dumps": search_paste_dumps,
+        "match_unique_identifiers": match_unique_identifiers,
         "detect_pii_in_text": detect_pii_in_text,
         "assess_exposure_risk": assess_exposure_risk,
         "determine_legal_basis": determine_legal_basis,

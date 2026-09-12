@@ -325,6 +325,19 @@ class Memory:
         )
         return req_id
 
+    def open_request_for(self, exposure_id: str) -> dict | None:
+        """An existing request for this exposure that has not been closed out.
+
+        Re-scanning the same identity must not mint a second notice for the same
+        record — that would serve a controller two identical demands and inflate
+        the tracker with duplicates.
+        """
+        return self._row(
+            "SELECT * FROM requests WHERE exposure_id=? "
+            "AND status NOT IN ('completed','rejected') ORDER BY created_at DESC LIMIT 1",
+            (exposure_id,),
+        )
+
     def get_request(self, request_id: str) -> dict | None:
         return self._row("SELECT * FROM requests WHERE id=?", (request_id,))
 

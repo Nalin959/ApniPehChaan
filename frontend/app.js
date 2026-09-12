@@ -821,6 +821,9 @@ const Agent = {
     riskBefore: null,
     drafted: [],
     busy: false,
+    steps: 0,
+    startedAt: 0,
+    timer: null,
 };
 
 function agEl(id) { return document.getElementById(id); }
@@ -835,6 +838,15 @@ function agProfile() {
         declared_accounts: (agEl('ag-declared')?.value || '').trim(),
         password: (agEl('ag-password')?.value || ''),
         sandbox: !!agEl('ag-sandbox')?.checked,
+        known_usernames: (agEl('ag-usernames')?.value || '').trim(),
+        alt_emails: (agEl('ag-altemails')?.value || '').trim(),
+        alt_phones: (agEl('ag-altphones')?.value || '').trim(),
+        date_of_birth: (agEl('ag-dob')?.value || '').trim(),
+        upi_id: (agEl('ag-upi')?.value || '').trim(),
+        websites: (agEl('ag-websites')?.value || '').trim(),
+        search_guessed_handles: !!agEl('ag-guessed')?.checked,
+        aadhaar: (agEl('ag-aadhaar')?.value || '').trim(),
+        pan: (agEl('ag-pan')?.value || '').trim(),
     };
 }
 
@@ -902,6 +914,7 @@ function agentConnect() {
 
 function agentOnMessage(msg) {
     if (msg.type === 'agent_event') {
+        Agent.steps = (Agent.steps || 0) + 1;
         traceAdd(msg.agent, msg.message, msg.status);
     } else if (msg.type === 'agent_reasoning') {
         traceReasoning(msg.text);
@@ -921,7 +934,26 @@ function agentSetBusy(busy) {
     const approve = agEl('ag-approve');
     if (approve) approve.disabled = busy;
     agEl('trace-live').hidden = !busy;
-    agEl('ag-run').textContent = busy ? 'Agent working…' : 'Deploy Privacy Agent';
+
+    // A static "Agent working…" for two minutes is indistinguishable from a
+    // hang. An LLM planner spends a round trip per decision, so a full run
+    // legitimately takes 1-3 minutes — the button has to show that it is
+    // progressing, not just that it is busy.
+    if (busy) {
+        Agent.startedAt = Date.now();
+        Agent.steps = 0;
+        const tick = () => {
+            if (!Agent.busy) return;
+            const secs = Math.floor((Date.now() - Agent.startedAt) / 1000);
+            agEl('ag-run').textContent =
+                `Working… ${secs}s · ${Agent.steps} step${Agent.steps === 1 ? '' : 's'}`;
+        };
+        tick();
+        Agent.timer = setInterval(tick, 1000);
+    } else {
+        clearInterval(Agent.timer);
+        agEl('ag-run').textContent = 'Deploy Privacy Agent';
+    }
 }
 
 function agentRender(msg) {
@@ -982,6 +1014,43 @@ function agentRender(msg) {
     } else {
         panel.hidden = true;
     }
+
+    // Removal plan — grouped by how the data actually comes down. Most of this
+    // is a link and three steps, not a legal notice.
+    const plan = st.removal_plan;
+    const planPanel = agEl('plan-panel');
+    if (plan && plan.groups && plan.groups.length) {
+        planPanel.hidden = false;
+        agEl('plan-principle').textContent = plan.principle || '';
+        agEl('plan-effort').textContent =
+            `${plan.self_serve_count} you can do yourself · ~${plan.estimated_minutes} min total · ` +
+            `${plan.needs_notice_count} need a legal notice`;
+        agEl('plan-groups').innerHTML = plan.groups.map(g => `
+            <div class="plan-group pg-${agEsc(g.method)}">
+                <div class="plan-group-head">
+                    <h4>${agEsc(g.label || g.method)}</h4>
+                    <span class="plan-group-why">${agEsc(g.why || '')}</span>
+                    <span class="plan-group-count">${g.items.length} · ${agEsc(g.typical_time || '')}</span>
+                </div>
+                ${g.items.map(it => `
+                    <div class="plan-item">
+                        <div class="plan-item-head">
+                            <span class="plan-src">${agEsc(it.source)}</span>
+                            ${it.effort_minutes ? `<span class="plan-min">~${it.effort_minutes} min</span>` : ''}
+                            <span class="ev-badge ev-${agEsc(it.evidence_class || '')}">${agEsc((it.evidence_class || '').replace('_', ' '))}</span>
+                            ${it.url ? `<a class="plan-link" href="${agEsc(it.url)}" target="_blank" rel="noopener noreferrer">Open removal page ↗</a>` : ''}
+                        </div>
+                        ${it.steps && it.steps.length
+                            ? `<ol class="plan-steps">${it.steps.map(x => `<li>${agEsc(x)}</li>`).join('')}</ol>`
+                            : ''}
+                        ${it.escalation ? `<div class="plan-escalation"><b>If that fails:</b> ${agEsc(it.escalation)}</div>` : ''}
+                    </div>`).join('')}
+            </div>`).join('');
+    } else {
+        planPanel.hidden = true;
+    }
+
+    renderCandidates(st);
 
     // Ledger
     agEl('ledger-panel').hidden = st.exposures.length === 0;
@@ -1057,6 +1126,8 @@ async function agentRun() {
     agEl('agent-outcome').hidden = true;
     agEl('approval-panel').hidden = true;
     agEl('ledger-panel').hidden = true;
+    const pp = agEl('plan-panel'); if (pp) pp.hidden = true;
+    const cp = agEl('candidates-panel'); if (cp) cp.hidden = true;
     agentSetBusy(true);
     try {
         const ws = await agentConnect();
@@ -1116,3 +1187,56 @@ document.addEventListener('DOMContentLoaded', () => {
     agEl('ag-approve').addEventListener('click', agentApprove);
     agEl('ag-reset').addEventListener('click', agentReset);
 });
+
+/* ── Candidates: matched a handle, nothing ties them to you ───────────────── */
+
+function renderCandidates(st) {
+    const panel = agEl('candidates-panel');
+    if (!panel) return;
+    const cands = (st.exposures || []).filter(e => e.status === 'unconfirmed');
+    if (!cands.length) { panel.hidden = true; return; }
+
+    panel.hidden = false;
+    agEl('cand-count').textContent = `${cands.length} unconfirmed — not counted as yours`;
+    agEl('candidates-list').innerHTML = cands.map(e => {
+        const d = e.detail || {};
+        const risk = d.collision_risk || 'medium';
+        return `
+        <div class="cand-item" id="cand-${agEsc(e.id)}">
+            <div class="cand-head">
+                <span class="cand-site">${agEsc(e.source_name)}</span>
+                <span class="cand-handle">@${agEsc(e.record_id)}</span>
+                <span class="cand-risk risk-${agEsc(risk)}">${agEsc(risk)} collision risk</span>
+                ${d.handle_source ? `<span class="cand-source">from ${agEsc(d.handle_source.replace('_', ' '))}</span>` : ''}
+                ${d.url ? `<a class="cand-link" href="${agEsc(d.url)}" target="_blank" rel="noopener noreferrer">view ↗</a>` : ''}
+                <span class="cand-actions">
+                    <button class="cand-btn yes" data-id="${agEsc(e.id)}" data-mine="1">Yes, mine</button>
+                    <button class="cand-btn no"  data-id="${agEsc(e.id)}" data-mine="0">Not me</button>
+                </span>
+            </div>
+            <div class="cand-why">${agEsc(d.collision_note || (d.attribution || {}).explanation || '')}</div>
+        </div>`;
+    }).join('');
+
+    agEl('candidates-list').querySelectorAll('.cand-btn').forEach(b => {
+        b.addEventListener('click', () => confirmCandidate(b.dataset.id, b.dataset.mine === '1', b));
+    });
+}
+
+async function confirmCandidate(exposureId, isMine, btn) {
+    const row = agEl('cand-' + exposureId);
+    try {
+        await fetch('/api/agent/confirm', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ...agProfile(), exposure_id: exposureId, is_mine: isMine }),
+        });
+        if (row) {
+            row.querySelectorAll('.cand-btn').forEach(x => { x.disabled = true; x.classList.add('done'); });
+            row.querySelector('.cand-why').textContent = isMine
+                ? '✓ Confirmed as yours — now included in your risk score and removal plan.'
+                : '✗ Marked as someone else — excluded permanently.';
+        }
+    } catch (e) {
+        if (row) row.querySelector('.cand-why').textContent = 'Could not save that. Try again.';
+    }
+}

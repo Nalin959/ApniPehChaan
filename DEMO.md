@@ -1,122 +1,161 @@
 # 3-Minute Demo Script
 
-> Replaces the script in `HANDOVER.txt` §8, which no longer works: it used the PAN
-> `ABCDE1234F` (structurally invalid — position 4 must be a holder-type character, so it is
-> correctly rejected) and an email whose domain matches no breach, so the breach panel
-> showed zero.
+> Supersedes the script in `HANDOVER.txt` §8 and the earlier version of this file.
+> Both described a flow that synthesised breach membership. That is gone — the tool
+> now only reports what it actually checked or what you declared.
 
 ## Before you start
 
 ```bash
-./run_demo.sh                 # or: .venv/bin/python -m uvicorn backend.app:app --port 8000
+./run_demo.sh          # or: .venv/bin/python -m uvicorn backend.app:app --port 8000
 ```
 
-Open <http://localhost:8000> — the **Privacy Agent** tab is the landing tab.
+Open <http://localhost:8000> — **Privacy Agent** is the landing tab.
 
-- If `ANTHROPIC_API_KEY` is set, the badge reads **LLM PLANNER · claude-opus-5** and Claude's
-  reasoning streams into the trace. If not, it reads **DETERMINISTIC PLANNER** and the product
-  still works end to end. Either is demoable — just don't claim the LLM is driving when it isn't.
-- Re-running with the same identity? Click **Reset this identity** first.
+**Decide your mode first:**
+
+| Mode | What you get | Use when |
+|---|---|---|
+| **Real-only** (default) | Live checks with reproducible proof + legal reasoning + refusals. No removal loop. | Default. Strongest on honesty and legal depth. |
+| **+ Sandbox** (tick the box) | Everything above, plus the full dispatch → follow-up → verify → escalate lifecycle on synthetic records. | Last 30s, to show verification working. |
+
+**Optional, big upgrade:** `export ANTHROPIC_API_KEY=sk-ant-...` flips the badge to
+**LLM PLANNER · claude-opus-5** and streams Claude's actual reasoning. `export HIBP_API_KEY=...`
+(~$3.95/mo) turns the breach check from *not checked* into a real verified result.
 
 ---
 
 ## 0:00 — The problem (25s)
 
-> "India's DPDP Act gives you a right to erasure under Section 12. In practice you'd have to
-> find every company holding your data, identify the right legal basis for each, write each
-> notice, send it, chase it, and then somehow prove they actually deleted it. Nobody does that.
-> The right exists on paper and goes unexercised.
+> "India's DPDP Act gives you a right to erasure under Section 12. Exercising it means finding
+> every company holding your data, working out which law applies to each, writing each notice,
+> sending it, chasing it, and proving they actually deleted it. Nobody does that. The right
+> exists on paper and goes unexercised.
 >
-> So we built an agent that does it."
+> So we built an agent that does it. And it will not lie to you about what it found."
 
-## 0:25 — Deploy the agent (35s)
+## 0:25 — Deploy (40s)
 
-Type an identity. **Use the judge's own name** — records are seeded from whatever you type,
-so this works for anyone:
+Fill in the form. **Use your own email** — the checks are real:
 
 ```
-Name:  Kavya Reddy
-Email: kavya.reddy@example.com
-Phone: +91 9900112233
-City:  Hyderabad
+Name:      <your name>
+Email:     <your real email>
+City:      Mumbai
+Accounts:  Truecaller, Naukri.com, Indian Kanoon, CIBIL
+Password:  password123          ← safe to type, see below
 ```
 
-Click **Deploy Privacy Agent**. Talk over the streaming trace:
+Click **Deploy Privacy Agent**. Talk over the trace:
 
-> "It's recalling what it already knows about this identity, deriving aliases, then searching
-> three surfaces. Every line appears when the agent actually gets there — nothing here is a
-> scripted animation."
+> "Every line appears when the agent actually gets there — nothing is animated."
 
-**Point at the `legal` lines.** This is the moment that separates this from a scanner:
+**Point at the password line.** This is your first proof beat:
 
-> "It's picking a different statute per controller — GDPR for the EU broker, DPDP for the
-> Indian ones, CCPA for the US one. And notice what it does with the breach records: it says
-> erasure isn't available against a breach corpus. It won't draft a notice that can't land."
+> "That password was checked against real breach corpora and came back compromised
+> 2.2 million times. And it never left this machine — only the first five characters of
+> its SHA-1 were sent. The match happened locally, so the server can't know what we checked.
+> That's k-anonymity."
 
-## 1:00 — The approval gate (25s)
+**Then point at what it refused to claim:**
 
-> "It drafted four notices and stopped. It cannot send them — dispatch is withheld from its
-> toolset entirely during discovery."
+> "Notice it says *one check could not run*. Breach membership for a specific address needs a
+> paid HIBP subscription. We don't have one, so it says **not checked** rather than guessing.
+> An earlier version of this invented that answer. We deleted it."
 
-Expand one notice. Show the real statutory citation.
+## 1:05 — Proof (30s)
 
-> "Serving a legal notice is irreversible and it's aimed at a third party. The agent decides
-> *what* to send; a human decides *whether*. That's a deliberate limit on autonomy."
+Scroll to the **Exposure Ledger**. Every row has a "how we know" badge.
 
-Click **Approve & Dispatch Selected**.
+Click **show proof** on the Gravatar row:
 
-## 1:25 — Dispatch, chase, verify (55s)
+```
+check       gravatar
+endpoint    https://www.gravatar.com/avatar/205e460b...?d=404
+queried     2026-09-12T17:xx:xxZ
+HTTP        200
+evidence    HTTP 200 — an avatar is served for MD5 205e460b...
+means       CONFIRMED: a public Gravatar profile exists for this address...
+verify it   curl -sI 'https://www.gravatar.com/avatar/205e460b...?d=404'
+```
 
-Let the trace run. Call out three beats:
+> "Every claim carries the endpoint, the timestamp, the status code, and a command you can
+> run yourself. Don't take our word for it — here's how to check."
 
-1. **Follow-up** — "DataFind Global didn't complete on first contact. The agent chased it."
-2. **Verification** — "This is the important one. It's not trusting the controller's word.
-   It re-queries the source independently and confirms the record is actually gone."
-3. **Escalation** — "LeadMarket Pro never responded. The agent escalated it to the Data
-   Protection Board of India under Section 27."
+*(If a judge is sceptical, run that curl in a terminal. It returns 200.)*
 
-> "Two verified removals, one escalated. And the risk score moved — it's driven by what's
-> still live, so it falls as records actually come down."
+## 1:35 — The legal reasoning (45s)
 
-## 2:20 — Close (25s)
+This is the part nothing else does. Point at the `legal` lines:
 
-Show the exposure ledger with `✓ VERIFIED` badges.
+```
+Truecaller:    DPDP Act 2023 → request_erasure              ✓ drafted
+Naukri.com:    DPDP Act 2023 → request_erasure              ✓ drafted
+Indian Kanoon: NO ERASURE RIGHT (court record)              ✗ refused
+CIBIL:         NO ERASURE RIGHT (CICRA retention duty)      ✗ refused
+```
 
-> "Discover, decide, act, verify — with a human holding the trigger on anything irreversible.
+> "In India 'can I get this deleted?' isn't one question. Truecaller is commercial processing —
+> Section 12 applies, so it drafts. Indian Kanoon is a court record; the DPDP Act doesn't reach
+> judicial proceedings, so it refuses and tells you the real route is an application to the
+> court that issued the judgment. CIBIL has a competing retention duty under CICRA 2005 — you
+> can dispute and correct, but not erase.
 >
-> One disclosure: removal runs against a controlled broker network, because real brokers take
-> weeks and need identity verification. That's stated in the UI. Everything being judged —
-> the planning, the legal reasoning, the drafting, the dispatch, the follow-up, the
-> verification — is real."
+> A naive build mails 'please delete my data' to a High Court judgment index. That letter has
+> no addressee in law. Telling someone they have a remedy they don't have is worse than saying
+> nothing."
+
+## 2:20 — Approval gate (20s)
+
+> "It drafted the notices and stopped. It cannot send them — dispatch is withheld from its
+> toolset entirely during discovery. Serving a statutory notice is irreversible and aimed at a
+> third party, so a human decides."
+
+Expand a notice, show the real citation. Click **Approve & Dispatch Selected**.
+
+## 2:40 — Close (20s)
+
+If sandbox is on, let the removal loop run and land on:
+
+> "It doesn't trust the controller's 'deleted'. It re-queries the source independently and only
+> then marks it verified. LeadKart ignored the notice, so it escalated to the Data Protection
+> Board of India under Section 27."
+
+Otherwise close on the ledger:
+
+> "Discover, prove, reason, act, verify — with a human on anything irreversible, and no claim
+> the tool can't substantiate."
 
 ---
 
 ## Likely questions
 
-**"Is the AI actually doing anything, or is it scripted?"**
-Two planners over one tool surface. With a key set, Claude picks each tool and its reasoning
-is in the trace. Without one, a deterministic pipeline runs the same tools. The badge says
-which. `/api/agent/info` shows the tool list.
+**"Is the AI actually doing anything?"**
+Two planners over one tool surface (16 tools). With a key, Claude picks each tool and its
+reasoning is in the trace. Without one, a deterministic pipeline runs the same tools. The badge
+says which. `GET /api/agent/info` returns the live tool list and the evidence policy.
 
-**"Why not let it send automatically?"**
-Because it's irreversible and aimed at a third party. A false attribution would serve a legal
-notice about someone else's record. We autonomised discovery and drafting, not dispatch.
+**"How do I know you're not making these findings up?"**
+Every row carries `evidence_class`: `verified` (a live endpoint returned a hit), `self_declared`
+(you told us), or `sandbox` (synthetic, off by default, labelled). Click *show proof* for the
+endpoint and a reproduce command. 14 tests in `test_system.py` §9 enforce this — including one
+that fails if the old fabrication code ever returns.
 
-**"How do you know it's the right person's record?"**
-A name alone isn't enough — names aren't unique. A match needs a unique identifier (email,
-phone) or several agreeing non-unique fields. A name-only record scores 0.40 and is rejected.
-`test_system.py` has the regression test.
+**"Why can't you check Truecaller or JustDial directly?"**
+They publish no API for it, and probing signup or password-reset endpoints to enumerate accounts
+would breach their terms. So we ask you. You know which services you signed up for, and that
+knowledge is itself valid grounds for a Section 12 request.
 
-**"Is the data real?"**
-The 1,035 HIBP breaches and 956 Optery brokers are real records. Breach *membership* is
-simulated for the demo identity — a real check needs the paid HIBP API. The broker network
-is simulated and labelled as such.
+**"Why is the sandbox there at all?"**
+Real controllers take weeks and require identity verification — you can't show a removal in
+three minutes. The sandbox exists so the *lifecycle* is demonstrable. It's off by default and
+everything it produces is tagged `sandbox`.
 
-**"That 99.6% benchmark looks too good."**
-It's synthetic and self-generated — a regression guard, not field accuracy, and the README
-says so. The meaningful part is the negative set: 20 correctly-shaped 12-digit numbers with
-bad Verhoeff check digits, all rejected. The previous 89.8% was measured against a benchmark
-whose Aadhaar samples were themselves checksum-invalid while the validator wasn't enforcing.
+**"What about the credit card / Aadhaar detection?"**
+Open the Accuracy Lab. 99.6% F1 on a synthetic benchmark — a regression guard, not field
+accuracy, and the README says so. The meaningful part is the negative set: 20 correctly-shaped
+12-digit numbers with deliberately wrong Verhoeff check digits, all rejected.
 
-**"What breaks if the network drops?"**
-Nothing. Everything runs locally; the LLM path falls back to the deterministic planner.
+**"What breaks without network?"**
+Live checks report `unavailable` and claim nothing. The LLM planner falls back to the
+deterministic one. Nothing fabricates a result to fill the gap.
