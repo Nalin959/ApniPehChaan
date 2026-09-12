@@ -1087,28 +1087,56 @@ def search_exposures(profile: dict, max_workers: int = 16,
 
     # One page can answer for only one identifier; keep the first pairing.
     seen: set[tuple[str, str]] = set()
-    todo: list[tuple[str, str, str, str, str]] = []
+    candidates: list[tuple[str, str, str, str, str]] = []
     for item in found:
         key = (item[3], item[1])
         if key not in seen:
             seen.add(key)
-            todo.append(item)
-    todo = todo[:max_pages]
+            candidates.append(item)
+
+    # There is a ceiling on how many pages one scan will fetch, and it used to
+    # be applied with a bare slice that nothing downstream ever heard about:
+    # measured, 200 candidate pages went in, 60 were read, and the result said
+    # complete with the note "All 1 search(es) completed." while 140 pages that
+    # the engine had nominated were never opened and nothing anywhere said so.
+    #
+    # Two things change that. The pages are interleaved across queries first, so
+    # the budget is not spent entirely on whichever identifier happened to sort
+    # first while another identifier's pages go unread — every identifier gets
+    # its best pages looked at. And whatever the cap then leaves behind is
+    # counted, named in the coverage note, and stops the scan calling itself
+    # complete.
+    todo = _interleave_by_query(candidates)[:max_pages]
+    skipped = [c for c in candidates[len(todo):]] if max_pages < len(candidates) else []
+    skipped_n = max(0, len(candidates) - len(todo))
 
     # 2. Go and read every page. The engine's claim is not evidence.
     def _one(item):
         query, ident, kind, url, title = item
-        ok, ctx, status, page_title = verify_page(url, ident, kind)
+        state, ok, ctx, status, page_title, why = check_page(url, ident, kind)
         domain = urllib.parse.urlparse(url).netloc.lower().removeprefix("www.")
+        if ok:
+            note = ""
+        elif state == "checked":
+            note = ("The search engine returned this page, but the identifier was not present "
+                    "in the HTML that was served. It may be rendered by JavaScript, behind a "
+                    "login, or already removed — so nothing is claimed.")
+        elif state == "gone":
+            note = (f"The search engine returned this page but it is no longer being served "
+                    f"({why}). It was NOT checked, so this is not a clean result for this "
+                    f"page — only a page that cannot be read at all.")
+        else:
+            # The important one. Nothing was served, so there is nothing this
+            # scan is entitled to say about what is or is not on this page.
+            note = (f"This page COULD NOT BE CHECKED — {why}. That is not the same as "
+                    f"finding nothing on it: your data may well be published here and this "
+                    f"scan was unable to look. Open it yourself, or re-run the scan.")
         return WebHit(
             query=query, identifier=ident, identifier_type=kind, url=url, domain=domain,
             title=page_title or title, http_status=status, confirmed=ok,
             matched_text=ctx, checked_at=_now(),
             reproduce=f"curl -s -A {shlex.quote(UA[:24] + '...')} {shlex.quote(url)} | grep -i {shlex.quote(ident)}",
-            note=("" if ok else
-                  "The search engine returned this page, but the identifier was not present "
-                  "in the HTML that was served. It may be rendered by JavaScript, behind a "
-                  "login, or already removed — so nothing is claimed."))
+            note=note, check_state=state)
 
     hits: list[WebHit] = []
     if todo:
@@ -1131,7 +1159,31 @@ def search_exposures(profile: dict, max_workers: int = 16,
                       "your confirmation and is not counted as your data.")
 
     confirmed = [h.to_dict() for h in hits if h.confirmed]
+    # Everything that is not a finding stays in `unconfirmed`, because a lead
+    # that quietly disappears is its own kind of lie — but the ones that were
+    # never read are also listed separately, and each carries a note saying
+    # which of the two it is.
     unconfirmed = [h.to_dict() for h in hits if not h.confirmed]
+    unchecked = [h.to_dict() for h in hits if h.check_state == "unchecked"]
+
+    # A scan is complete when every query was answered, every page the engine
+    # nominated was read, and every one of those reads succeeded. Any of the
+    # three failing means part of the web went unexamined, and the report has to
+    # be able to say which part.
+    gaps = []
+    if blocked_queries:
+        gaps.append(
+            f"{len(blocked_queries)} of {len(queries)} search(es) were refused by the "
+            f"search engine (rate limiting), so the open web was only partly checked")
+    if skipped_n:
+        gaps.append(
+            f"{skipped_n} candidate page(s) were nominated by the engines but not read, "
+            f"because this scan reads at most {max_pages}")
+    if unchecked:
+        gaps.append(
+            f"{len(unchecked)} page(s) could not be fetched at all (blocked, refused or "
+            f"unreachable) and were NOT checked")
+
     return {
         "queries": [{"query": q, "identifier": i, "type": k} for q, i, k in queries],
         "searched": len(queries),
@@ -1140,19 +1192,48 @@ def search_exposures(profile: dict, max_workers: int = 16,
         # True when the engine refused some query. The caller must then say the
         # web could not be checked, NOT that nothing was found.
         "search_degraded": bool(blocked_queries),
-        "complete": not blocked_queries,
+        "complete": not gaps,
         "pages_fetched": len(hits),
+        "candidate_pages": len(candidates),
+        "pages_skipped": skipped_n,
+        "pages_unchecked": len(unchecked),
+        "skipped_urls": [c[3] for c in skipped[:50]],
+        "engines": engine_status(),
         "confirmed": confirmed,
         "unconfirmed": unconfirmed,
+        "unchecked": unchecked,
         "domains": sorted({h["domain"] for h in confirmed}),
         "coverage_note": (
-            f"{len(blocked_queries)} of {len(queries)} search(es) were refused by the "
-            f"search engine (rate limiting), so the open web was only partly checked. "
-            f"A clean result here does NOT mean your data is absent — re-run to complete it."
-            if blocked_queries else
+            "; ".join(gaps).capitalize() +
+            ". A clean result here does NOT mean your data is absent — re-run to complete it."
+            if gaps else
             f"All {len(queries)} search(es) completed."),
-        "method": ("Each unique identifier is searched as an exact phrase on the open web. "
-                   "Every page returned is then fetched and the identifier must appear in it "
-                   "verbatim before anything is reported — a search result on its own is "
-                   "treated as a lead, never as a finding. Legal names are never searched."),
+        "method": ("Each unique identifier is searched as an exact phrase on the open web, "
+                   "across every search engine that will answer. Every page returned is then "
+                   "fetched and the identifier must appear in it verbatim before anything is "
+                   "reported — a search result on its own is treated as a lead, never as a "
+                   "finding. A page that could not be fetched is reported as unchecked and "
+                   "never as clean. Legal names are never searched."),
     }
+
+
+def _interleave_by_query(items: list[tuple[str, str, str, str, str]]
+                         ) -> list[tuple[str, str, str, str, str]]:
+    """
+    Round-robin the candidate pages across the queries that produced them.
+
+    Each query's own list is already best-first (see _dedupe), so taking one
+    from each in turn means a page budget spends itself on every identifier's
+    strongest leads rather than exhausting itself on the first identifier's
+    weakest ones.
+    """
+    buckets: dict[str, list] = {}
+    for item in items:
+        buckets.setdefault(item[0], []).append(item)
+    out: list = []
+    while buckets:
+        for query in list(buckets):
+            out.append(buckets[query].pop(0))
+            if not buckets[query]:
+                del buckets[query]
+    return out
