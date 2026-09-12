@@ -424,3 +424,30 @@ class SupabaseMemory:
     def get_receipts(self, limit: int = 100) -> list[dict]:
         params = {"order": "seq.asc", "limit": str(limit), "select": "*"}
         return self._request("GET", "audit_receipts", params=params) or []
+
+    def append_receipt(self, receipt: dict):
+        return self.record_receipt(receipt)
+
+    def load_receipts(self) -> list[dict]:
+        return self.get_receipts()
+
+    # ── Summary for the dashboard ────────────────────────────────────────────
+
+    def user_summary(self, user_id: str) -> dict:
+        exps = self.get_exposures(user_id)
+        reqs = self.get_requests(user_id)
+        by_status: dict[str, int] = {}
+        for e in exps:
+            st = e.get("status", "exposed")
+            by_status[st] = by_status.get(st, 0) + 1
+        return {
+            "exposures_total": len(exps),
+            "exposures_by_status": by_status,
+            "high_risk": len([e for e in exps if (e.get("severity") or "").lower() in ("critical", "high")]),
+            "requests_total": len(reqs),
+            "requests_submitted": len([r for r in reqs if r.get("status") in
+                                       ("submitted", "acknowledged", "completed", "escalated")]),
+            "removals_verified": len([e for e in exps if e.get("status") == "removed"]),
+            "overdue": len(self.overdue_requests(user_id)),
+        }
+
