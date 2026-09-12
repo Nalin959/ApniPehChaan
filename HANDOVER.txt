@@ -10,7 +10,7 @@ Collaborators:      Nalin Sharma (Nalin959), Moturi Venkatesh (mvenky1208-byte),
 Technology Stack:   Python 3.10+ · FastAPI · Uvicorn · SQLite3 (WAL mode) · Vanilla CSS/JS Glassmorphism
 LLM Backends:       Google Gemini (gemini-3.6-flash) · Groq (openai/gpt-oss-20b) · Anthropic Claude
 Regulatory Anchor:  India DPDP Act 2023 (s.12, s.13, s.27) · EU GDPR Art. 17 · US CCPA/CPRA § 1798.105
-Verification:       333/333 Passing Tests (15 Test Suites in 0.88s) · 100% Free-Tier Keyless Intelligence
+Verification:       334/334 Passing Tests (15 Test Suites in 0.88s) · 100% Free-Tier Keyless Intelligence
 ================================================================================
 
 
@@ -381,12 +381,12 @@ Base URL:    http://localhost:8000
 
 
 ================================================================================
-8. VERIFICATION METRICS & 333-TEST SUITE BREAKDOWN
+8. VERIFICATION METRICS & 334-TEST SUITE BREAKDOWN
 ================================================================================
 
 Test Runner: `./.venv/bin/python test_system.py`
 Execution Time: 0.88s (all offline and mocked, zero external network dependency)
-Total Pass Count: 333 / 333 Tests Passing (0 Failures)
+Total Pass Count: 334 / 334 Tests Passing (0 Failures)
 
 Section Breakdown:
   1. Dataset Integrity (13 tests): Optery broker roster, HIBP catalogs, paste corpus.
@@ -403,8 +403,8 @@ Section Breakdown:
  12. Open-Web Search (46 tests): Exact-phrase search, phone boundary checks, zero false hits.
  13. Discovery Site Roster (22 tests): 26 valid namespaces, exclusion of Kaggle/Replit soft-404s.
  14. Free Breach Intelligence (50 tests): XposedOrNot & Hudson Rock parsing, rate-limit honesty.
- 15. Fiduciary Directory & Threat Surface Intelligence (26 tests): Operating fiduciary
-     resolution, DPDP s.12 rights, 22-tool registration, and attack surface correlation.
+ 15. Fiduciary Directory & Threat Surface Intelligence (27 tests): Operating fiduciary
+     resolution, DPDP s.12 rights, loop tool coverage floor, and attack surface correlation.
 
 
 ================================================================================
