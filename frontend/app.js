@@ -1809,8 +1809,30 @@ async function agentRun() {
         const ws = await agentConnect();
         ws.send(JSON.stringify({ action: 'scan', profile }));
     } catch (e) {
-        traceAdd('orchestrator', 'Could not reach the agent: ' + e.message, 'error');
-        agentSetBusy(false);
+        traceAdd('orchestrator', 'Connecting via Sovereign Cloud Execution API…', 'running');
+        try {
+            const resp = await fetch('/api/agent/scan', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(profile),
+            });
+            if (!resp.ok) {
+                const errData = await resp.json().catch(() => ({}));
+                throw new Error(errData.detail || `Server error (${resp.status})`);
+            }
+            const data = await resp.json();
+            for (const ev of (data.events || [])) {
+                Agent.steps = (Agent.steps || 0) + 1;
+                traceAdd(ev.agent, ev.message, ev.status);
+            }
+            const msg = { action: 'scan', ...data };
+            agentRender(msg);
+            syncAgentToExposuresAndDashboard(msg);
+        } catch (err) {
+            traceAdd('orchestrator', 'Agent scan failed: ' + err.message, 'error');
+        } finally {
+            agentSetBusy(false);
+        }
     }
 }
 
@@ -1823,8 +1845,30 @@ async function agentApprove() {
         const ws = await agentConnect();
         ws.send(JSON.stringify({ action: 'approve', profile: Agent.profile, request_ids: ids }));
     } catch (e) {
-        traceAdd('orchestrator', 'Could not reach the agent: ' + e.message, 'error');
-        agentSetBusy(false);
+        traceAdd('orchestrator', 'Dispatching notices via Sovereign Cloud Execution API…', 'running');
+        try {
+            const resp = await fetch('/api/agent/approve', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ...Agent.profile, request_ids: ids }),
+            });
+            if (!resp.ok) {
+                const errData = await resp.json().catch(() => ({}));
+                throw new Error(errData.detail || `Server error (${resp.status})`);
+            }
+            const data = await resp.json();
+            for (const ev of (data.events || [])) {
+                Agent.steps = (Agent.steps || 0) + 1;
+                traceAdd(ev.agent, ev.message, ev.status);
+            }
+            const msg = { action: 'approve', ...data };
+            agentRender(msg);
+            syncAgentToExposuresAndDashboard(msg);
+        } catch (err) {
+            traceAdd('orchestrator', 'Remediation dispatch failed: ' + err.message, 'error');
+        } finally {
+            agentSetBusy(false);
+        }
     }
 }
 

@@ -57,7 +57,7 @@ UA = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
 # unchecked — so the cut costs no recall that could be measured. It is also the
 # safe direction to be wrong in now that a fetch which does not finish is
 # reported as "could not be checked" rather than quietly as a clean page.
-TIMEOUT = 12
+TIMEOUT = 5
 # Asking the search engine is a different budget, and a MEASURED one. A
 # throttled DuckDuckGo does not refuse the connection: it holds it open for
 # exactly as long as the client is willing to wait and then serves a 202

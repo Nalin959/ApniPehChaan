@@ -38,7 +38,7 @@ from backend.agent.attribution import (
 
 UA = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/120.0 Safari/537.36")
-TIMEOUT = 14
+TIMEOUT = 5
 
 # Sites where a 200 genuinely means "this profile exists" and a 404 genuinely
 # means it does not. Each was tested against a real and a fake username.

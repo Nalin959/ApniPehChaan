@@ -153,6 +153,10 @@ class Memory:
             self._conn.executescript(SCHEMA)
             self._conn.commit()
 
+    def flush(self):
+        """No-op for SQLite (WAL mode commits on exec), provided for parity with SupabaseMemory."""
+        pass
+
     # ── low level ────────────────────────────────────────────────────────────
 
     def _exec(self, sql: str, params: tuple = ()):
@@ -215,6 +219,10 @@ class Memory:
             "ORDER BY started_at DESC LIMIT 1",
             (user_id, run_id),
         )
+
+    def get_run(self, run_id: str) -> dict | None:
+        return self._row("SELECT * FROM runs WHERE id=?", (run_id,))
+
 
     # ── identities ───────────────────────────────────────────────────────────
 
@@ -309,6 +317,13 @@ class Memory:
                 params.append(stamps[col])
         params.append(exposure_id)
         self._exec(f"UPDATE exposures SET {', '.join(sets)} WHERE id=?", tuple(params))
+
+    def update_exposure(self, exposure_id: str, **fields):
+        if not fields:
+            return
+        cols = ", ".join(f"{k}=?" for k in fields.keys())
+        params = list(fields.values()) + [exposure_id]
+        self._exec(f"UPDATE exposures SET {cols} WHERE id=?", tuple(params))
 
     # ── requests ─────────────────────────────────────────────────────────────
 

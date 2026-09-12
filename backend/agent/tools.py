@@ -898,8 +898,7 @@ def build_tools(ctx: ToolContext) -> dict[str, Callable]:
         if is_mine:
             ctx.memory.set_exposure_status(exposure_id, "exposed")
             if exp.get("evidence_class") != "verified":
-                ctx.memory._exec("UPDATE exposures SET evidence_class=?, match_tier=? WHERE id=?",
-                                 ("self_declared", "user_confirmed", exposure_id))
+                ctx.memory.update_exposure(exposure_id, evidence_class="self_declared", match_tier="user_confirmed")
             ctx.emit("discovery", "confirm",
                      f"You confirmed {exp['source_name']} ({exp['record_id']}) is yours.")
             return {"exposure_id": exposure_id, "status": "exposed", "confirmed": True}
@@ -1145,7 +1144,7 @@ def build_tools(ctx: ToolContext) -> dict[str, Callable]:
         ranks = {"critical": 95.0, "high": 72.0, "medium": 45.0, "low": 20.0}
         for e in live:
             score = ranks.get((e["severity"] or "low").lower(), 20.0) * max(0.35, e["match_confidence"] or 0.5)
-            ctx.memory._exec("UPDATE exposures SET risk_score=? WHERE id=?", (round(score, 1), e["id"]))
+            ctx.memory.update_exposure(e["id"], risk_score=round(score, 1))
 
         ctx.emit("risk", "score",
                  f"Privacy Risk Score: {assessment['overall_score']} ({assessment['risk_level']}).",

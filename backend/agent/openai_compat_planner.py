@@ -24,6 +24,14 @@ import typing
 # base_url + a sensible free model for each. All are free-tier, no card needed
 # (GitHub Models needs only a GitHub account).
 PROVIDERS = {
+    "gemini": {
+        "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
+        "key_env": "GEMINI_API_KEY",
+        "default_model": "gemini-3.7-flash",
+        "fallback_models": ["gemini-flash-latest", "gemini-3.5-flash"],
+        "signup": "https://aistudio.google.com/apikey",
+        "note": "Primary reasoning planner driven by Google Gemini.",
+    },
     "groq": {
         "base_url": "https://api.groq.com/openai/v1",
         "key_env": "GROQ_API_KEY",
@@ -31,22 +39,7 @@ PROVIDERS = {
         "default_model": "openai/gpt-oss-20b",
         "fallback_models": ["openai/gpt-oss-120b", "qwen/qwen3.8-27b"],
         "signup": "https://console.groq.com/keys",
-        "note": "Fastest inference available free. Excellent for a live demo.",
-    },
-    # Google exposes Gemini through an OpenAI-compatible endpoint, so the same
-    # adapter drives it. It is here because .env.example has always advertised
-    # GEMINI_API_KEY while no provider existed to consume it: a key set in the
-    # file was silently ignored and the run fell back to the deterministic
-    # planner, with nothing saying why. A second free provider is also real
-    # insurance — if one free tier is throttling during a demo, the other is
-    # very unlikely to be throttling at the same moment.
-    "gemini": {
-        "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
-        "key_env": "GEMINI_API_KEY",
-        "default_model": "gemini-3.6-flash",
-        "fallback_models": ["gemini-3.5-flash", "gemini-flash-latest"],
-        "signup": "https://aistudio.google.com/apikey",
-        "note": "Generous free tier; good fallback when another provider throttles.",
+        "note": "Backup planner for high-speed inference if Gemini is throttled.",
     },
     "cerebras": {
         "base_url": "https://api.cerebras.ai/v1",
@@ -334,6 +327,17 @@ def run(ctx, tools: dict, system: str, goal: str, stream, max_steps: int = 25) -
                         models_to_try.remove(candidate)
                         ctx.emit("orchestrator", "plan",
                                  f"Rate limit on {candidate}; failing over to {models_to_try[0]}…")
+                        break
+
+                    # If primary Gemini exhausts free quota, switch seamlessly to backup planner (Groq)
+                    if (is_rate_limit or is_parse_fail) and provider == "gemini" and os.environ.get("GROQ_API_KEY"):
+                        ctx.emit("orchestrator", "plan",
+                                 "Gemini quota/limit reached; switching to backup planner (Groq)…")
+                        provider = "groq"
+                        spec = PROVIDERS["groq"]
+                        client = OpenAI(api_key=os.environ[spec["key_env"]], base_url=spec["base_url"])
+                        active_model = model_for("groq")
+                        models_to_try = [active_model] + [m for m in PROVIDERS["groq"].get("fallback_models", []) if m != active_model]
                         break
 
                     # A model that cannot produce a usable tool call after three

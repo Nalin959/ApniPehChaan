@@ -98,6 +98,9 @@ def _make_emitter(memory, user_id: str, run_id: str, stream: EventStream):
              tool_input=None, tool_output=None, status: str = "ok"):
         ev = memory.log_event(user_id, run_id, agent, phase, message,
                               tool_name, tool_input, tool_output, status)
+        if not isinstance(ev, dict):
+            ev = {"ts": utcnow(), "agent": agent, "phase": phase, "message": message,
+                  "tool_name": tool_name, "status": status}
         ev["run_id"] = run_id
         stream.put({"type": "agent_event", **ev})
     return emit

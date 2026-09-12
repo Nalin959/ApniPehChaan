@@ -1250,10 +1250,8 @@ async def agent_scan(req: AgentScanRequest):
         "run_id": result.run_id, "user_id": result.user_id, "planner": result.mode,
         "summary": result.summary, "error": result.error,
         "events": [e for e in result.events if e.get("type") == "agent_event"],
-        "risk_before": (_memory._row("SELECT risk_before FROM runs WHERE id=?",
-                                     (result.run_id,)) or {}).get("risk_before"),
-        "risk_after": (_memory._row("SELECT risk_after FROM runs WHERE id=?",
-                                    (result.run_id,)) or {}).get("risk_after"),
+        "risk_before": (_memory.get_run(result.run_id) or {}).get("risk_before"),
+        "risk_after": (_memory.get_run(result.run_id) or {}).get("risk_after"),
         "state": _dashboard_state(result.user_id),
     }
 
@@ -1270,10 +1268,8 @@ async def agent_approve(req: AgentApproveRequest):
         "run_id": result.run_id, "user_id": result.user_id, "planner": result.mode,
         "summary": result.summary, "error": result.error,
         "events": [e for e in result.events if e.get("type") == "agent_event"],
-        "risk_before": (_memory._row("SELECT risk_before FROM runs WHERE id=?",
-                                     (result.run_id,)) or {}).get("risk_before"),
-        "risk_after": (_memory._row("SELECT risk_after FROM runs WHERE id=?",
-                                    (result.run_id,)) or {}).get("risk_after"),
+        "risk_before": (_memory.get_run(result.run_id) or {}).get("risk_before"),
+        "risk_after": (_memory.get_run(result.run_id) or {}).get("risk_after"),
         "state": _dashboard_state(result.user_id),
     }
 
