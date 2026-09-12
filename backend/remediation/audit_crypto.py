@@ -63,11 +63,19 @@ class AuditReceipt:
             except Exception:
                 pass
 
-        timestamps = [self.timestamp]
-        if self.timestamp.endswith("+00:00"):
-            timestamps.append(self.timestamp[:-6])
-        elif not self.timestamp.endswith("Z") and "+" not in self.timestamp:
-            timestamps.append(self.timestamp + "+00:00")
+        ts_no_tz = self.timestamp
+        if ts_no_tz.endswith("+00:00"):
+            ts_no_tz = ts_no_tz[:-6]
+        elif ts_no_tz.endswith("Z"):
+            ts_no_tz = ts_no_tz[:-1]
+
+        timestamps = {self.timestamp, ts_no_tz}
+        if "." in ts_no_tz:
+            date_part, micro_part = ts_no_tz.split(".", 1)
+            if len(micro_part) < 6:
+                padded_ts = f"{date_part}.{micro_part.ljust(6, '0')}"
+                timestamps.add(padded_ts)
+                timestamps.add(padded_ts + "+00:00")
 
         for ts in timestamps:
             content = json.dumps({
