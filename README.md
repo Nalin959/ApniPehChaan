@@ -9,7 +9,7 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100%2B-009688.svg)](https://fastapi.tiangolo.com/)
 [![DPDP Act 2023](https://img.shields.io/badge/Compliance-India%20DPDP%202023-orange.svg)](https://www.meity.gov.in/)
 [![GDPR Art 17](https://img.shields.io/badge/Compliance-EU%20GDPR%20Art%2017-blue.svg)](https://gdpr.eu/)
-[![Tests](https://img.shields.io/badge/Tests-332%2F332%20Passed-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/Tests-333%2F333%20Passed-brightgreen.svg)]()
 [![Cost](https://img.shields.io/badge/Paid%20APIs-none%20required-success.svg)]()
 
 ---
@@ -62,7 +62,7 @@ chmod +x run_demo.sh
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 python data/download_datasets.py      # builds data/ from authoritative public sources
-python test_system.py                 # 332 tests
+python test_system.py                 # 333 tests
 python -m uvicorn backend.app:app --reload --port 8000
 ```
 
@@ -564,7 +564,7 @@ The consequence that matters: re-scanning after a removal detects a record that 
 ```
 
 ```
-ALL 332 TESTS PASSED in 0.88s
+ALL 333 TESTS PASSED in 0.88s
 ```
 
 (Wall time varies by a few tenths of a second; the count is the part that matters.)
@@ -574,7 +574,7 @@ ALL 332 TESTS PASSED in 0.88s
 | Section | Tests | What it enforces |
 |---|---|---|
 | 9. Evidence policy | 54 | Anti-fabrication. Verifies exact endpoints, rates, error resilience, and synthetic quarantine |
-| 14. Free breach intelligence | 49 | XposedOrNot & Hudson Rock record endpoints, severity scores, and state what they do **not** prove |
+| 14. Free breach intelligence | 50 | XposedOrNot & Hudson Rock record endpoints, severity scores, and state what they do **not** prove |
 | 12. Open-web search | 46 | Exact-phrase search, candidate demotion, phone boundary isolation, zero false positives |
 | 3. Identity resolver | 29 | Name-part collisions, alias derivations, phone/email normalisation |
 | 15. Fiduciary Directory & Threat Surface Intelligence | 26 | Operating fiduciary DPDP s.12 rights, Grievance Officer lookup, 22-tool registry, and attack surface correlation |
