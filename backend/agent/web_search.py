@@ -64,6 +64,13 @@ SEARCH_TIMEOUT = 6
 FALLBACK_TIMEOUT = 8
 MAX_RESULTS_PER_QUERY = 15
 MAX_PAGES_VERIFIED = 60
+# The engines are asked together, so the slowest one would otherwise set the
+# pace for every query. Once the first engine has come back with something
+# usable the rest are given this long to add to it, and then the query moves on.
+# Measured on this machine: Bing's feed answers in 0.38-0.60s and Seznam in
+# 0.73-1.09s, so this window is wide enough for both to land and narrow enough
+# that a stalled engine cannot hold a query open for the full search budget.
+MERGE_WINDOW_S = 1.5
 # Queries are no longer run one after another (see search_exposures): waiting
 # out one engine's silence before asking the next question is where a refused
 # scan spent its minutes. THROTTLE_S is now a floor on the OUTBOUND RATE rather
@@ -96,22 +103,36 @@ _CACHE_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
     "data", "web_cache")
 CACHE_TTL_S = 6 * 60 * 60
+# A SECOND, much longer window, used for one narrow purpose: when every engine
+# has refused a query, yesterday's result list is still a perfectly good list of
+# PAGES TO GO AND READ. Nothing is claimed on the strength of it — every page is
+# fetched and required to contain the identifier right now, exactly as a live
+# result would be — so a stale lead can only ever produce a fresh, verified
+# finding. The query itself is still reported as refused, because it was: a
+# stale list is not a search, and it must never turn into "the web is clean".
+STALE_TTL_S = 24 * 60 * 60
 
 
 def _cache_path(query: str) -> str:
     return os.path.join(_CACHE_DIR, hashlib.sha256(query.encode()).hexdigest()[:32] + ".json")
 
 
-def _cache_get(query: str):
+def _cache_get(query: str, ttl: float = CACHE_TTL_S):
     try:
         path = _cache_path(query)
-        if time.time() - os.path.getmtime(path) > CACHE_TTL_S:
+        if time.time() - os.path.getmtime(path) > ttl:
             return None
         with open(path) as f:
             blob = json.load(f)
         return [tuple(x) for x in blob["results"]], blob["status"]
     except Exception:
         return None
+
+
+def _stale_leads(query: str) -> list[tuple[str, str]]:
+    """Pages a previous run found for this query, for verification only."""
+    stale = _cache_get(query, STALE_TTL_S)
+    return list(stale[0]) if stale and stale[0] else []
 
 
 def _cache_put(query: str, results, status: str):
@@ -146,15 +167,118 @@ class WebHit:
     checked_at: str
     reproduce: str
     note: str = ""
+    # "checked" | "gone" | "unchecked" — see check_page. `confirmed is False`
+    # means something different in each case, and the difference is the whole
+    # reason this field exists: only "checked" licenses the word "clear".
+    check_state: str = "checked"
 
     def to_dict(self):
         return asdict(self)
 
 
 # ── search ────────────────────────────────────────────────────────────
+#
+# THE ENGINE LAYER IS A LIST, NOT A NAME
+# --------------------------------------
+# This module used to be DuckDuckGo plus one fallback, and when DuckDuckGo
+# started refusing this machine there was nowhere else to go: measured, every
+# probe over a ten-minute window came back 202 "anomaly", so every query in a
+# scan was reported as refused and the open web went unchecked.
+#
+# The engines are now a registry. Each one declares how it is asked, how its
+# answer is parsed, whether it needs a key, and — the part that matters for
+# correctness — whether its silence may be believed. Adding an engine is one
+# entry; a user who obtains one free API key gets a better index without
+# touching any code, and a user with no keys at all still gets everything the
+# keyless engines can do.
+#
+# MEASURED FROM THIS MACHINE (2026-09-13), which is why the list looks like it
+# does:
+#   duckduckgo html/lite  202 anomaly on every probe, every entry point,
+#                         including the vqd JSON path — throttled, kept because
+#                         the throttle is per-client and will lift
+#   seznam.cz             200 in 0.73-1.09s, 15/15 under a burst, real results
+#                         AND a real no-results page — the new workhorse
+#   bing.com &format=rss  200 in 0.38-0.60s, 15/15 under a burst, genuine
+#                         people-search coverage, but it answers an unmatched
+#                         query with unrelated filler rather than with nothing
+#   marginalia            timing out on this machine today (12.5s), kept
+#   mojeek                403 after the first request; searx instances 403/429
+#                         or a JS anti-bot page; yep/qwant 403; startpage,
+#                         ecosia, brave-web, rightdao, stract all refused
+#
+# "authoritative" is the whole safety property. An engine is authoritative only
+# if a genuine empty answer is DISTINGUISHABLE from a refusal — i.e. it serves a
+# recognisable "no results" page. Only an authoritative engine may turn a query
+# into "nothing found". Everything else can nominate pages and nothing more, so
+# no amount of silence from a small index or a filler-serving feed can ever add
+# up to "your data is not out there".
 
-_ENDPOINTS = ("https://html.duckduckgo.com/html/",
-              "https://lite.duckduckgo.com/lite/")
+
+@dataclass(frozen=True)
+class _Engine:
+    name: str
+    label: str
+    url: str = ""
+    # May a parsed, result-free answer from this engine be reported as
+    # "searched, found nothing"? False for any engine whose empty answer cannot
+    # be told apart from a refusal.
+    authoritative: bool = False
+    # Environment variables that must all be non-empty for this engine to be
+    # used. Empty for the keyless ones. A missing key is not an error and is
+    # never reported as a failed search — the engine is simply not consulted.
+    env_keys: tuple[str, ...] = ()
+
+    def available(self) -> bool:
+        return all(os.environ.get(k) for k in self.env_keys)
+
+
+# Keyless engines, always consulted. The name is historical — these are the
+# endpoints _search_once asks directly — and is kept because the test suite
+# stubs the seam by that name.
+_ENDPOINTS = (
+    _Engine("ddg_html", "DuckDuckGo", "https://html.duckduckgo.com/html/", authoritative=True),
+    _Engine("ddg_lite", "DuckDuckGo Lite", "https://lite.duckduckgo.com/lite/", authoritative=True),
+    _Engine("seznam", "Seznam", "https://search.seznam.cz/", authoritative=True),
+    # NOT authoritative, and the reason is measured rather than cautious. Asked
+    # for a string it has no match for, this feed does not return an empty
+    # channel — it returns ten unrelated pages. '"webmaster@w3.org"' and
+    # '"ABCPD1234E"' came back with the SAME ten Microsoft support pages. An
+    # engine that cannot say "nothing" must never be allowed to mean it.
+    _Engine("bing_rss", "Bing", "https://www.bing.com/search", authoritative=False),
+)
+
+# Engines behind a free API key. Each was probed without a key from this machine
+# and answered with a proper authentication error, so the request shapes below
+# are known to reach the right endpoint: Brave 422 (missing token), Serper 403
+# ("Sign up for a free account"), Tavily 401, Google 403 (unregistered caller).
+# Absent the key the engine is skipped silently and the keyless list above is
+# exactly what runs — which is today's behaviour, unchanged.
+_KEYED_ENGINES = (
+    _Engine("brave", "Brave Search API", "https://api.search.brave.com/res/v1/web/search",
+            authoritative=True, env_keys=("BRAVE_SEARCH_API_KEY",)),
+    _Engine("serper", "Serper (Google)", "https://google.serper.dev/search",
+            authoritative=True, env_keys=("SERPER_API_KEY",)),
+    _Engine("google_cse", "Google Programmable Search",
+            "https://www.googleapis.com/customsearch/v1",
+            authoritative=True, env_keys=("GOOGLE_CSE_KEY", "GOOGLE_CSE_CX")),
+    # An answer synthesiser over a search index rather than an index, so its
+    # "no results" is not a statement about the web.
+    _Engine("tavily", "Tavily", "https://api.tavily.com/search",
+            authoritative=False, env_keys=("TAVILY_API_KEY",)),
+)
+
+
+def _active_engines() -> tuple[_Engine, ...]:
+    """The engines that can be asked right now, keyless ones first."""
+    return _ENDPOINTS + tuple(e for e in _KEYED_ENGINES if e.available())
+
+
+def engine_status() -> list[dict]:
+    """What the engine layer is made of — for diagnostics and the UI."""
+    return [{"name": e.name, "label": e.label, "authoritative": e.authoritative,
+             "needs_key": list(e.env_keys), "available": e.available()}
+            for e in _ENDPOINTS + _KEYED_ENGINES]
 
 
 class _Refused(Exception):
@@ -222,28 +346,50 @@ def _race(tasks, budget: float):
             return
 
 
-def _ddg(query: str, endpoint: str) -> list[tuple[str, str]]:
+def _http(url: str, *, data: bytes | None = None, headers: dict | None = None,
+          timeout: float = SEARCH_TIMEOUT) -> tuple[int, str]:
+    """One request to an engine. Returns (status, body); raises _Refused."""
+    h = {"User-Agent": UA}
+    if headers:
+        h.update(headers)
+    req = urllib.request.Request(url, data=data, headers=h)
+    try:
+        resp = urllib.request.urlopen(req, timeout=timeout)
+        return getattr(resp, "status", getattr(resp, "code", 200)), \
+            resp.read(500_000).decode("utf-8", "ignore")
+    except urllib.error.HTTPError as e:
+        raise _Refused(f"{url} answered HTTP {e.code}") from e
+
+
+def _ddg(query: str, endpoint) -> list[tuple[str, str]]:
     """
-    Return (url, title) pairs from a DuckDuckGo HTML endpoint.
+    Ask ONE engine and return the (url, title) pairs it nominated.
 
     Raises _Refused when the engine declined rather than searched. Telling
     those apart is this function's real job. A throttled DuckDuckGo answers
     202 with an ordinary-looking body, and urlopen does not raise on a 2xx — so
     the refusal has to be read off the response. Missing that read it as a page
     with no results on it, which is the one mistake this module cannot make.
+
+    Every engine in the registry is asked through here, and the name is kept
+    from when there was only one of them. That is deliberate rather than
+    laziness: this is the single seam the offline test suite replaces, and a
+    second, separately-named door would let a live network call slip into a test
+    that believes it has stubbed the network out.
     """
-    data = urllib.parse.urlencode({"q": query}).encode()
-    req = urllib.request.Request(
-        endpoint, data=data,
-        headers={"User-Agent": UA, "Content-Type": "application/x-www-form-urlencoded"})
-    try:
-        resp = urllib.request.urlopen(req, timeout=SEARCH_TIMEOUT)
-        status = resp.status
-        body = resp.read(500_000).decode("utf-8", "ignore")
-    except urllib.error.HTTPError as e:
-        raise _Refused(f"{endpoint} answered HTTP {e.code}") from e
+    if isinstance(endpoint, str):                 # a bare DuckDuckGo URL
+        endpoint = _Engine("ddg", "DuckDuckGo", endpoint, authoritative=True)
+    handler = _PARSERS.get(endpoint.name) or _engine_ddg
+    return handler(query, endpoint)
+
+
+def _engine_ddg(query: str, engine: _Engine) -> list[tuple[str, str]]:
+    """DuckDuckGo's scraped HTML endpoints."""
+    status, body = _http(engine.url,
+                         data=urllib.parse.urlencode({"q": query}).encode(),
+                         headers={"Content-Type": "application/x-www-form-urlencoded"})
     if status in (202, 403, 429):
-        raise _Refused(f"{endpoint} answered HTTP {status}")
+        raise _Refused(f"{engine.url} answered HTTP {status}")
 
     out: list[tuple[str, str]] = []
     # html endpoint: <a class="result__a" href="URL">TITLE</a>
@@ -257,8 +403,155 @@ def _ddg(query: str, endpoint: str) -> list[tuple[str, str]]:
     # Every link pointing back at the engine is its anomaly page ("please let
     # us know: click here"), not a search with no results on it.
     if out and all("duckduckgo.com" in u for u, _ in out):
-        raise _Refused(f"{endpoint} served its anomaly page")
+        raise _Refused(f"{engine.url} served its anomaly page")
     return out
+
+
+def _engine_seznam(query: str, engine: _Engine) -> list[tuple[str, str]]:
+    """
+    Seznam's public result page.
+
+    An independent European crawler that still answers an automated client:
+    measured 15 requests in a row, all 200, 0.73-1.09s each, no throttling.
+
+    It is treated as authoritative because its two answers are distinguishable.
+    Every Seznam result page — including the one for a string that matches
+    nothing — carries its `data-e-a` instrumentation attributes, and results are
+    the anchors marked `data-e-a="heading"`. So a page with the attributes and
+    no headings is a real "nothing found", while a page without them is not a
+    result page at all and is refused rather than believed.
+    """
+    status, body = _http(engine.url + "?q=" + urllib.parse.quote(query))
+    if status != 200 or "data-e-a=" not in body:
+        raise _Refused(f"{engine.url} did not serve a result page (HTTP {status})")
+    out: list[tuple[str, str]] = []
+    for pat in (r'<a[^>]+data-e-a="heading"[^>]*?href="(https?://[^"]+)"[^>]*>(.*?)</a>',
+                r'<a[^>]+href="(https?://[^"]+)"[^>]*?data-e-a="heading"[^>]*>(.*?)</a>'):
+        for m in re.finditer(pat, body, re.S):
+            out.append((html.unescape(m.group(1)), _strip_tags(m.group(2))))
+        if out:
+            break
+    return out
+
+
+def _engine_bing_rss(query: str, engine: _Engine) -> list[tuple[str, str]]:
+    """
+    Bing's RSS output — the one Bing entry point that is still parseable.
+
+    Worth having: it is the only free engine reached from this machine with
+    consumer people-search coverage. '"+919876543210"' came back with
+    truecaller, tellows, telspy and spamcallcheck pages for that exact number,
+    which is precisely the kind of exposure this tool exists to find and which
+    the small independent indexes have no sight of at all.
+
+    Two things had to be got right.
+
+    `mkt=en-US` is load-bearing. Without it the feed guesses a market from the
+    caller's address and answers a perfectly good query with pages from another
+    country in another language — the same query returned Korean, Italian and
+    Japanese filler on consecutive probes. With it, '"psf@python.org"' returns
+    python.org.
+
+    And it never says "nothing". Asked for a string it cannot match it returns
+    ten unrelated popular pages rather than an empty channel — measured,
+    '"webmaster@w3.org"' and '"ABCPD1234E"' returned the identical ten pages.
+    That is a refusal wearing a result page's clothes, exactly like DuckDuckGo's
+    anomaly page, and it is refused here on the same grounds: if not one result
+    so much as mentions the thing that was asked about, this engine did not
+    answer the question. Results that do pass are still only leads — every page
+    is fetched and must contain the identifier before anything is reported.
+    """
+    status, body = _http(engine.url + "?q=" + urllib.parse.quote(query) + "&format=rss&mkt=en-US")
+    if status != 200 or "<rss" not in body[:200]:
+        raise _Refused(f"{engine.url} did not serve its feed (HTTP {status})")
+
+    ident = query.strip('"')
+    hits, filler = [], []
+    for item in re.findall(r"<item>(.*?)</item>", body, re.S):
+        def tag(name, _item=item):
+            m = re.search(rf"<{name}>(.*?)</{name}>", _item, re.S)
+            return html.unescape(m.group(1)).strip() if m else ""
+        url, title, desc = tag("link"), _strip_tags(tag("title")), _strip_tags(tag("description"))
+        if not url.startswith("http"):
+            continue
+        (hits if _mentions(ident, f"{url} {title} {desc}") else filler).append((url, title))
+    if not hits:
+        raise _Refused(f"{engine.url} answered with results unrelated to the query")
+    return hits + filler
+
+
+def _engine_brave(query: str, engine: _Engine) -> list[tuple[str, str]]:
+    status, body = _http(
+        engine.url + "?q=" + urllib.parse.quote(query) + "&count=20",
+        headers={"Accept": "application/json",
+                 "X-Subscription-Token": os.environ.get("BRAVE_SEARCH_API_KEY", "")})
+    if status != 200:
+        raise _Refused(f"{engine.url} answered HTTP {status}")
+    data = json.loads(body)
+    return [(r["url"], _strip_tags(r.get("title", "")))
+            for r in data.get("web", {}).get("results", []) if r.get("url")]
+
+
+def _engine_serper(query: str, engine: _Engine) -> list[tuple[str, str]]:
+    status, body = _http(
+        engine.url, data=json.dumps({"q": query, "num": 20}).encode(),
+        headers={"Content-Type": "application/json",
+                 "X-API-KEY": os.environ.get("SERPER_API_KEY", "")})
+    if status != 200:
+        raise _Refused(f"{engine.url} answered HTTP {status}")
+    data = json.loads(body)
+    return [(r["link"], _strip_tags(r.get("title", "")))
+            for r in data.get("organic", []) if r.get("link")]
+
+
+def _engine_google_cse(query: str, engine: _Engine) -> list[tuple[str, str]]:
+    status, body = _http(engine.url + "?" + urllib.parse.urlencode({
+        "key": os.environ.get("GOOGLE_CSE_KEY", ""),
+        "cx": os.environ.get("GOOGLE_CSE_CX", ""),
+        "q": query, "num": 10}), headers={"Accept": "application/json"})
+    if status != 200:
+        raise _Refused(f"{engine.url} answered HTTP {status}")
+    data = json.loads(body)
+    # Google reports "no match" by omitting `items` entirely, which is a real
+    # empty answer and not a refusal — so an absent list is returned as one.
+    return [(r["link"], _strip_tags(r.get("title", "")))
+            for r in data.get("items", []) if r.get("link")]
+
+
+def _engine_tavily(query: str, engine: _Engine) -> list[tuple[str, str]]:
+    key = os.environ.get("TAVILY_API_KEY", "")
+    status, body = _http(
+        engine.url,
+        data=json.dumps({"query": query, "api_key": key, "max_results": 20}).encode(),
+        headers={"Content-Type": "application/json", "Authorization": f"Bearer {key}"})
+    if status != 200:
+        raise _Refused(f"{engine.url} answered HTTP {status}")
+    data = json.loads(body)
+    return [(r["url"], _strip_tags(r.get("title", "")))
+            for r in data.get("results", []) if r.get("url")]
+
+
+_PARSERS = {
+    "ddg_html": _engine_ddg, "ddg_lite": _engine_ddg,
+    "seznam": _engine_seznam, "bing_rss": _engine_bing_rss,
+    "brave": _engine_brave, "serper": _engine_serper,
+    "google_cse": _engine_google_cse, "tavily": _engine_tavily,
+}
+
+
+def _mentions(ident: str, blob: str) -> bool:
+    """
+    Does this text so much as refer to the identifier?
+
+    Used to tell an engine's answer from its filler, and to decide which pages
+    are worth a fetch first. It is NEVER a standard of proof — passing this only
+    earns a page the right to be downloaded and searched properly.
+    """
+    digits = re.sub(r"\D", "", ident)
+    if len(digits) >= 8 and digits in re.sub(r"\D", "", blob):
+        return True
+    norm = _normalise(ident)
+    return bool(norm) and norm in _normalise(blob)
 
 
 def _marginalia(query: str) -> list[tuple[str, str]]:
@@ -310,16 +603,27 @@ def _strip_tags(s: str) -> str:
 
 def _fallback_only(query: str) -> tuple[list[tuple[str, str]], str]:
     """Consult the secondary index alone, the primary having already refused."""
-    clean = _dedupe(_secondary(query))
+    clean = _dedupe(_secondary(query), query.strip('"'))
     if clean:
         _cache_put(query, clean, "ok")
         return clean, "ok"
     # The secondary returning nothing is not evidence of absence — its index is
-    # a fraction of the web — so this stays "blocked", never "empty".
-    return [], "blocked"
+    # a fraction of the web — so this stays "blocked", never "empty". What CAN
+    # be salvaged is a previous run's list of pages: they are re-fetched and
+    # re-checked from scratch, and the query is still counted as refused.
+    return _stale_leads(query), "blocked"
 
 
-def _dedupe(pairs: list[tuple[str, str]]) -> list[tuple[str, str]]:
+def _dedupe(pairs: list[tuple[str, str]], ident: str = "") -> list[tuple[str, str]]:
+    """
+    Drop duplicates and useless hosts, and put the most promising pages first.
+
+    The ordering matters because there is a cap on how many pages a scan will
+    fetch. A result that already shows the identifier in its URL or title is far
+    likelier to be a real exposure than one that merely came back in the same
+    list, so those go to the front and get looked at while there is still
+    budget. It changes which pages are READ, never which are believed.
+    """
     clean: list[tuple[str, str]] = []
     seen: set[str] = set()
     for url, title in pairs:
@@ -331,9 +635,9 @@ def _dedupe(pairs: list[tuple[str, str]]) -> list[tuple[str, str]]:
             continue
         seen.add(key)
         clean.append((key, title))
-        if len(clean) >= MAX_RESULTS_PER_QUERY:
-            break
-    return clean
+    if ident:
+        clean.sort(key=lambda r: not _mentions(ident, f"{r[0]} {r[1]}"))
+    return clean[:MAX_RESULTS_PER_QUERY]
 
 
 def search_web(query: str, engine_state: dict | None = None) -> tuple[list[tuple[str, str]], str]:
@@ -387,48 +691,69 @@ def search_web(query: str, engine_state: dict | None = None) -> tuple[list[tuple
 
         if engine_state is not None:
             engine_state["blocked"] = True
-        return [], "blocked"
+        # Every engine refused. A previous run's page list is still worth
+        # re-reading — see _stale_leads — and the query stays "blocked", so
+        # this can add findings but can never add confidence.
+        return _stale_leads(query), "blocked"
     finally:
         _local.secondary = None
 
 
 def _search_once(query: str) -> tuple[list[tuple[str, str]], str]:
-    """One pass over the endpoints. Returns (results, status); never raises."""
+    """One pass over the engines. Returns (results, status); never raises."""
     _PACER.wait()
 
-    # The endpoints are asked CONCURRENTLY. Asked in turn, a throttled engine
+    # The engines are asked CONCURRENTLY. Asked in turn, a throttled engine
     # charged the full budget for each one over again, and measurement never
-    # found the second endpoint disagreeing with the first about whether this
-    # client is throttled: identical 202 anomaly pages, identical stall, on
-    # every probe. Concurrency spends that budget once instead of twice while
-    # still giving the second endpoint its say.
-    answers = 0
-    for hits, err in _race([lambda ep=ep: _ddg(query, ep) for ep in _ENDPOINTS],
-                           SEARCH_TIMEOUT + 2):
+    # found one endpoint disagreeing with another about whether this client is
+    # throttled: identical 202 anomaly pages, identical stall, on every probe.
+    # Concurrency spends that budget once instead of once per engine, and it is
+    # also what makes a long registry affordable — eight engines cost about what
+    # the slowest one costs, not the sum.
+    engines = _active_engines()
+    merged: list[tuple[str, str]] = []
+    answered_authority = False
+    first_answer: float | None = None
+
+    for res, err in _race([lambda e=e: (e, _ddg(query, e)) for e in engines],
+                          SEARCH_TIMEOUT + 2):
         if err is not None:
             continue
-        answers += 1
-        clean = _dedupe(hits)
+        engine, hits = res
+        answered_authority = answered_authority or engine.authoritative
+        merged.extend(hits)
+        # Results from several engines are pooled rather than raced for, because
+        # their indexes barely overlap — Bing found this number on four people-
+        # search sites that Seznam had never crawled. But a pool is only worth
+        # the wait it costs, so once something usable is in hand the stragglers
+        # get MERGE_WINDOW_S and no more.
+        if merged:
+            now = time.monotonic()
+            first_answer = first_answer or now
+            if now - first_answer > MERGE_WINDOW_S:
+                break
+
+    clean = _dedupe(merged, query.strip('"'))
+    if clean:
+        return clean, "ok"
+
+    # Every engine that did not come back with a page it could parse counts as
+    # a refusal — a timeout, an HTTP error, an anomaly page, a feed of filler
+    # and the group deadline alike. None of them is evidence of absence, and the
+    # single thing this module may never do is let one read as a clean result.
+    if not answered_authority:
+        # Nobody whose silence means anything has spoken. Ask the secondary
+        # index before giving up — it is unthrottled, and anything it returns is
+        # verified on the page exactly as a primary result would be, so coverage
+        # widens without the standard of proof moving.
+        clean = _dedupe(_secondary(query), query.strip('"'))
         if clean:
             return clean, "ok"
 
-    # Every endpoint that did not come back with a page it could parse counts
-    # as a refusal — a timeout, an HTTP error, an anomaly page and the group
-    # deadline alike. None of them is evidence of absence, and the single thing
-    # this module may never do is let one read as a clean result. Only a page
-    # that was actually served and actually parsed can say "nothing found".
-    refused = answers < len(_ENDPOINTS)
-
-    if refused:
-        # The primary refused. Ask the secondary index before giving up — it is
-        # unthrottled, and anything it returns is verified on the page exactly
-        # as a primary result would be, so coverage widens without the standard
-        # of proof moving.
-        clean = _dedupe(_secondary(query))
-        if clean:
-            return clean, "ok"
-
-    return [], ("blocked" if refused else "empty")
+    # "empty" needs an engine that can actually say the word: one that served a
+    # result page it could parse, with no results on it, AND whose empty page is
+    # distinguishable from its refusal. Anything less is "could not check".
+    return [], ("empty" if answered_authority else "blocked")
 
 
 # ── query construction ──────────────────────────────────────────────────────
@@ -517,6 +842,31 @@ def _normalise(s: str) -> str:
     return re.sub(r"[^a-z0-9@.]+", "", s.lower())
 
 
+_NAT64_PREFIX = ipaddress.ip_network("64:ff9b::/96")
+
+
+def _unwrap_nat64(ip):
+    """
+    Return the real IPv4 address behind a NAT64 address.
+
+    On a NAT64/DNS64 network — which is what this machine is on, and what many
+    mobile networks in India are — the resolver synthesises an IPv6 address in
+    64:ff9b::/96 for every IPv4-only host. Python's ipaddress reports that
+    whole range as `is_reserved`, so the SSRF guard refused github.com,
+    keybase.io, soundcloud.com and wordpress.com: four ordinary public sites out
+    of twelve tested. It failed closed, so it was not a hole — but it silently
+    stopped open-web verification from reading those pages at all, and a page
+    that cannot be read produces no finding.
+
+    Decoding the embedded IPv4 and judging THAT keeps the protection intact: a
+    NAT64 address wrapping 127.0.0.1 or the cloud metadata address unwraps to
+    exactly those and is still refused.
+    """
+    if ip.version == 6 and ip in _NAT64_PREFIX:
+        return ipaddress.ip_address(int(ip) & 0xFFFFFFFF)
+    return ip
+
+
 def is_safe_web_url(url: str) -> bool:
     """
     Validates that a URL is a legitimate public web destination and not an
@@ -542,7 +892,7 @@ def is_safe_web_url(url: str) -> bool:
         # If DNS resolves to a private IP, reject
         try:
             for *_, sockaddr in socket.getaddrinfo(hostname, None):
-                ip = ipaddress.ip_address(sockaddr[0])
+                ip = _unwrap_nat64(ipaddress.ip_address(sockaddr[0]))
                 if ip.is_loopback or ip.is_private or ip.is_link_local or ip.is_multicast or ip.is_reserved:
                     return False
         except Exception:
@@ -553,23 +903,93 @@ def is_safe_web_url(url: str) -> bool:
         return False
 
 
+class _SafeRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """
+    Re-check every redirect hop against is_safe_web_url.
+
+    Validating only the URL we were handed is not enough. urllib follows
+    redirects by itself, so a page on a perfectly ordinary public domain can
+    answer 302 with Location: http://127.0.0.1/admin and the fetch goes there
+    unchecked. Demonstrated: the internal page's body came back as `confirmed`
+    evidence, which both leaks it into the ledger and files the finding against
+    the attacker's domain.
+
+    The check therefore has to run on the destination of each hop, not just on
+    the entry point.
+    """
+
+    max_redirections = 5
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        if not is_safe_web_url(newurl):
+            raise urllib.error.HTTPError(
+                newurl, code,
+                "redirect to a non-public address was refused", headers, fp)
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+# Installed as the process default rather than used as a local opener, for two
+# reasons. It keeps urllib.request.urlopen as the single seam the tests stub —
+# swapping in a private opener silently bypassed those stubs and the phone
+# matcher went untested again. And it extends the same redirect check to every
+# other urllib caller in the app, which is the behaviour we want anyway.
+urllib.request.install_opener(urllib.request.build_opener(_SafeRedirectHandler))
+
+
 def verify_page(url: str, identifier: str, kind: str) -> tuple[bool, str, int | None, str]:
     """
     Fetch the page and look for the identifier in it.
 
-    Returns (confirmed, matched_context, http_status, title).
+    Returns (confirmed, matched_context, http_status, title). Kept at four
+    values because that is what callers and the test suite unpack; anything
+    that needs to know WHY a page was not confirmed calls check_page instead.
+    """
+    _state, confirmed, ctx, status, title, _why = check_page(url, identifier, kind)
+    return confirmed, ctx, status, title
+
+
+def check_page(url: str, identifier: str, kind: str
+               ) -> tuple[str, bool, str, int | None, str, str]:
+    """
+    Fetch the page and look for the identifier in it, keeping "I looked and it
+    was not there" apart from "I never got to look".
+
+    Returns (state, confirmed, matched_context, http_status, title, reason).
+
+    state is one of:
+        checked    the page was served and read; `confirmed` is the answer
+        gone       the server says there is no such page (404/410)
+        unchecked  nothing was read — blocked, refused, timed out, unresolvable
+
+    This distinction did not exist, and its absence was a bug of exactly the
+    kind this module is built to prevent. A fetch that timed out, hit a
+    Cloudflare interstitial, was refused with a 403 or could not be resolved
+    came back indistinguishable from a clean page, and the hit was then
+    annotated "the identifier was not present in the HTML that was served" —
+    about a page where nothing whatsoever was served. Every site that blocks
+    scrapers therefore read as checked-and-clear, which is the report saying
+    "clean" about the places it is least able to see into.
     """
     if not is_safe_web_url(url):
-        return False, "", None, ""
+        return ("unchecked", False, "", None, "",
+                "the address did not resolve to a public web server, so it was not fetched")
     try:
         req = urllib.request.Request(url, headers={"User-Agent": UA})
         resp = urllib.request.urlopen(req, timeout=TIMEOUT)
         status = getattr(resp, "status", getattr(resp, "code", 200))
         raw = resp.read(400_000).decode("utf-8", "ignore")
     except urllib.error.HTTPError as e:
-        return False, "", e.code, ""
-    except Exception:
-        return False, "", None, ""
+        if e.code in (404, 410):
+            # A definite answer: the server says this page does not exist. It
+            # is not a page that was read, so nothing is claimed about its
+            # contents either — but it is not a check that was prevented.
+            return ("gone", False, "", e.code, "",
+                    f"the page no longer exists (HTTP {e.code})")
+        return ("unchecked", False, "", e.code, "",
+                f"the site refused the request (HTTP {e.code})")
+    except Exception as exc:
+        return ("unchecked", False, "", None, "",
+                f"the page could not be fetched ({type(exc).__name__})")
 
     title_m = re.search(r"<title[^>]*>(.*?)</title>", raw, re.S | re.I)
     title = _strip_tags(title_m.group(1))[:200] if title_m else ""
@@ -598,18 +1018,21 @@ def verify_page(url: str, identifier: str, kind: str) -> tuple[bool, str, int | 
                     digits.endswith(identifier)
                     and digits[:-len(identifier)] in ("0", "91", "091", "0091")):
                 i = m.start()
-                return True, "…" + text[max(0, i - 60):i + len(m.group(0)) + 60].replace("\n", " ") + "…", status, title
-        return False, "", status, title
+                ctx = "…" + text[max(0, i - 60):i + len(m.group(0)) + 60].replace("\n", " ") + "…"
+                return "checked", True, ctx, status, title, ""
+        return "checked", False, "", status, title, ""
 
     hay, needle = text.lower(), identifier.lower()
     i = hay.find(needle)
     if i >= 0:
-        return True, "…" + text[max(0, i - 90):i + len(identifier) + 90].replace("\n", " ") + "…", status, title
+        ctx = "…" + text[max(0, i - 90):i + len(identifier) + 90].replace("\n", " ") + "…"
+        return "checked", True, ctx, status, title, ""
 
     # Fall back to a punctuation-insensitive comparison.
     if _normalise(identifier) and _normalise(identifier) in _normalise(text):
-        return True, "(matched ignoring punctuation and spacing)", status, title
-    return False, "", status, title
+        return ("checked", True, "(matched ignoring punctuation and spacing)",
+                status, title, "")
+    return "checked", False, "", status, title, ""
 
 
 def search_exposures(profile: dict, max_workers: int = 16,

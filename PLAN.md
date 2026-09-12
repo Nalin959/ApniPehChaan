@@ -144,9 +144,11 @@ A judge clicking around will find the inconsistency and it undercuts the honesty
 **Options, cheapest first:**
 1. Hide them behind a "Legacy (pre-agent)" section — 20 min, removes the contradiction.
 2. Repoint Exposures at the agent ledger — ~1h, one source of truth.
-3. Delete them — loses the PII Accuracy Lab, which is genuinely good evidence.
+3. Delete them — the PII Accuracy Lab tab was in fact removed on 2026-09-13 at the
+   user's request; its evidence now lives in test_system.py.
 
-**Recommendation:** option 1 now, option 2 if time allows. Keep the Accuracy Lab visible.
+**Recommendation:** option 1 now, option 2 if time allows. (Superseded: the
+Accuracy Lab tab was removed; the test suite carries that evidence instead.)
 
 ### P1.2 Seed the leak corpus with the user's identifiers under a clear label (~1h)
 

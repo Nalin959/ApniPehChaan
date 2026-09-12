@@ -314,10 +314,10 @@ endpoints to enumerate accounts would breach their terms. So the tool asks you �
 services you signed up for, and that knowledge is itself valid grounds for a Section 12 request.
 
 **"What about the credit card / Aadhaar detection?"**
-Open the PII Accuracy Lab. The benchmark is **synthetic and self-generated**, so treat it as a
-regression guard, not field accuracy — the README says so. The part that carries signal is the
-negative set: correctly-shaped 12-digit numbers with deliberately wrong Verhoeff check digits,
-all rejected. Invoice numbers and timestamps look exactly like that in the wild.
+Run `./.venv/bin/python test_system.py`. The PII benchmark is **synthetic and
+self-generated**, so treat it as a regression guard rather than an external
+accuracy claim — its value is that it fails loudly when a detector regresses.
+(The in-UI Accuracy Lab tab was removed; the suite is the source of truth.)
 
 **"What breaks with no network?"**
 Live checks report `unavailable` and claim nothing. The LLM planner falls back to the

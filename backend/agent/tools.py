@@ -25,6 +25,10 @@ from datetime import datetime, timezone
 from typing import Callable
 
 from backend.agent import account_discovery, extra_sources, verifiers, web_search
+from backend.remediation.mailer import prepare_notice, send_notice, smtp_status
+from backend.remediation.officer_directory import resolve_officer
+from backend.remediation.self_serve import (
+    plan_unsubscribe, resolve_route, unsubscribe_one_click, verify_removal as verify_gone)
 from backend.agent.verification import get_verifier
 from backend.agent.memory import Memory, utcnow
 from backend.mock_brokers.network import (
@@ -1422,6 +1426,107 @@ def build_tools(ctx: ToolContext) -> dict[str, Callable]:
 
         ctx.emit("action", "dispatch", f"Serving notice on {exp['source_name']}…",
                  tool_name="submit_erasure_request")
+
+        # Real dispatch, by email, to the controller's published grievance
+        # officer. The sandbox broker network is only used when the user has
+        # explicitly turned it on — it contains synthetic controllers, and
+        # "delivered" there means nothing was sent anywhere.
+        if not ctx.sandbox:
+            detail = exp.get("detail") or {}
+            domain = str(detail.get("domain") or "")
+            officer = resolve_officer(exp["source_name"], domain)
+            reply_to = (ctx.profile.get("email") or "").strip()
+
+            if not officer.primary:
+                ctx.emit("action", "dispatch",
+                         f"No published grievance-officer address is known for "
+                         f"{exp['source_name']}, and one will not be invented. "
+                         f"The notice is exported for you to send yourself.",
+                         status="error")
+            outcome = send_notice(
+                notice_text=req.get("request_text") or "",
+                recipient=(officer.primary.email if officer.primary else ""),
+                reply_to=reply_to,
+                approved=True,   # the gate above is the only thing that gets us here
+                subject=f"Erasure request under {req.get('statute') or 'DPDP Act 2023'} "
+                        f"— ref {request_id}",
+                recipient_name=(officer.company_name or exp["source_name"]),
+                sender_name=ctx.profile.get("name", ""),
+                company_name=officer.company_name or exp["source_name"],
+                statute=req.get("statute") or "",
+                reference_id=request_id,
+                recipient_tier=(officer.primary.tier if officer.primary else ""),
+            )
+            od = outcome.to_dict()
+
+            # A refusal must still leave the user with something they can act
+            # on. The mailer is right to refuse an address it only guessed —
+            # a notice carries the user's identifiers, and sending it to an
+            # invented domain discloses them to a stranger. But refusing to
+            # SEND is not a reason to produce nothing: draft the message, export
+            # it, and hand over the candidate addresses so a human can confirm
+            # the right one and send it themselves.
+            if od.get("status") == "refused":
+                # Always hand back the addresses we know of, whether or not the
+                # mailer already exported the draft. A refusal tells the user
+                # "not this address, unverified" — it is only useful next to the
+                # candidates they can check.
+                cands = []
+                if officer.primary:
+                    cands.append(officer.primary.email)
+                for a in (officer.to_dict().get("alternates") or []):
+                    addr = a.get("email")
+                    if addr and addr not in cands:
+                        cands.append(addr)
+                od["candidate_addresses"] = cands
+                od["officer_status"] = officer.status
+            if od.get("status") == "refused" and not od.get("eml_path"):
+                try:
+                    prepared = prepare_notice(
+                        notice_text=req.get("request_text") or "",
+                        recipient=(officer.primary.email if officer.primary else ""),
+                        reply_to=reply_to,
+                        subject=f"Erasure request under {req.get('statute') or 'DPDP Act 2023'} "
+                                f"— ref {request_id}",
+                        sender_name=ctx.profile.get("name", ""),
+                        company_name=officer.company_name or exp["source_name"],
+                        statute=req.get("statute") or "",
+                        reference_id=request_id,
+                    )
+                    pd = prepared.to_dict() if hasattr(prepared, "to_dict") else {}
+                    od["eml_path"] = pd.get("eml_path", "")
+                    od["mailto"] = pd.get("mailto_url", "")
+                except Exception as exc:
+                    od["export_error"] = f"{type(exc).__name__}: {exc}"
+            ctx.emit("action", "dispatch",
+                     {"sent": f"Notice emailed to {od.get('recipient')} for {exp['source_name']}.",
+                      "not_configured": f"No SMTP configured, so nothing was sent. The notice for "
+                                        f"{exp['source_name']} is saved as a .eml you can open in "
+                                        f"your own mail client: {od.get('eml_path')}",
+                      "refused": (f"Not sent — {od.get('reason') or od.get('error') or ''} "
+                                  f"The notice is drafted and exported; confirm the controller's "
+                                  f"published grievance address and send it yourself: "
+                                  f"{od.get('eml_path') or '(export failed)'}"),
+                      "failed": f"Send failed: {od.get('error') or ''}"}.get(
+                         od.get("status"), f"Dispatch result: {od.get('status')}"),
+                     tool_output=od,
+                     status="error" if od.get("status") in ("refused", "failed") else "ok")
+
+            ctx.memory.update_request(
+                request_id,
+                status="submitted" if od.get("status") == "sent" else "awaiting_send",
+                submitted_at=utcnow() if od.get("status") == "sent" else None,
+                confirmation_id=od.get("message_id", "") or "")
+            if od.get("status") == "sent":
+                ctx.memory.set_exposure_status(req["exposure_id"], "requested")
+            return {"request_id": request_id, "service": exp["source_name"],
+                    "dispatch": od, "officer": officer.to_dict(),
+                    "smtp": smtp_status(),
+                    "note": ("A statutory notice was emailed to the controller's published "
+                             "grievance officer." if od.get("status") == "sent" else
+                             "Nothing was transmitted. The drafted notice is exported for you "
+                             "to send from your own mail client.")}
+
         res = ctx.network.submit_erasure(
             exp["source_id"], exp["record_id"], ctx.profile.get("email", ""), req["statute"] or "")
 
@@ -1662,6 +1767,72 @@ def build_tools(ctx: ToolContext) -> dict[str, Callable]:
                  tool_name="analyze_threat_surface", tool_output=result)
         return result
 
+    def self_serve_removal(exposure_id: str, list_unsubscribe: str = "",
+                           list_unsubscribe_post: str = "") -> dict:
+        """Find the exact account-deletion or opt-out route for an exposure, and
+        one-click unsubscribe where the message's headers actually support it.
+        Unsubscribing is outward-facing, so it needs approval first."""
+        exp = ctx.memory.get_exposure(exposure_id)
+        if not exp:
+            return {"error": f"No exposure {exposure_id}"}
+
+        route = resolve_route(exp["source_name"],
+                              str((exp.get("detail") or {}).get("domain") or ""))
+        rd = route.to_dict()
+
+        out = {"exposure_id": exposure_id, "service": exp["source_name"], "route": rd}
+
+        # A one-click unsubscribe is a property of the individual MESSAGE, not
+        # of the service: it exists only when that message carries
+        # List-Unsubscribe-Post. So it is never assumed — the headers are read,
+        # and a plain RFC 2369 link is returned as something to open rather than
+        # POSTed, because POSTing an unadvertised link is outside the standard.
+        if list_unsubscribe:
+            plan = plan_unsubscribe(list_unsubscribe, list_unsubscribe_post or None)
+            pd = plan.to_dict() if hasattr(plan, "to_dict") else {}
+            out["unsubscribe_plan"] = pd
+            if ctx.auto_approve and pd.get("method") == "one_click_post":
+                ctx.emit("action", "unsubscribe",
+                         f"One-click unsubscribing from {exp['source_name']}…",
+                         tool_name="self_serve_removal")
+                res = unsubscribe_one_click(list_unsubscribe, list_unsubscribe_post or None)
+                out["unsubscribe_result"] = res.to_dict() if hasattr(res, "to_dict") else {}
+            elif pd.get("method") == "one_click_post":
+                ctx.emit("action", "approval",
+                         f"{exp['source_name']} supports one-click unsubscribe. Approve to send it.",
+                         tool_output=pd, status="awaiting_approval")
+                out["status"] = "awaiting_approval"
+
+        if rd.get("is_deep_link") and rd.get("url"):
+            ctx.emit("remediation", "self_serve",
+                     f"{exp['source_name']}: delete directly at {rd['url']} "
+                     f"(~{rd.get('effort_minutes', '?')} min).",
+                     tool_output=rd)
+        else:
+            ctx.emit("remediation", "self_serve",
+                     f"{exp['source_name']}: no verified self-serve deletion link is known, so "
+                     f"none is invented. " + (rd.get("why") or rd.get("method") or ""),
+                     tool_output=rd)
+        return out
+
+    def confirm_removal(exposure_id: str) -> dict:
+        """Check whether a profile actually stopped being served after a deletion.
+        A removal nobody verified is a claim, not an outcome."""
+        exp = ctx.memory.get_exposure(exposure_id)
+        if not exp:
+            return {"error": f"No exposure {exposure_id}"}
+        detail = exp.get("detail") or {}
+        url = detail.get("url") or ""
+        if not url:
+            return {"exposure_id": exposure_id, "result": "not_checkable",
+                    "why": "No public profile URL was recorded for this exposure."}
+        chk = verify_gone(url, site=exp["source_name"], username=exp.get("record_id") or "")
+        cd = chk.to_dict() if hasattr(chk, "to_dict") else {}
+        ctx.emit("verify", "removal",
+                 f"Re-checked {exp['source_name']}: {cd.get('result', 'unknown')}.",
+                 tool_output=cd)
+        return {"exposure_id": exposure_id, "service": exp["source_name"], "check": cd}
+
     return {
         "build_identity_profile": build_identity_profile,
         "recall_prior_activity": recall_prior_activity,
@@ -1672,6 +1843,8 @@ def build_tools(ctx: ToolContext) -> dict[str, Callable]:
         "discover_accounts": discover_accounts,
         "confirm_account": confirm_account,
         "plan_removal": plan_removal,
+        "self_serve_removal": self_serve_removal,
+        "confirm_removal": confirm_removal,
         "search_data_brokers": search_data_brokers,
         "search_paste_dumps": search_paste_dumps,
         "search_open_web": search_open_web,

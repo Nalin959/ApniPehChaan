@@ -1048,7 +1048,7 @@ def _expert_privacy_reply(user_msg: str, tab: str, risk_score: float | None, exp
         )
 
     return (
-        f"### SovereignPrivacy AI Copilot\n\n"
+        f"### SovereignPrivacy Rights Advisor\n\n"
         f"I am monitoring your privacy posture on the **{tab.replace('-', ' ').title()}** tab. "
         f"Currently, {exposure_count} exposures have been tracked.\n\n"
         f"**Actions you can take right now:**\n"
@@ -1059,10 +1059,64 @@ def _expert_privacy_reply(user_msg: str, tab: str, risk_score: float | None, exp
     )
 
 
+
+def _chat_grounding(user_id: str | None = None) -> tuple[str, int]:
+    """
+    The user's ACTUAL findings, rendered for the assistant's system prompt.
+
+    Without this the assistant was told only a risk NUMBER and a COUNT, so the
+    most obvious question a user can ask — "which companies have my data?" —
+    could not be answered from evidence. What came back instead was a plausible
+    generic account of how a risk score is computed, listing contributors like
+    dark-web pastes and broker records that were not in this user's ledger at
+    all. That is exactly the fabrication this product exists to avoid, and it
+    was happening in the one component that talks directly to the user.
+
+    So the assistant is handed the real rows and told to answer only from them.
+    """
+    try:
+        if not user_id:
+            row = _memory._row("SELECT user_id FROM runs ORDER BY started_at DESC LIMIT 1")
+            user_id = (row or {}).get("user_id")
+        if not user_id:
+            return "", 0
+        exposures = [e for e in _memory.get_exposures(user_id) if e.get("status") != "not_mine"]
+    except Exception:
+        return "", 0
+
+    if not exposures:
+        return ("\nTHE USER'S ACTUAL FINDINGS: none recorded yet. No scan has produced an "
+                "exposure. Say so plainly rather than describing what a scan might find.\n"), 0
+
+    confirmed = [e for e in exposures if e.get("status") != "unconfirmed"]
+    candidates = [e for e in exposures if e.get("status") == "unconfirmed"]
+
+    lines = ["\nTHE USER'S ACTUAL FINDINGS — answer from THESE ROWS ONLY:"]
+    for e in confirmed[:25]:
+        detail = e.get("detail") or {}
+        found = ", ".join(e.get("data_found") or []) or "unspecified"
+        where = detail.get("source_dataset") or e.get("source_type") or ""
+        lines.append(
+            f"  - {e.get('source_name')} | type={e.get('source_type')} | "
+            f"severity={e.get('severity')} | data exposed: {found}"
+            + (f" | found via: {where}" if where else ""))
+    if len(confirmed) > 25:
+        lines.append(f"  ...and {len(confirmed) - 25} more confirmed exposure(s).")
+    if candidates:
+        lines.append(f"  {len(candidates)} UNCONFIRMED candidate(s) are held back pending the "
+                     f"user's confirmation and are NOT counted as theirs: "
+                     + ", ".join(str(c.get("source_name")) for c in candidates[:8]))
+    lines.append(
+        "  If asked something these rows do not answer, say you do not have it and suggest "
+        "running a scan. Never name a company, a breach or a data type that is not listed "
+        "above, and never describe a risk contributor that is not present here.")
+    return "\n".join(lines) + "\n", len(confirmed)
+
+
 @app.post("/api/agent/chat")
 async def agent_chat(req: AgentChatRequest):
     """
-    Sitewide AI Privacy Copilot — available across all tabs.
+    Sitewide Rights Advisor — available across all tabs.
     Context-aware reasoning powered by Groq (openai/gpt-oss-120b) or expert knowledge engine.
     """
     user_msg = (req.message or "").strip()
@@ -1075,9 +1129,12 @@ async def agent_chat(req: AgentChatRequest):
     exposure_count = ctx.get("exposure_count", 0)
     profile = ctx.get("profile", {})
     user_name = profile.get("name", "User")
+    grounding, grounded_count = _chat_grounding(ctx.get("user_id"))
+    if grounded_count:
+        exposure_count = grounded_count
 
     system_prompt = (
-        "You are SovereignPrivacy AI Copilot — an expert autonomous privacy intelligence and legal defense assistant. "
+        "You are the SovereignPrivacy Rights Advisor — an expert privacy and statutory-rights assistant. "
         "You help users identify personal data exposures, understand data privacy legislation (India DPDP Act 2023, EU GDPR, US CCPA), "
         "and assert their statutory rights to erasure, correction, and opt-out.\n\n"
         f"CURRENT SESSION CONTEXT:\n"
@@ -1090,13 +1147,22 @@ async def agent_chat(req: AgentChatRequest):
         "2. When discussing Indian law, cite Section 12 (Right to correction and erasure) and Section 13 (Grievance redressal) of DPDP Act 2023.\n"
         "3. Emphasize that self-serve deletion links should be prioritized over legal notices for services that offer instant deletion (e.g. Truecaller, Naukri, social profiles).\n"
         "4. Clarify that statutory notices apply to commercial data brokers and data fiduciaries, but NOT public court records (e.g. Indian Kanoon) or statutory corporate filings (MCA21).\n"
-        "5. Keep responses concise (under 250 words), structured with markdown formatting."
+        "5. Keep responses concise (under 250 words), structured with markdown formatting.\n"
+        "6. GROUNDING RULE, which overrides every other guideline: the findings listed below "
+        "are the only exposures this user has. Answer questions about their data from those "
+        "rows and nothing else. Do not invent a company, a breach, a data type or a risk "
+        "contributor that is not listed. If the answer is not there, say so.\n"
+        + grounding
     )
 
     # 1. Try OpenAI-compatible provider (e.g. Groq with openai/gpt-oss-120b)
-    from backend.agent.openai_compat_planner import configured, PROVIDERS, model_for
-    provider = configured()
-    if provider:
+    from backend.agent.openai_compat_planner import configured_all, PROVIDERS, model_for
+    # Walk EVERY configured provider, not just the first. A free tier runs out
+    # — Gemini's is twenty requests a day — and stopping at the first one meant
+    # a working Groq key in the same .env was never tried. The user then saw
+    # the canned fallback text under a header claiming a model was active.
+    llm_errors: list[str] = []
+    for provider in configured_all():
         try:
             from openai import OpenAI
             spec = PROVIDERS[provider]
@@ -1122,8 +1188,12 @@ async def agent_chat(req: AgentChatRequest):
                     "model": f"{model} ({provider})",
                     "suggested_actions": _get_chat_suggestions(tab, user_msg)
                 }
-        except Exception:
-            pass
+        except Exception as exc:
+            # Never swallow this silently. A hidden failure here is why the
+            # assistant answered from a canned script while the UI said a model
+            # was running, and nothing anywhere said otherwise.
+            llm_errors.append(f"{provider}: {type(exc).__name__}: {str(exc)[:160]}")
+            continue
 
     # 2. Try Anthropic if configured
     if os.environ.get("ANTHROPIC_API_KEY"):
@@ -1148,14 +1218,24 @@ async def agent_chat(req: AgentChatRequest):
                     "model": "claude-3-5-sonnet",
                     "suggested_actions": _get_chat_suggestions(tab, user_msg)
                 }
-        except Exception:
-            pass
+        except Exception as exc:
+            llm_errors.append(f"anthropic: {type(exc).__name__}: {str(exc)[:160]}")
 
-    # 3. Expert Knowledge Engine fallback
+    # 3. Expert Knowledge Engine fallback — a scripted reply, and it must say so.
     reply = _expert_privacy_reply(user_msg, tab, risk_score, exposure_count)
+    # Say plainly that no model answered. The UI header read "Groq · GPT-OSS
+    # Active" over this scripted text, so a rate-limited key looked exactly like
+    # a working assistant — and a user asking "which companies have my data"
+    # got a confident answer from a script that had never seen their data.
+    if llm_errors:
+        reply += ("\n\n---\n*Answered from the built-in knowledge base — no AI model was "
+                  "reachable just now (" + "; ".join(llm_errors[:2]) + "). "
+                  "This reply is not grounded in your scan results.*")
     return {
         "reply": reply,
-        "model": "SovereignPrivacy Expert Engine (Offline/Fast)",
+        "model": "SovereignPrivacy knowledge base (no AI model available)",
+        "llm_unavailable": bool(llm_errors),
+        "llm_errors": llm_errors,
         "suggested_actions": _get_chat_suggestions(tab, user_msg)
     }
 

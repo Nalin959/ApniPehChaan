@@ -130,6 +130,24 @@ def configured() -> str | None:
     return None
 
 
+def configured_all() -> list[str]:
+    """
+    Every provider with a key, best first.
+
+    configured() returns only ONE. When that one is rate-limited — and a free
+    tier is rate-limited often; Gemini's is twenty requests — anything built on
+    configured() alone simply fails, even with a second working key sitting in
+    the same .env. Callers that can retry should walk this list instead.
+    """
+    pinned = (os.environ.get("OPENAI_COMPAT_PROVIDER")
+              or os.environ.get("SOVEREIGN_PLANNER") or "").strip().lower()
+    names = [n for n in PROVIDERS if os.environ.get(PROVIDERS[n]["key_env"])]
+    if pinned in names:
+        names.remove(pinned)
+        names.insert(0, pinned)
+    return names
+
+
 def available() -> bool:
     return configured() is not None
 

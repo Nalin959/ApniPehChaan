@@ -255,20 +255,48 @@ def get_fiduciary_contact(name_or_id: str) -> dict:
     usable fallback instead of returning blanks.
     """
     clean = re.sub(r"[^a-zA-Z0-9]", "", (name_or_id or "").lower())
-    for key, spec in KNOWN_FIDUCIARIES.items():
-        if key in clean or clean in key:
-            return dict(spec)
+    # Exact first, then containment — and longest key first, so a short key
+    # cannot claim a longer name it merely appears inside. Loose substring
+    # matching is how "Amazon India" resolved to Domino's grievance officer on
+    # the shared token "india".
+    if clean in KNOWN_FIDUCIARIES:
+        return dict(KNOWN_FIDUCIARIES[clean], contact_tier="curated", dpo_email_is_guess=False)
+    for key in sorted(KNOWN_FIDUCIARIES, key=len, reverse=True):
+        if len(key) >= 5 and (key in clean or clean in key):
+            return dict(KNOWN_FIDUCIARIES[key], contact_tier="curated", dpo_email_is_guess=False)
 
     raw_name = (name_or_id or "").strip()
     if not raw_name or is_darkweb_dump(raw_name):
         return {}
 
-    # Smart fallback for corporate entities
+    # Fallback for an entity that is not in the directory.
+    #
+    # It GUESSES, and it must say so. This returned privacy@<slug>.com in the
+    # same shape as a curated entry, so a caller could not tell a researched
+    # grievance-officer address from a string built out of a breach's name:
+    # "SomeRandomLeak2021" produced privacy@somerandomleak2021.com, and
+    # "Amazon India" produced privacy@amazonindia.com, which is not Amazon's
+    # domain. An erasure notice carries the data subject's name, email and
+    # phone — sending one to an invented domain hands their identifiers to
+    # whoever happens to own it. A privacy tool causing that disclosure is the
+    # exact harm it exists to prevent.
+    #
+    # The guess is still returned, because a plausible starting point is useful
+    # to a human who will check it. It is flagged so that nothing can dispatch
+    # to it unattended: backend/remediation/mailer.py refuses a recipient whose
+    # tier is a guess unless explicitly overridden.
     domain_slug = re.sub(r"[^a-zA-Z0-9]", "", raw_name.lower())
     return {
         "company_name": f"{raw_name} Data Fiduciary",
         "brand": raw_name,
         "dpo_email": f"privacy@{domain_slug}.com",
+        "dpo_email_is_guess": True,
+        "contact_tier": "synthesised",
+        "contact_warning": (
+            f"This address was CONSTRUCTED from the name '{raw_name}', not looked up. "
+            f"It may not exist, and may belong to an unrelated party. Confirm the "
+            f"controller's published grievance-officer address (DPDP Act 2023 s.13 "
+            f"requires one to be published) before serving anything on it."),
         "dpo_name": f"Grievance Officer, {raw_name}",
         "address": f"Corporate Grievance Office, {raw_name} Operations Centre",
         "self_serve_url": f"https://www.{domain_slug}.com/privacy",

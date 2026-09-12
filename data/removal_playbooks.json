@@ -22,11 +22,11 @@
       "service": "Naukri.com",
       "country": "IN",
       "method": "self_serve",
-      "url": "https://www.naukri.com/",
+      "url": "https://www.naukri.com/mnjuser/profile",
       "effort_minutes": 5,
       "steps": [
-        "Log in and open your profile settings.",
-        "Choose 'Delete my profile' (or set visibility to private as an interim step).",
+        "Open https://www.naukri.com/mnjuser/profile — it redirects to the login page and back to your profile once you sign in.",
+        "Scroll to the bottom of the profile page and choose 'Delete my profile' (or set visibility to private as an interim step).",
         "Confirm by email.",
         "Note: recruiters who already downloaded your CV keep their copy. Deleting the profile stops NEW downloads; it does not recall old ones."
       ],
@@ -162,11 +162,12 @@
       "service": "Gravatar",
       "country": "US",
       "method": "self_serve",
-      "url": "https://gravatar.com/",
+      "url": "https://wordpress.com/me/account/close",
       "effort_minutes": 5,
       "steps": [
-        "Gravatar is part of your WordPress.com account.",
-        "Remove the image and profile fields, or delete the WordPress.com account entirely.",
+        "Gravatar has no account of its own — it is your WordPress.com account, so deletion happens there.",
+        "To remove only the avatar and profile fields, edit them at https://gravatar.com/profiles/edit.",
+        "To delete outright, use https://wordpress.com/me/account/close and confirm. This closes the WordPress.com account as well.",
         "Your avatar is keyed to the MD5 of your email — anyone who knows your address can look it up until it is removed."
       ],
       "escalation": "Self-serve is definitive.",
@@ -209,11 +210,12 @@
       "service": "Behance",
       "country": "US",
       "method": "self_serve",
-      "url": "https://www.behance.net/",
+      "url": "https://www.behance.net/account/settings",
       "effort_minutes": 5,
       "steps": [
         "Behance is an Adobe service — deleting it may affect your Adobe ID.",
-        "Settings → Account → Delete Behance profile."
+        "Open https://www.behance.net/account/settings (it redirects through Adobe sign-in).",
+        "Account → Delete Behance profile, then confirm."
       ],
       "escalation": "If the Adobe account blocks it, use Adobe's privacy request form.",
       "legal_class": "gdpr_erasure"
@@ -302,10 +304,11 @@
       "service": "Buy Me a Coffee",
       "country": "US",
       "method": "self_serve",
-      "url": "https://www.buymeacoffee.com/",
+      "url": "https://buymeacoffee.com/settings",
       "effort_minutes": 5,
       "steps": [
-        "Settings → Account → Delete account.",
+        "Open https://buymeacoffee.com/settings and sign in.",
+        "Account → Delete account.",
         "Payment records may be retained for tax purposes."
       ],
       "escalation": "Retention of payment records is lawful; the profile still goes.",
@@ -373,11 +376,12 @@
       "service": "Internshala",
       "country": "IN",
       "method": "self_serve",
-      "url": "https://internshala.com/",
+      "url": "https://internshala.com/student/profile",
       "effort_minutes": 4,
       "steps": [
-        "Manage Account → Delete Account.",
-        "Enter reason and confirm deletion."
+        "Open https://internshala.com/student/profile and sign in.",
+        "Scroll to the bottom of the profile page → Delete Account.",
+        "Enter a reason and confirm deletion."
       ],
       "escalation": "Write to grievance officer under IT Rules 2021 / DPDP.",
       "legal_class": "dpdp_erasure"
@@ -485,11 +489,12 @@
       "service": "CommonFloor",
       "country": "IN",
       "method": "email_request",
-      "url": "https://www.commonfloor.com/",
+      "url": "https://www.commonfloor.com/privacy-policy",
       "effort_minutes": 15,
       "steps": [
-        "Contact CommonFloor resident community support.",
-        "Request de-listing of apartment and resident directory profile."
+        "Open https://www.commonfloor.com/privacy-policy and take the grievance-officer address named there.",
+        "Email that address requesting de-listing of the apartment and resident-directory profile.",
+        "Quote the exact listing URLs that carry your name, flat number or phone."
       ],
       "escalation": "DPDP s.12 statutory demand.",
       "legal_class": "dpdp_erasure"
@@ -687,11 +692,12 @@
       "service": "Domino's India Leak Archive",
       "country": "IN",
       "method": "email_request",
-      "url": "https://www.dominos.co.in/",
+      "url": "https://www.dominos.co.in/privacy-policy",
       "effort_minutes": 10,
       "steps": [
-        "Submit account and delivery address purge request to Jubilant FoodWorks grievance officer.",
-        "Cite DPDP s.12(1) withdrawal of consent for historical customer database."
+        "Take the Jubilant FoodWorks grievance-officer address from https://www.dominos.co.in/privacy-policy.",
+        "Submit an account and delivery-address purge request to that officer.",
+        "Cite DPDP s.12(1) withdrawal of consent for the historical customer database."
       ],
       "escalation": "Formal DPDP Section 12 erasure notice.",
       "legal_class": "dpdp_erasure"
@@ -729,11 +735,11 @@
       "service": "RailYatri Leak Archive",
       "country": "IN",
       "method": "email_request",
-      "url": "https://www.railyatri.in/",
+      "url": "https://www.railyatri.in/privacy-policy",
       "effort_minutes": 10,
       "steps": [
         "Identify the exact records in the leaked archive that carry your data.",
-        "Email the RailYatri grievance officer requesting erasure under DPDP s.12, quoting the breach and the identifiers involved.",
+        "Take the grievance-officer address from https://www.railyatri.in/privacy-policy and email it requesting erasure under DPDP s.12, quoting the breach and the identifiers involved.",
         "Understand the limit: an archive already circulating cannot be un-published by the controller. Rotate any password reused from it and enable 2FA.",
         "Keep the acknowledgement and escalate to the Data Protection Board if there is no response within 30 days."
       ],
@@ -745,11 +751,12 @@
       "service": "Upstox Security Incident",
       "country": "IN",
       "method": "statutory_only",
-      "url": "https://upstox.com/",
+      "url": "https://upstox.com/terms-of-use-and-privacy-policy/",
       "effort_minutes": 15,
       "steps": [
-        "SEBI regulations require 5-year post-account-closure retention of KYC data.",
-        "Formally close trading and demat accounts to start the 5-year statutory countdown clock."
+        "SEBI regulations require 5-year post-account-closure retention of KYC data, so erasure on demand is not available.",
+        "Formally close the trading and demat accounts to start the 5-year statutory countdown clock.",
+        "The grievance-officer address for the request is published at https://upstox.com/terms-of-use-and-privacy-policy/."
       ],
       "escalation": "SEBI SCORES portal grievance.",
       "legal_class": "dpdp_limited"
@@ -920,11 +927,11 @@
       "service": "Flickr",
       "country": "US",
       "method": "self_serve",
-      "url": "https://www.flickr.com/account",
+      "url": "https://www.flickr.com/account/delete",
       "effort_minutes": 10,
       "steps": [
-        "Sign in to Flickr and open Settings → Personal Information.",
-        "Use 'Delete your Flickr account'. Download your photos first — deletion is irreversible.",
+        "Open https://www.flickr.com/account/delete — it redirects to sign-in and returns to the deletion page.",
+        "Download your photos first: deletion is irreversible.",
         "Confirm by email.",
         "Re-check https://www.flickr.com/people/<handle> returns 404."
       ],
@@ -936,11 +943,11 @@
       "service": "Instructables",
       "country": "US",
       "method": "email_request",
-      "url": "https://www.instructables.com/account/",
+      "url": "https://www.instructables.com/member/settings/",
       "effort_minutes": 15,
       "steps": [
-        "Sign in and remove or unpublish the Instructables that carry your personal data.",
-        "Instructables is an Autodesk service and has no self-serve account deletion.",
+        "Sign in and open https://www.instructables.com/member/settings/ to remove or unpublish the Instructables that carry your personal data.",
+        "Instructables is an Autodesk service and has no self-serve account deletion — the settings page only lets you strip the content.",
         "Email privacy.questions@autodesk.com requesting deletion of the Instructables account and its associated personal data.",
         "Quote your member URL (https://www.instructables.com/member/<handle>/) and the Autodesk account email.",
         "Autodesk responds within 30 days under GDPR/CCPA."

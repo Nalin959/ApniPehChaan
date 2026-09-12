@@ -40,3 +40,4 @@ SESSION_EXPORT.txt
 # Local agent database
 sovereign.db
 data/web_cache/
+data/outbox/

@@ -7,7 +7,7 @@
 
 // ═══ State ═══════════════════════════════════════════════════════════════════
 const state = {
-    currentSection: 'dashboard',
+    currentSection: 'agent',
     scanResults: null,
     selectedJurisdiction: 'dpdp',
     generatedNotice: null,
@@ -22,11 +22,10 @@ document.addEventListener('DOMContentLoaded', () => {
     initNavigation();
     initScanForm();
     initLegalForm();
-    initBenchmark();
     initExposureFilters();
     initProfileSync();
     fetchSystemStatus();
-    initAICopilot();
+    initRightsAdvisor();
     restoreLatestAgentState();
 });
 
@@ -150,9 +149,9 @@ function navigateTo(section) {
         prefillLegalForm();
     }
 
-    // Update AI Copilot
-    if (window.AIAssistant) {
-        window.AIAssistant.onTabChange(section);
+    // Update Rights Advisor
+    if (window.RightsAdvisor) {
+        window.RightsAdvisor.onTabChange(section);
     }
 }
 
@@ -1122,64 +1121,6 @@ async function updateRequestStatus(requestId, status, note) {
     }
 }
 
-// ═══ Benchmark ══════════════════════════════════════════════════════════════
-function initBenchmark() {
-    document.getElementById('btn-run-benchmark').addEventListener('click', runBenchmark);
-}
-
-async function runBenchmark() {
-    const btn = document.getElementById('btn-run-benchmark');
-    const statusEl = document.getElementById('benchmark-status');
-    btn.disabled = true;
-    statusEl.textContent = 'Running benchmark...';
-
-    try {
-        const resp = await fetch('/api/pii/benchmark');
-        const data = await resp.json();
-
-        // Show results
-        document.getElementById('benchmark-results').style.display = 'block';
-        document.getElementById('bench-precision').textContent = `${(data.aggregate.precision * 100).toFixed(1)}%`;
-        document.getElementById('bench-recall').textContent = `${(data.aggregate.recall * 100).toFixed(1)}%`;
-        document.getElementById('bench-f1').textContent = `${(data.aggregate.f1 * 100).toFixed(1)}%`;
-        document.getElementById('bench-samples').textContent = data.total_samples;
-
-        // Category breakdown
-        const catContainer = document.getElementById('benchmark-categories');
-        catContainer.innerHTML = Object.entries(data.per_category).map(([cat, metrics]) => {
-            const f1Pct = (metrics.f1 * 100).toFixed(1);
-            return `
-                <div class="category-card">
-                    <div class="category-name">${escapeHtml(cat)}</div>
-                    <div class="category-metrics">
-                        <div class="category-metric">
-                            <div class="category-metric-value">${(metrics.precision * 100).toFixed(0)}%</div>
-                            <div class="category-metric-label">Precision</div>
-                        </div>
-                        <div class="category-metric">
-                            <div class="category-metric-value">${(metrics.recall * 100).toFixed(0)}%</div>
-                            <div class="category-metric-label">Recall</div>
-                        </div>
-                        <div class="category-metric">
-                            <div class="category-metric-value">${f1Pct}%</div>
-                            <div class="category-metric-label">F1</div>
-                        </div>
-                    </div>
-                    <div class="metric-bar"><div class="metric-bar-fill" style="width: ${f1Pct}%"></div></div>
-                </div>
-            `;
-        }).join('');
-
-        statusEl.textContent = `Complete — ${data.total_samples} samples tested`;
-        showToast('Benchmark complete!', 'success');
-    } catch (e) {
-        statusEl.textContent = `Error: ${e.message}`;
-        showToast('Benchmark failed: ' + e.message, 'error');
-    }
-
-    btn.disabled = false;
-}
-
 // ═══ Utilities ══════════════════════════════════════════════════════════════
 /* Escapes the five characters that can change the meaning of HTML text OR of a
    double-quoted attribute value. The previous textContent -> innerHTML form
@@ -1574,9 +1515,9 @@ function syncAgentToExposuresAndDashboard(msg) {
     // Render cards in Exposures tab
     renderAgentExposures(st);
 
-    // Update Copilot if open
-    if (window.AIAssistant) {
-        window.AIAssistant.updateContextStats();
+    // Update Rights Advisor if open
+    if (window.RightsAdvisor) {
+        window.RightsAdvisor.updateContextStats();
     }
 }
 
@@ -2014,21 +1955,21 @@ async function confirmCandidate(exposureId, isMine, btn) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   Sitewide AI Copilot Assistant Module
+   Sitewide Rights Advisor Module
    ═══════════════════════════════════════════════════════════════════════════ */
 
-const AIAssistant = {
+const RightsAdvisor = {
     isOpen: false,
     history: [],
     currentTab: 'dashboard',
 
     init() {
-        const trigger = document.getElementById('ai-copilot-trigger');
-        const panel = document.getElementById('ai-copilot-panel');
-        const closeBtn = document.getElementById('copilot-close-btn');
-        const clearBtn = document.getElementById('copilot-clear-btn');
-        const sendBtn = document.getElementById('copilot-send-btn');
-        const input = document.getElementById('copilot-input');
+        const trigger = document.getElementById('ai-advisor-trigger');
+        const panel = document.getElementById('ai-advisor-panel');
+        const closeBtn = document.getElementById('advisor-close-btn');
+        const clearBtn = document.getElementById('advisor-clear-btn');
+        const sendBtn = document.getElementById('advisor-send-btn');
+        const input = document.getElementById('advisor-input');
 
         if (!trigger || !panel) return;
 
@@ -2067,7 +2008,7 @@ const AIAssistant = {
         try {
             const resp = await fetch('/api/agent/info');
             const data = await resp.json();
-            const tag = document.getElementById('copilot-model-tag');
+            const tag = document.getElementById('advisor-model-tag');
             if (tag) {
                 if (data.planner === 'openai_compat') {
                     tag.innerHTML = `<span class="status-dot online"></span> Groq · GPT-OSS Active`;
@@ -2081,20 +2022,20 @@ const AIAssistant = {
     },
 
     toggle(force) {
-        const panel = document.getElementById('ai-copilot-panel');
+        const panel = document.getElementById('ai-advisor-panel');
         if (!panel) return;
         this.isOpen = force !== undefined ? force : !this.isOpen;
         panel.hidden = !this.isOpen;
         if (this.isOpen) {
             this.updateContextStats();
-            const input = document.getElementById('copilot-input');
+            const input = document.getElementById('advisor-input');
             if (input) setTimeout(() => input.focus(), 150);
         }
     },
 
     onTabChange(tab) {
         this.currentTab = tab;
-        const tabEl = document.getElementById('copilot-active-tab');
+        const tabEl = document.getElementById('advisor-active-tab');
         if (tabEl) tabEl.textContent = tab.replace('-', ' ');
 
         this.updateContextStats();
@@ -2102,7 +2043,7 @@ const AIAssistant = {
     },
 
     updateContextStats() {
-        const riskEl = document.getElementById('copilot-risk-badge');
+        const riskEl = document.getElementById('advisor-risk-badge');
         if (!riskEl) return;
         const score = state.agentRisk != null
             ? Math.round(state.agentRisk)
@@ -2120,7 +2061,7 @@ const AIAssistant = {
     },
 
     renderChipsForTab(tab) {
-        const chipsContainer = document.getElementById('copilot-chips');
+        const chipsContainer = document.getElementById('advisor-chips');
         if (!chipsContainer) return;
 
         const tabChips = {
@@ -2156,10 +2097,10 @@ const AIAssistant = {
 
         const chips = tabChips[tab] || tabChips.dashboard;
         chipsContainer.innerHTML = chips.map(c => `
-            <button class="copilot-chip" data-prompt="${agEsc(c.prompt)}">${agEsc(c.label)}</button>
+            <button class="advisor-chip" data-prompt="${agEsc(c.prompt)}">${agEsc(c.label)}</button>
         `).join('');
 
-        chipsContainer.querySelectorAll('.copilot-chip').forEach(btn => {
+        chipsContainer.querySelectorAll('.advisor-chip').forEach(btn => {
             btn.addEventListener('click', () => {
                 this.sendMessage(btn.dataset.prompt);
             });
@@ -2168,14 +2109,14 @@ const AIAssistant = {
 
     clearChat() {
         this.history = [];
-        const msgContainer = document.getElementById('copilot-messages');
+        const msgContainer = document.getElementById('advisor-messages');
         if (msgContainer) {
             msgContainer.innerHTML = `
-                <div class="copilot-msg bot">
-                    <div class="copilot-msg-bubble">
+                <div class="advisor-msg bot">
+                    <div class="advisor-msg-bubble">
                         Chat cleared. How can I assist you with data privacy and statutory rights?
                     </div>
-                    <span class="copilot-msg-time">Ready</span>
+                    <span class="advisor-msg-time">Ready</span>
                 </div>
             `;
         }
@@ -2183,15 +2124,15 @@ const AIAssistant = {
 
     async sendMessage(text) {
         if (!text || !text.trim()) return;
-        const msgContainer = document.getElementById('copilot-messages');
+        const msgContainer = document.getElementById('advisor-messages');
         if (!msgContainer) return;
 
         this.appendMessage('user', text);
         this.history.push({ role: 'user', content: text });
 
         const typingEl = document.createElement('div');
-        typingEl.className = 'copilot-typing';
-        typingEl.id = 'copilot-typing-indicator';
+        typingEl.className = 'advisor-typing';
+        typingEl.id = 'advisor-typing-indicator';
         typingEl.innerHTML = '<span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span>';
         msgContainer.appendChild(typingEl);
         msgContainer.scrollTop = msgContainer.scrollHeight;
@@ -2232,14 +2173,14 @@ const AIAssistant = {
     },
 
     appendMessage(role, text, actions = []) {
-        const msgContainer = document.getElementById('copilot-messages');
+        const msgContainer = document.getElementById('advisor-messages');
         if (!msgContainer) return;
 
         const msgDiv = document.createElement('div');
-        msgDiv.className = `copilot-msg ${role}`;
+        msgDiv.className = `advisor-msg ${role}`;
 
         const bubble = document.createElement('div');
-        bubble.className = 'copilot-msg-bubble';
+        bubble.className = 'advisor-msg-bubble';
 
         if (role === 'bot') {
             bubble.innerHTML = this.formatMarkdown(text);
@@ -2252,7 +2193,7 @@ const AIAssistant = {
 
                 actions.forEach(act => {
                     const btn = document.createElement('button');
-                    btn.className = 'copilot-action-btn';
+                    btn.className = 'advisor-action-btn';
                     btn.textContent = `→ ${act.label}`;
                     btn.addEventListener('click', () => {
                         if (act.action === 'navigate_tab' && act.tab) {
@@ -2270,7 +2211,7 @@ const AIAssistant = {
         }
 
         const timeSpan = document.createElement('span');
-        timeSpan.className = 'copilot-msg-time';
+        timeSpan.className = 'advisor-msg-time';
         timeSpan.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
         msgDiv.appendChild(bubble);
@@ -2300,8 +2241,8 @@ const AIAssistant = {
     }
 };
 
-function initAICopilot() {
-    window.AIAssistant = AIAssistant;
-    AIAssistant.init();
+function initRightsAdvisor() {
+    window.RightsAdvisor = RightsAdvisor;
+    RightsAdvisor.init();
 }
 

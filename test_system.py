@@ -355,9 +355,48 @@ def test_free_intel():
          xposed_fields("['Email addresses', 'Passwords']") == ["email", "password"])
     test("An unknown label is kept, not dropped",
          xposed_fields("Quantum telepathy records") == ["quantum_telepathy_records"])
-    test("Label map covers the common classes",
-         all(k in XPOSED_LABEL_TO_FIELD for k in
-             ("email addresses", "passwords", "phone numbers", "government ids")))
+    # Asserting that four hand-picked keys exist in a dict declared in the same
+    # repo proves nothing — it passed while 'Credit card details' and
+    # 'Historical passwords', both emitted by the live catalogue, fell through
+    # to "low". What must hold is the PROPERTY: nothing describing a credential
+    # or a payment instrument may ever be scored as minor.
+    LIVE_LABELS = [
+        "Email addresses", "Passwords", "Names", "Usernames", "Phone numbers",
+        "IP addresses", "Physical addresses", "Dates of birth", "Genders",
+        "Geographic locations", "Social media profiles", "Device information",
+        "Private messages", "Government IDs", "Government issued IDs",
+        "Job titles", "Nationalities", "Security questions and answers",
+        "Marital statuses", "Purchases", "Instant messenger identities",
+        "Website activity", "Income levels", "Employers", "Ethnicities",
+        "Passport numbers", "Religions", "Social security numbers",
+        "Sexual preferences", "Browser user agent details", "Spoken languages",
+        "Support tickets", "Partial credit card data", "Vehicle details",
+        "Account balances", "Nationality", "Vehicle registration numbers",
+        "Titles", "Academic records", "National IDs", "Financial transactions",
+        "Customer support tickets", "Spouses names", "AI prompts", "Auth tokens",
+        "Places of birth", "Bank account numbers", "Credit cards", "Browsers",
+        "Occupations", "Licence plates", "Profile photos", "Mothers maiden names",
+        "Passwords history", "Credit card details", "Historical passwords",
+    ]
+    SEVERE_WORDS = ("credit card", "debit card", "password", "bank account",
+                    "auth token", "passport", "social security", "government",
+                    "national id", "security question")
+    mis_scored = []
+    for label in LIVE_LABELS:
+        fields = xposed_fields(label)
+        sev = _severity_of(fields)
+        if any(w in label.lower() for w in SEVERE_WORDS) and sev in ("low", "medium"):
+            mis_scored.append(f"{label!r}->{fields}={sev}")
+    test("No credential or payment label is ever scored low/medium",
+         not mis_scored, f"mis-scored: {mis_scored}")
+
+    # Every label the live catalogue emits must resolve to something the
+    # severity table recognises, not to an unknown slug.
+    from backend.agent.tools import SEVERITY_BY_FIELD as _SEV
+    unknown = sorted({f for label in LIVE_LABELS for f in xposed_fields(label)
+                      if f not in _SEV})
+    test("Every live breach label maps to a known severity field",
+         not unknown, f"unmapped: {unknown}")
 
     # ── severity is a rule, not a spelling ──
     # The test above picks four keys out of a dict that lives in this repo, so

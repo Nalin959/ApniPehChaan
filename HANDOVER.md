@@ -122,8 +122,13 @@ Expected output: `ALL 306 TESTS PASSED in ~0.8s`.
    - Navigate to the **Compliance** tab.
    - Show the statutory compliance deadline tracking.
    - Scroll down to the **Monitored Indian Fiduciaries (Reference Directory)** table to show the 51 Indian fiduciaries cataloged under the DPDP Act with statutory exemptions (e.g. court records vs. commercial databases).
-5. **PII Accuracy Lab**:
-   - Navigate to **Accuracy Lab** and click **Run Accuracy Benchmark** to show real-time 100% precision evaluation against the independent ground-truth dataset.
+5. **Detection accuracy** (the Accuracy Lab tab was removed from the UI):
+   - Run `./.venv/bin/python test_system.py` in a terminal. It prints the PII
+     precision/recall/F1 against the ground-truth dataset as part of the suite,
+     alongside every other correctness check. Showing the suite is stronger
+     evidence than the old tab was, because it also demonstrates the
+     false-positive guards (Aadhaar vs +91 phone, attribution tiers,
+     could-not-check vs clear).
 
 ---
 

@@ -1518,7 +1518,7 @@ Q5. "Your benchmark says 99.6%. That looks too good."
      re-running discovery daily and diffing against memory is the obvious
      next step — the "reappeared" status already exists to support it.
 
-  8. The legacy tabs (Threat Scanner, Legal Studio, Compliance, Accuracy Lab)
+  8. The legacy tabs (Threat Scanner, Legal Studio, Compliance)
      still call the original non-agentic endpoints. They work, but the
      Privacy Agent tab supersedes them.
 
