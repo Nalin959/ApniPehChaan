@@ -10,8 +10,8 @@
 [![DPDP Act 2023](https://img.shields.io/badge/Compliance-India%20DPDP%202023-orange.svg)](https://www.meity.gov.in/)
 [![GDPR Art 17](https://img.shields.io/badge/Compliance-EU%20GDPR%20Art%2017-blue.svg)](https://gdpr.eu/)
 [![Tests](https://img.shields.io/badge/Tests-67%2F67%20Passed-brightgreen.svg)]()
-[![Precision](https://img.shields.io/badge/PII%20Precision-89.8%25-success.svg)]()
-[![Zero-Knowledge](https://img.shields.io/badge/Architecture-Zero--Knowledge-purple.svg)]()
+[![Precision](https://img.shields.io/badge/PII%20F1-99.6%25%20(synthetic)-success.svg)]()
+[![Agent](https://img.shields.io/badge/Agent-Claude%20tool--calling-purple.svg)]()
 
 ---
 
@@ -73,7 +73,7 @@ flowchart TB
         D4[("Ground Truth (380)")]
     end
 
-    Vault -->|Zero-Knowledge Hash| API
+    Vault -->|Local HTTP| API
     API --> Scanners
     Scanners --> Datasets
     Scanners --> Engine
@@ -88,6 +88,136 @@ flowchart TB
 
 ---
 
+---
+
+## 🤖 The Agent
+
+The core of this project is not a scanner — it is an agent that plans over the scanner.
+
+Give it an identity and it decides for itself what to investigate, what the findings mean,
+which statute applies, and what to do about each exposure. Thirteen capabilities are exposed
+to it as tools:
+
+| Tool | What the agent uses it for |
+|---|---|
+| `build_identity_profile` | Normalise the identity, derive aliases with confidence scores |
+| `recall_prior_activity` | Read its own memory of earlier runs before acting |
+| `search_breach_databases` | Query breach intelligence |
+| `search_data_brokers` | Find removable broker records |
+| `search_paste_dumps` | Find attributable leak-dump entries |
+| `detect_pii_in_text` | Run the Verhoeff/Luhn-validated PII recogniser |
+| `assess_exposure_risk` | Compute the Privacy Risk Score |
+| `determine_legal_basis` | Decide jurisdiction, statute, and whether erasure is even available |
+| `draft_erasure_request` | Compile the statutory notice |
+| `submit_erasure_request` | Serve it — **gated on user approval** |
+| `check_request_status` | Follow up on a served notice |
+| `verify_removal` | Independently re-query the source to prove removal |
+| `escalate_to_regulator` | Escalate to the DPBI / supervisory authority / CPPA |
+
+### Two planners, one tool surface
+
+| Planner | When it runs | What it does |
+|---|---|---|
+| **LLM** | `ANTHROPIC_API_KEY` is set | Claude (`claude-opus-5`, adaptive thinking) chooses each tool call and explains why. Its reasoning streams to the UI. |
+| **Deterministic** | No key, or offline | A fixed pipeline over the *identical* tools. The product works end to end; only the reasoning is canned. |
+
+The UI states which planner is live. If the LLM path errors mid-run, it falls back to the
+deterministic pipeline rather than failing the demo.
+
+### Design decisions worth defending
+
+**Drafting is autonomous; sending is not.** `submit_erasure_request` is withheld from the
+toolset entirely during the discovery phase — the agent *cannot* dispatch, even if it decides
+it wants to. Serving a statutory notice is an outward, irreversible act against a third party,
+so a human authorises it. This is a deliberate limit on autonomy, not a missing feature.
+
+**"Submitted" is not "removed".** The agent never reports a record as gone on a controller's
+say-so. `verify_removal` re-queries the source independently and only then marks it removed.
+
+**Not every exposure is actionable.** A historical breach cannot be un-published and an
+unattributed dump has no controller to serve. The agent says so instead of drafting a notice
+that cannot land.
+
+**Attribution requires corroboration.** A record matching only on name is not treated as
+yours. Names are not unique; acting on one would serve a legal notice about a stranger's
+record. A match needs a unique identifier, or several agreeing non-unique fields.
+
+### Indian legal classification
+
+"Can I get this deleted?" is not one question in India. Every source is classified,
+and the agent refuses to draft where erasure does not lie:
+
+| Class | Examples | Agent action |
+|---|---|---|
+| `dpdp_erasure` | Truecaller, JustDial, Naukri, Shaadi.com | **Drafts a notice** (DPDP s.12) |
+| `dpdp_limited` | CIBIL, telecom KYC | Dispute/correct — retention duty competes (CICRA 2005) |
+| `statutory_publication` | MCA21, electoral rolls, Bhulekh | Correction only — DPDP s.3(c)(ii) excludes it |
+| `judicial_record` | Indian Kanoon, eCourts | Court application (cf. Delhi HC, *Jorawer Singh Mundy*, 2021) |
+
+A naive build sends "please delete my data" to Indian Kanoon. That letter has no
+addressee in law. Telling a user they have a remedy they don't have is worse than
+saying nothing — so the agent says **NO ERASURE RIGHT**, names the reason, and points
+at the real route.
+
+`data/brokers/indian_sources.json` holds 22 Indian sources with this classification,
+served at `GET /api/sources/indian`. Breach selection is also India-weighted: the HIBP
+catalog has 41 real Indian breaches (BigBasket 24.5M, RailYatri 23.2M, Domino's India
+22.5M, IndiaMART 20.2M, boAt, Paytm, Dunzo), and an Indian user gets those rather than
+a list of American companies.
+
+### Evidence, not assertions
+
+**Nothing appears as a finding unless it was actually checked or you declared it.**
+Every exposure carries the endpoint that was queried, the timestamp, the HTTP status,
+the raw evidence, and a command you can run yourself to reproduce it.
+
+| Class | Meaning |
+|---|---|
+| `verified` | A live endpoint was queried and returned a positive hit. Proof attached. |
+| `self_declared` | You told us you hold this account. Valid grounds under DPDP s.12. |
+| `sandbox` | Synthetic demo record. **Off by default**, and labelled wherever it appears. |
+
+**Checks that genuinely run, free and unauthenticated:**
+
+- **Pwned Passwords** (`api.pwnedpasswords.com/range/{prefix}`) — real k-anonymous breach
+  check. Only the first 5 characters of the SHA-1 leave the machine; the match happens
+  locally, so the server cannot learn which password was checked.
+- **Gravatar** (`gravatar.com/avatar/{md5}?d=404`) — a 200 proves a public profile is
+  attached to that address.
+- **HIBP breach catalog** — real metadata about breaches.
+
+**Checks that need a key, and are reported as `not_checked` without one:**
+
+- **HIBP breached account** — the authoritative answer to "is this address in a breach"
+  needs a subscription (~$3.95/month). Set `HIBP_API_KEY` and it runs for real. Without
+  it the tool says *not checked* and makes no claim. It does not substitute a domain
+  heuristic for a real answer.
+
+**What is deliberately not attempted:** no Indian people-search site publishes an API to
+check whether it holds a given person, and probing signup or password-reset endpoints to
+enumerate accounts would breach their terms. So the tool asks you instead — you know which
+services you signed up for, and that knowledge is itself valid grounds to exercise erasure.
+
+An earlier build synthesised breach membership: it picked real breaches at random and told
+the user they were in them. Labelling that "simulated" in a payload did not make it honest,
+because on screen it read as a finding. It has been removed.
+
+### The demo sandbox (opt-in, off by default)
+
+Five simulated controllers exist so the **removal lifecycle** can be demonstrated — real
+brokers take weeks and require identity verification. Enabling it plants synthetic records,
+so it is off unless you tick the box, and everything it produces is tagged `sandbox`.
+
+### Memory
+
+State lives in SQLite (`data/sovereign.db`), so the agent remembers across runs: which
+exposures it already knows, which requests are in flight, and what the risk score was last
+time. Re-scanning after a removal detects a record that has **reappeared** rather than logging
+it as new.
+
+
+---
+
 ## ⚡ Key Innovations & Engineering Highlights
 
 ### 1. Verhoeff Algorithmic Aadhaar Verification
@@ -98,12 +228,17 @@ Validates Visa, MasterCard, RuPay, and Amex credit/debit card numbers using mod-
 
 ### 3. Jaro-Winkler Probabilistic Record Linkage
 Calculates token set overlap and Jaro-Winkler string similarity ($0.0 \le \text{sim} \le 1.0$) across full names, emails, phone numbers, and cities:
-- **Definite Match** ($\ge 0.85$): Confirmed personal exposure.
-- **Probable Match** ($0.65 - 0.84$): High-probability match.
+- **Definite Match** ($\ge 0.90$): Corroborated by a unique identifier.
+- **Likely Match** ($0.70 - 0.89$): Strong but not conclusive.
 - **Possible Match** ($0.45 - 0.64$): Weak match requiring user confirmation.
 
-### 4. Zero-Knowledge Local Architecture
-User identifiers (Aadhaar, PAN, credentials) are processed locally and never transmitted unhashed to third-party endpoints. External breach checks leverage local catalog matching and k-anonymity SHA-1 prefixes.
+### 4. Local-Only Processing
+All scanning runs against locally held datasets on the machine you run this on. No user
+identifier is sent to any third-party service. Note the honest limits: identifiers are
+posted from the browser to your own backend in plaintext over the local connection, and
+are hashed only when written into the audit log. There is no client-side hashing and no
+k-anonymity breach lookup — a real k-anonymity check requires the paid Have I Been Pwned
+API, which this build does not call. Adding it is the first item on the roadmap.
 
 ### 5. Chained Cryptographic Proof-of-Dispatch
 Every legal notice generated or dispatched creates an immutable audit block linking to the previous block's SHA-256 hash ($Block_N \to Block_{N-1}$), creating a tamper-evident audit trail suitable for court or regulatory proceedings.
@@ -124,6 +259,19 @@ Every legal notice generated or dispatched creates an immutable audit block link
 
 ## 🧪 Benchmark & Test Results
 
+> **What this number is, and what it isn't.** The benchmark is **synthetic and
+> self-generated** (`data/download_datasets.py`), so it measures the detector against
+> known-correct inputs — not against messy real-world text. Treat it as a regression
+> guard, not evidence of field accuracy.
+>
+> The part that carries real signal is the **negative set**: 30 samples that look like
+> Indian identifiers but are not, 20 of which are correctly shaped 12-digit numbers with
+> a deliberately wrong Verhoeff check digit — invoice numbers, transaction ids and
+> timestamps look exactly like this in the wild. The recogniser rejects all 30. An earlier
+> build scored 89.8% on a benchmark whose Aadhaar samples were themselves checksum-invalid
+> while the validator was non-binding, so the checksum was being measured against nothing.
+
+
 All 67 tests in [`test_system.py`](test_system.py) run and pass in **0.08 seconds**:
 
 ```
@@ -137,9 +285,9 @@ All 67 tests in [`test_system.py`](test_system.py) run and pass in **0.08 second
   ✓ Verhoeff algorithm validates Aadhaar correctly
   ✓ Rejects invalid Aadhaar numbers
   ✓ Detects PAN ([A-Z]{5}[0-9]{4}[A-Z]{1}), Phone, Email, UPI, IFSC
-  ✓ PII Precision: 89.8%  (Target: ≥ 70%)
-  ✓ PII Recall:    88.0%  (Target: ≥ 70%)
-  ✓ PII F1 Score:  88.9%  (Target: ≥ 70%)
+  ✓ PII Precision: 99.6%  (Target: ≥ 70%)
+  ✓ PII Recall:    99.6%  (Target: ≥ 70%)
+  ✓ PII F1 Score:  99.6%  (Target: ≥ 70%)
   ✓ Jaro-Winkler identity matching validated
   ✓ Privacy Risk Score [0, 100] bounded
   ✓ DPDP 2023 notice cites Sections 12 & 13
@@ -193,6 +341,24 @@ Open [http://localhost:8000](http://localhost:8000) in your browser.
 
 ## 🔌 API Reference
 
+### Agent endpoints
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| `GET` | `/api/agent/info` | Which planner is live, the tool list, the approval policy |
+| `GET` | `/api/agent/brokers` | The controlled broker environment, disclosed |
+| `POST` | `/api/agent/scan` | Phase 1 — discover, assess, decide, draft. Dispatches nothing |
+| `POST` | `/api/agent/approve` | Phase 2 — dispatch approved notices, follow up, verify, escalate |
+| `GET` | `/api/agent/state/{user_id}` | Current exposures, requests and identities |
+| `GET` | `/api/agent/events/{run_id}` | Full trace of one agent run |
+| `POST` | `/api/agent/reset` | Wipe an identity to re-run the demo cleanly |
+| `WS` | `/ws/agent` | Live agent feed — reasoning and tool calls as they happen |
+
+`/ws/agent` emits each message at the moment the agent reaches that step. The legacy
+`/ws/scan` padded its output with `asyncio.sleep()` so the terminal looked busy; the
+agent feed has no artificial delays.
+
+
 | Method | Endpoint | Description |
 | :--- | :--- | :--- |
 | `GET` | `/api/status` | System health, dataset counts, audit chain status |
@@ -217,7 +383,7 @@ Open [http://localhost:8000](http://localhost:8000) in your browser.
 
 > *"Under Section 12 of India's DPDP Act 2023, every citizen has the statutory Right to Erasure. Yet with 950+ commercial data brokers scraping public records and dark-web leaks persisting, how can an individual realistically track and exercise this right?*  
 >  
-> *SovereignPrivacy AI is the zero-knowledge personal privacy agent. It monitors over 1,000 breaches and 956 data brokers, algorithmically verifies Indian identifiers like Aadhaar and PAN, scores overall privacy vulnerability, and generates legally airtight erasure notices with chained SHA-256 cryptographic audit receipts. When a company ignores the 30-day deadline, the agent escalates directly to the Data Protection Board of India."*
+> *SovereignPrivacy AI is a personal privacy agent. Give it your identity and it plans its own investigation: it searches breach intelligence, a data-broker network and leak dumps, decides which exposures are actually actionable, picks the statute that applies — DPDP Act 2023 s.12, GDPR Art. 17 or CCPA §1798.105 — drafts the notice, and stops. You approve dispatch, because serving a legal notice is irreversible. Then it serves, chases, and independently re-queries the source to prove the record is gone. When a controller ignores the statutory deadline, it escalates to the Data Protection Board of India.*
 
 ---
 

@@ -1,0 +1,1294 @@
+================================================================================
+SOVEREIGNPRIVACY AI — COMPLETE WORKFLOW REFERENCE
+================================================================================
+Written for: the build team — people who need to understand this system well
+             enough to explain and defend it in front of judges.
+
+Generated:   2026-09-12
+Codebase:    /home/nalin/Hackathon
+Scale:       ~8,300 lines (backend 2,400 · agent layer 1,300 · frontend 3,000
+             · dataset tooling 750 · tests 450)
+Stack:       Python 3.12 · FastAPI · SQLite · vanilla JS · Anthropic SDK
+================================================================================
+
+
+TABLE OF CONTENTS
+--------------------------------------------------------------------------------
+  1.  THE ONE-PARAGRAPH VERSION
+  2.  THE MENTAL MODEL — why this is an agent, not a scanner
+  3.  SYSTEM MAP — every component and what it owns
+  4.  WORKFLOW A: DISCOVERY (phase 1) — exhaustive step-by-step
+  5.  WORKFLOW B: REMEDIATION (phase 2) — exhaustive step-by-step
+  6.  THE 13 TOOLS — what each one does, inputs, outputs, side effects
+  7.  THE TWO PLANNERS — LLM vs deterministic
+  8.  DATA MODEL — every table, every column, why it exists
+  9.  THE BROKER ENVIRONMENT — behaviours and the state machine
+  10. THE ALGORITHMS — Verhoeff, Luhn, Jaro-Winkler, corroboration, risk
+  11. LEGAL ROUTING — how a statute gets chosen
+  12. END-TO-END TRACE — one real run, annotated line by line
+  13. DESIGN DECISIONS — the five you will be asked about
+  14. REAL vs SIMULATED — the honesty boundary
+  15. FILE MAP
+  16. RUNNING IT
+  17. FAILURE MODES AND WHAT HAPPENS
+  18. KNOWN LIMITS
+
+
+================================================================================
+1.  THE ONE-PARAGRAPH VERSION
+================================================================================
+
+A person types their identity into a web page. An AI agent then plans and runs
+its own investigation: it searches breach intelligence, a data-broker network
+and leak dumps; decides which findings are actually attributable to that person
+and which are strangers with similar names; scores the overall privacy risk;
+determines which law applies to each controller holding the data (India's DPDP
+Act, EU GDPR, or California's CCPA); drafts a formal statutory erasure notice
+for each one — and then STOPS. The human approves dispatch. Only then does the
+agent serve the notices, chase the ones that go quiet, independently re-query
+each source to prove the record is actually gone, and escalate the controllers
+that ignore their statutory deadline to the data protection regulator.
+
+The loop that matters: DISCOVER -> DECIDE -> ACT -> VERIFY, with a human
+holding the trigger on anything irreversible.
+
+
+================================================================================
+2.  THE MENTAL MODEL — why this is an agent, not a scanner
+================================================================================
+
+A scanner does this:
+
+    input -> fixed pipeline -> output
+    "here are 12 places your data appears"
+
+The user is still left with the entire problem: which of these matter? which
+are even mine? what can I legally do about each? who do I write to? what do I
+say? did they actually do it?
+
+An agent does this:
+
+    goal -> plan -> act -> observe -> re-plan -> act -> ... -> outcome
+    "I found 12. Four are yours with high confidence. Three of those are
+     commercial brokers I can serve a notice on — here are the notices,
+     under three different statutes. Approve and I'll send them, chase
+     them, and prove they deleted the data."
+
+The difference is DECISION-MAKING between the steps. Concretely, in this system
+the agent decides:
+
+    * which discovery surfaces to search, and in what order
+    * whether a found record actually belongs to this person (attribution)
+    * which exposures are worth acting on at all
+    * which legal regime governs each specific controller
+    * whether erasure is even an available remedy for that exposure type
+    * when a controller has stalled long enough to warrant escalation
+    * whether a claimed removal actually happened
+
+Three of those are judgement calls that a fixed pipeline cannot make well,
+and two of them (attribution, and whether erasure is available) have real
+consequences if you get them wrong.
+
+
+================================================================================
+3.  SYSTEM MAP — every component and what it owns
+================================================================================
+
+                         ┌─────────────────────────┐
+                         │   BROWSER (frontend/)   │
+                         │  Privacy Agent tab      │
+                         └───────────┬─────────────┘
+                                     │  WebSocket /ws/agent
+                                     │  (live event stream)
+                         ┌───────────▼─────────────┐
+                         │   FastAPI (backend/     │
+                         │   app.py)               │
+                         │   - 8 agent endpoints   │
+                         │   - 16 legacy endpoints │
+                         └───────────┬─────────────┘
+                                     │
+                         ┌───────────▼─────────────┐
+                         │   ORCHESTRATOR          │
+                         │ agent/orchestrator.py   │
+                         │                         │
+                         │  picks a planner:       │
+                         │   • LLM (Claude)        │
+                         │   • deterministic       │
+                         └───────────┬─────────────┘
+                                     │  calls tools
+                         ┌───────────▼─────────────┐
+                         │   TOOL LAYER            │
+                         │   agent/tools.py        │
+                         │   13 capabilities       │
+                         └─┬────┬────┬────┬────┬───┘
+                           │    │    │    │    │
+        ┌──────────────────┘    │    │    │    └──────────────────┐
+        │              ┌────────┘    │    └────────┐              │
+        ▼              ▼             ▼             ▼              ▼
+  ┌──────────┐  ┌───────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐
+  │ SCANNERS │  │ PII ENGINE│  │REMEDIATION│  │  MEMORY  │  │  BROKER  │
+  │          │  │           │  │           │  │          │  │   ENV    │
+  │ hibp     │  │ recognizer│  │ notice    │  │ sqlite   │  │ 5 mock   │
+  │ broker   │  │ resolver  │  │ generator │  │ 9 tables │  │ brokers  │
+  │ paste    │  │ risk calc │  │ audit     │  │          │  │ search/  │
+  │          │  │           │  │ tracker   │  │          │  │ delete/  │
+  │          │  │           │  │           │  │          │  │ status   │
+  └──────────┘  └───────────┘  └───────────┘  └──────────┘  └──────────┘
+       │              │              │             │             │
+       └──────────────┴──────────────┴─────────────┴─────────────┘
+                                     │
+                         ┌───────────▼─────────────┐
+                         │  data/sovereign.db      │
+                         │  + static JSON corpora  │
+                         └─────────────────────────┘
+
+OWNERSHIP — who is responsible for what:
+
+  frontend/                 Identity form, live trace rendering, approval gate,
+                            exposure ledger, risk delta display.
+
+  backend/app.py            HTTP + WebSocket surface. Marshals requests, runs
+                            agent phases in worker threads, streams events.
+                            Owns NO business logic.
+
+  backend/agent/
+      orchestrator.py       Chooses a planner. Runs the agent loop. Handles
+                            LLM failure -> deterministic fallback. Owns the
+                            EventStream that carries live updates.
+      tools.py              The 13 capabilities. This is the agent's entire
+                            action space. Every tool emits a trace event.
+      memory.py             Durable state. All 9 tables. Survives restart.
+      prompts.py            System prompt + the two phase goals.
+
+  backend/scanners/         Read-only search over local corpora.
+      hibp_scanner.py       1,035 real HIBP breach records.
+      broker_scanner.py     956 real Optery broker directory entries.
+      paste_scanner.py      50 synthetic leak dumps.
+
+  backend/pii/
+      recognizer.py         14 regex patterns + Verhoeff + Luhn validators.
+      resolver.py           Jaro-Winkler + corroboration -> is this person?
+      risk_calculator.py    Exposure pressure -> 0-100 score.
+
+  backend/remediation/
+      notice_generator.py   Fills statutory templates. Mints a receipt hash.
+      audit_crypto.py       SHA-256 hash chain, now persisted.
+      statutory_tracker.py  Deadline arithmetic (legacy path).
+
+  backend/mock_brokers/
+      network.py            The controlled environment. Seeds records, serves
+                            search, accepts erasure requests, runs the
+                            per-broker response state machine.
+
+
+================================================================================
+4.  WORKFLOW A: DISCOVERY (phase 1) — exhaustive step-by-step
+================================================================================
+
+TRIGGER: user clicks "Deploy Privacy Agent", or POST /api/agent/scan,
+         or WS message {"action":"scan","profile":{...}}
+
+INVARIANT FOR THIS ENTIRE PHASE:
+    submit_erasure_request is REMOVED from the toolset.
+    See orchestrator.py, run_discovery():
+        phase_tools = {k: v for k, v in tools.items()
+                       if k != "submit_erasure_request"}
+    The agent physically cannot dispatch during discovery. This is not a
+    prompt instruction the model might ignore — the capability is absent.
+
+--------------------------------------------------------------------------------
+STEP 0 — SETUP  (orchestrator._prepare)
+--------------------------------------------------------------------------------
+  0.1  memory.upsert_user(profile)
+       Derives a STABLE user id:
+           key     = email.lower()  (or name if no email)
+           user_id = "usr_" + uuid5(NAMESPACE_DNS, key).hex[:12]
+       Same person -> same id, forever. This is what makes memory work
+       across runs without any login system.
+
+  0.2  planner_mode()
+       Returns "llm" if ANTHROPIC_API_KEY or ANTHROPIC_AUTH_TOKEN is set,
+       else "deterministic".
+
+  0.3  memory.start_run(user_id, mode, model)
+       Creates a row in `runs`. Returns run_id = "run_" + 12 hex chars.
+       Every event from here on is tagged with this run_id.
+
+  0.4  Build ToolContext — the object every tool closes over:
+           memory, network, user_id, run_id, profile,
+           emit (the trace callback), auto_approve=False
+
+  0.5  build_tools(ctx) -> dict of 13 closures.
+
+--------------------------------------------------------------------------------
+STEP 1 — RECALL  (tool: recall_prior_activity)
+--------------------------------------------------------------------------------
+  Queries memory for this user_id:
+      * the most recent completed run (excluding this one)
+      * all known exposures with their current status
+      * all requests not yet completed/rejected
+
+  WHY FIRST: so the agent does not re-request removal of something already
+  in flight, and so it can say "3 new exposures since your last scan".
+
+  Emits:  "No prior activity for this identity — this is a first scan."
+     or:  "Recalled 6 known exposure(s) and 2 open request(s)."
+
+--------------------------------------------------------------------------------
+STEP 2 — IDENTITY  (tool: build_identity_profile)
+--------------------------------------------------------------------------------
+  2.1  Normalise name / email / phone / city / country.
+
+  2.2  Derive aliases WITH CONFIDENCE:
+
+           "Aarav Mehta"        full_name   1.00  supplied directly
+           "A. Mehta"           variant     0.72  common abbreviation
+           "aarav"              username    0.88  email local-part reuse
+           "aarav" (destripped) username     0.55  digits removed, weak
+
+       The confidence numbers matter: they are why the system does not treat
+       every "A. Mehta" on the internet as the user.
+
+  2.3  memory.clear_identities() then add each alias.
+       Cleared first so a re-scan does not accumulate duplicates.
+
+  2.4  network.seed_for_profile(profile)  <-- IMPORTANT
+       Plants broker records for THIS identity in the controlled environment.
+       Deterministic: seeded by sha256(email or name)[:16], so the same
+       person always gets the same exposure pattern — a rehearsed demo is
+       reproducible, but a judge typing their own name also works.
+
+       Always lands on: profilehub + leadmarket-pro  (guaranteed)
+       Plus 1-2 of:     peoplesearch-india, datafind-global, publiclookup
+
+       The guarantee exists so the demo always has one compliant broker
+       (ProfileHub -> clean removal) and one stubborn broker
+       (LeadMarket Pro -> escalation to DPBI). Both narrative beats fire
+       every single time.
+
+       If already seeded, returns 0 and changes nothing.
+
+--------------------------------------------------------------------------------
+STEP 3 — DISCOVERY: BREACHES  (tool: search_breach_databases)
+--------------------------------------------------------------------------------
+  Two signals combined:
+
+  3.1  REAL domain match.
+       hibp_scanner.scan(email) checks whether the user's own email DOMAIN
+       equals a breached company's domain. This fires for someone with an
+       @adobe.com address. For gmail.com / example.com it returns nothing —
+       which is correct and honest.
+       Tagged: environment = "real_domain_match"
+
+  3.2  SIMULATED membership.
+       _simulated_breach_membership() deterministically picks 2-4 breaches
+       from the real 1,035-record HIBP catalog, weighted toward breaches
+       with >5M records.
+       Tagged: environment = "simulated"
+
+       WHY SIMULATED: checking whether a specific email appears inside a
+       breach corpus requires the PAID HaveIBeenPwned API. We do not have a
+       subscription, so we do not pretend to. The breach METADATA is entirely
+       real — real names, real dates, real data classes, real record counts.
+       Only membership is synthesised, and it is labelled in the payload.
+
+  3.3  For each breach, derive the exposed field list from its data_classes
+       ("Email addresses" -> "email_addresses", "Passwords" -> "passwords"),
+       compute severity, and write an exposure row.
+
+  3.4  Severity is the WORST field present:
+           critical : aadhaar, pan, credit_card, bank_account, password
+           high     : address, phone, date_of_birth
+           medium   : email, employer, username
+           low      : city, name, age_range, interests
+
+--------------------------------------------------------------------------------
+STEP 4 — DISCOVERY: BROKERS  (tool: search_data_brokers)
+--------------------------------------------------------------------------------
+  4.1  network.search(name, email, phone)
+       SQL over broker_records WHERE removed=0 AND (email match OR
+       last-10-digits phone match OR exact name match).
+
+  4.2  FOR EACH HIT, run identity resolution:
+           resolver.resolve(user_profile, candidate_record)
+       This is the attribution gate. It returns overall_score, a tier
+       (definite/likely/possible/unlikely), and an evidence_note explaining
+       WHY. See section 10 for the algorithm.
+
+  4.3  Write an exposure row per record, carrying:
+           record_id      <-- the handle used later to delete AND to verify
+           match_confidence, match_tier
+           source_id      <-- the broker slug, used to pick jurisdiction
+
+  4.4  ALSO query the real 956-broker Optery directory for breadth context.
+       This is reported as "brokers_indexed" but is NOT removable — we have
+       no ability to delete from real brokers. The payload says so:
+           "Optery directory provides industry breadth; only the demo
+            network is removable."
+
+--------------------------------------------------------------------------------
+STEP 5 — DISCOVERY: PASTES  (tool: search_paste_dumps)
+--------------------------------------------------------------------------------
+  5.1  paste_scanner.scan(profile) over 50 synthetic leak dumps.
+
+  5.2  CRITICAL FILTER:
+           if not resolution.get("is_match", False):
+               continue
+       Paste dumps are multi-record SQL exports containing thousands of
+       DIFFERENT people. Without this filter, every stranger's Aadhaar in
+       the dump would be counted as the user's own exposure and would
+       inflate their risk score. The original build had exactly this bug.
+
+--------------------------------------------------------------------------------
+STEP 6 — RISK  (tool: assess_exposure_risk)
+--------------------------------------------------------------------------------
+  6.1  Pull all exposures with status in
+       (exposed, requested, acknowledged, reappeared) — i.e. anything still
+       LIVE. Removed records are excluded, which is what makes the score fall
+       when removals land.
+
+  6.2  Flatten each exposure into per-field entries and compute
+       exposure pressure (see section 10.5).
+
+  6.3  Write a per-exposure risk_score so the UI can rank them.
+
+  6.4  Emits:  "Privacy Risk Score: 78.2 (High)."
+
+--------------------------------------------------------------------------------
+STEP 7 — LEGAL ASSESSMENT  (tool: determine_legal_basis, once per exposure)
+--------------------------------------------------------------------------------
+  For each exposure the agent considers acting on:
+
+  7.1  Pick jurisdiction (section 11).
+
+  7.2  Decide whether erasure is even AVAILABLE:
+
+       source_type = data_broker  -> erasure_available = TRUE
+                                     action = request_erasure
+                                     basis  = "commercial profiling with no
+                                               continuing necessity, consent
+                                               withdrawn"
+
+       source_type = breach       -> erasure_available = FALSE
+                                     action = secure_accounts
+                                     basis  = "Erasure is not available
+                                               against a breach corpus; the
+                                               correct remedies are credential
+                                               rotation and monitoring."
+
+       source_type = paste        -> erasure_available = FALSE
+                                     action = monitor
+                                     basis  = "No identifiable controller to
+                                               serve."
+
+       THIS IS THE MOST IMPORTANT REASONING IN THE SYSTEM. A naive build
+       drafts a "please delete my data" letter for a 2013 Adobe breach. You
+       cannot un-publish a breach. Serving that notice is theatre. The agent
+       explicitly refuses and explains why.
+
+  7.3  Every legal result carries:
+           "disclaimer": "Automated privacy-request assistance, not legal
+                          advice."
+
+--------------------------------------------------------------------------------
+STEP 8 — DRAFTING  (tool: draft_erasure_request, once per actionable exposure)
+--------------------------------------------------------------------------------
+  8.1  Refuses non-broker exposures outright:
+           if exp["source_type"] != "data_broker":
+               return {"error": "Erasure notices are only servable on an
+                                 identified controller."}
+
+  8.2  notice_generator.generate() fills the statutory template with the
+       user's details, the controller's details, and the specific PII fields
+       found at that controller.
+
+  8.3  Mints a SHA-256 receipt hash and a reference id
+       (e.g. SP-DPDP-20260912-6A651EF0).
+
+  8.4  memory.create_request(...) with status = "awaiting_approval"
+       and deadline = now + statutory days (30 DPDP / 30 GDPR / 45 CCPA).
+
+  8.5  Emits with status="awaiting_approval", which the UI renders in amber.
+
+--------------------------------------------------------------------------------
+STEP 9 — WRAP UP
+--------------------------------------------------------------------------------
+  9.1  Re-run assess_exposure_risk to get the settled score.
+  9.2  memory.finish_run(run_id, risk_before, risk_after, summary)
+  9.3  Push {"type":"run_complete"} then close the EventStream.
+  9.4  app.py sends {"type":"phase_complete"} with the FULL dashboard state.
+
+  PHASE 1 OUTPUT: N drafted notices sitting in `awaiting_approval`.
+  Nothing has been sent. Nothing outward has happened at all.
+
+
+================================================================================
+5.  WORKFLOW B: REMEDIATION (phase 2) — exhaustive step-by-step
+================================================================================
+
+TRIGGER: user ticks boxes and clicks "Approve & Dispatch Selected"
+         -> WS {"action":"approve","request_ids":[...]}
+
+DIFFERENCE FROM PHASE 1:
+    ctx.auto_approve = True
+    and the FULL toolset (including submit_erasure_request) is available.
+
+The approval is carried by the request_ids the human explicitly selected.
+An id the user did not tick is never passed in, so it is never dispatched.
+
+--------------------------------------------------------------------------------
+FOR EACH APPROVED REQUEST:
+--------------------------------------------------------------------------------
+
+STEP 1 — DISPATCH  (tool: submit_erasure_request)
+
+    1.1  Guard:
+             if not ctx.auto_approve and req.status == "awaiting_approval":
+                 return {"status": "awaiting_approval", ...}
+         So even if this tool is somehow reached outside an approved phase,
+         it refuses and explains.
+
+    1.2  network.submit_erasure(broker_id, record_id, requester_email, statute)
+
+    1.3  Broker responds per its behaviour (section 9):
+             compliant -> "completed"     (record deleted immediately)
+             prompt    -> "acknowledged"  (queued)
+             slow      -> "acknowledged"  (identity verification pending)
+             stubborn  -> "submitted"     (no response from controller)
+
+    1.4  Update request: status="submitted", confirmation_id=<broker req id>
+         Update exposure: status="requested"
+
+    1.5  Emits: "Notice served on ProfileHub — confirmation PROFILEHUB-D172A5A6."
+
+STEP 2 — FOLLOW UP  (tool: check_request_status, up to 2x)
+
+    2.1  network.check_status(broker_request_id)
+
+    2.2  POLLING ADVANCES THE STATE MACHINE. This is deliberate: there is no
+         real calendar in a 3-minute demo, so a follow-up is what moves a
+         controller forward.
+             prompt + acknowledged           -> completed (record deleted)
+             slow   + acknowledged + 2 polls -> completed (record deleted)
+             stubborn                        -> never advances
+
+    2.3  Increments followup_count, stamps last_followup.
+
+    2.4  If completed -> exposure status = "removed", removed_at stamped.
+
+STEP 3 — VERIFY  (tool: verify_removal)   <-- THE INTEGRITY STEP
+
+    3.1  network.record_exists(broker_id, record_id)
+         This RE-QUERIES THE SOURCE. It does not read our own request status.
+         It does not trust the controller's "completed".
+
+    3.2  If still present:
+             verified_removed = False
+             "Record is still live. Keep the request open and follow up."
+
+         If gone:
+             exposure.verified_at = now
+             "Independently verified: the record is no longer returned by
+              the source."
+
+    3.3  Non-broker exposures return verifiable=False with an explanation —
+         you cannot verify the un-publication of a breach.
+
+    WHY THIS EXISTS: "submitted" is not "removed". A privacy tool that marks
+    things done because a company said so is worthless. This is the single
+    step that makes the product's claim honest.
+
+STEP 4 — ESCALATE  (tool: escalate_to_regulator)
+
+    Fires when verification FAILED (record still present).
+
+    4.1  Map jurisdiction -> authority:
+             dpdp -> Data Protection Board of India (DPBI)
+             gdpr -> Lead Supervisory Authority (GDPR Art. 77)
+             ccpa -> California Privacy Protection Agency (CPPA)
+
+    4.2  request.status = "escalated"
+         grounds = "Controller failed to respond within the statutory period."
+
+--------------------------------------------------------------------------------
+WRAP UP
+--------------------------------------------------------------------------------
+    Re-score risk. finish_run with risk_before AND risk_after.
+    The UI renders the delta — e.g. 83.5 Critical -> 56.5 Medium.
+
+
+================================================================================
+6.  THE 13 TOOLS — inputs, outputs, side effects
+================================================================================
+
+Defined in backend/agent/tools.py as closures over ToolContext, so they carry
+run state without global variables. Every one emits at least one trace event.
+
+ #  TOOL                        ARGS              WRITES TO           PHASE
+--- --------------------------- ----------------- ------------------- --------
+ 1  build_identity_profile      (none)            identities,         both
+                                                  broker_records
+                                                  (seeding)
+ 2  recall_prior_activity       (none)            nothing (read-only) both
+ 3  search_breach_databases     (none)            exposures           1
+ 4  search_data_brokers         (none)            exposures           1
+ 5  search_paste_dumps          (none)            exposures           1
+ 6  detect_pii_in_text          text              nothing             both
+ 7  assess_exposure_risk        (none)            exposures.risk_score both
+ 8  determine_legal_basis       exposure_id       nothing             1
+ 9  draft_erasure_request       exposure_id,      requests            1
+                                jurisdiction?
+10  submit_erasure_request      request_id        requests, exposures, 2 ONLY
+                                                  broker_requests
+11  check_request_status        request_id        requests, exposures, 2
+                                                  broker_records
+12  verify_removal              exposure_id       exposures.verified_at 2
+13  escalate_to_regulator       request_id        requests            2
+
+NOTE ON TOOL DESIGN: tools 1-9 are safe and idempotent-ish. Tool 10 is the
+only one with an outward, irreversible effect, and it is the only one gated.
+That is not a coincidence — the tool boundary was drawn so that exactly one
+tool needs a human.
+
+HOW THE LLM SEES THEM: each function's docstring IS the tool description sent
+to Claude, and the type hints generate the JSON schema. From orchestrator.py:
+
+    from anthropic import beta_tool
+    wrapped = [beta_tool(fn) for fn in tools.values()]
+    runner = client.beta.messages.tool_runner(
+        model="claude-opus-5",
+        tools=wrapped,
+        thinking={"type": "adaptive", "display": "summarized"},
+        output_config={"effort": "high"},
+        ...)
+
+So the docstrings are load-bearing. Changing a docstring changes agent behaviour.
+
+
+================================================================================
+7.  THE TWO PLANNERS
+================================================================================
+
+Both drive the IDENTICAL tool functions. Only the decision layer differs.
+
+--------------------------------------------------------------------------------
+LLM PLANNER   (active when ANTHROPIC_API_KEY is set)
+--------------------------------------------------------------------------------
+  Model:     claude-opus-5
+  Thinking:  adaptive, display="summarized"
+  Effort:    high (override via SOVEREIGN_EFFORT)
+  Loop:      client.beta.messages.tool_runner — the SDK runs the
+             request -> tool_use -> execute -> feed result -> repeat cycle.
+
+  Claude decides the ORDER and the SELECTION of tool calls, and writes a
+  one-line rationale before each. Those rationales stream to the UI as
+  `agent_reasoning` events and render as italic indented blocks.
+
+  It also decides things the deterministic planner cannot, e.g. skipping a
+  broker whose match confidence is too weak, or choosing not to draft when
+  a request is already in flight from a prior run.
+
+  Refusal handling: if stop_reason == "refusal", the loop breaks and logs it.
+
+--------------------------------------------------------------------------------
+DETERMINISTIC PLANNER  (no key, or offline, or LLM failed)
+--------------------------------------------------------------------------------
+  A fixed pipeline:
+
+      recall -> identity -> breaches -> brokers -> pastes -> risk
+        -> for each broker record:
+               determine_legal_basis
+               if erasure_available: draft_erasure_request
+        -> summary
+
+  Remediation:
+      for each approved request:
+          submit -> poll (x2) -> verify
+          -> if not verified: escalate
+
+  It produces the same artifacts and the same final state. What it lacks is
+  genuine reasoning — the log lines are written by us, not by a model.
+
+--------------------------------------------------------------------------------
+FALLBACK
+--------------------------------------------------------------------------------
+  Wrapped in try/except in run_discovery / run_remediation:
+
+      except Exception as exc:
+          ctx.emit(... "LLM planner failed (...). Falling back to the
+                        deterministic pipeline.", status="error")
+          summary = _run_deterministic_discovery(ctx, tools)
+          mode = "deterministic_fallback"
+
+  A demo cannot die because an API call timed out. The mode is reported
+  honestly in the response so nobody claims LLM reasoning that did not happen.
+
+
+================================================================================
+8.  DATA MODEL — data/sovereign.db
+================================================================================
+
+9 tables. WAL mode. Single connection guarded by an RLock (FastAPI serves from
+a thread pool).
+
+users
+    id            "usr_" + uuid5(email)[:12] — STABLE across runs
+    name email phone pan city country created_at
+
+identities                          <- Identity Agent output
+    id user_id alias alias_type confidence rationale created_at
+
+exposures                           <- the core table
+    id              "exp_" + 10 hex
+    user_id run_id
+    source_type     breach | data_broker | paste | public_profile
+    source_name     "ProfileHub" / "Adobe"
+    source_id       broker slug or "breach:Adobe" — drives jurisdiction
+    record_id       handle for deletion AND verification (brokers only)
+    data_found      JSON list of exposed field names
+    detail          JSON blob of the raw finding
+    match_confidence  0.0-1.0 from the resolver
+    match_tier      definite | likely | possible | unlikely
+    risk_score severity
+    status          exposed | requested | acknowledged | removed | reappeared
+    discovered_at removed_at verified_at
+
+    IDENTITY OF A ROW = (user_id, source_id, record_id)
+    On re-scan, an existing row is UPDATED, not duplicated. And:
+        if existing.status == "removed": status = "reappeared"
+    That is how the system detects a broker re-publishing data it deleted —
+    the "whack-a-mole" problem that makes one-time opt-outs useless.
+
+requests
+    id "req_" + 10 hex
+    user_id exposure_id jurisdiction statute legal_basis
+    request_text      the full rendered notice
+    reference_id      SP-DPDP-20260912-6A651EF0
+    receipt_hash      SHA-256
+    status            drafted | awaiting_approval | submitted | acknowledged
+                      | completed | rejected | overdue | escalated
+    confirmation_id   the BROKER's request id (used for polling)
+    created_at submitted_at deadline deadline_days
+    last_followup followup_count
+
+agent_events                        <- the demo trace, and the audit of reasoning
+    id user_id run_id ts
+    agent      identity|discovery|risk|legal|action|followup|verification|orchestrator
+    phase message tool_name tool_input tool_output status
+
+runs
+    id user_id started_at finished_at
+    mode       llm | deterministic | deterministic_fallback
+    model risk_before risk_after summary
+
+audit_receipts                      <- persisted SHA-256 chain
+    seq receipt_id timestamp action details previous_hash hash
+
+broker_records                      <- the controlled environment
+    id broker_id subject_key name email phone city fields
+    removed created_at removed_at
+
+broker_requests
+    id broker_id record_id requester_email statute status
+    followups created_at updated_at confirmation_id note
+
+
+================================================================================
+9.  THE BROKER ENVIRONMENT — behaviours and the state machine
+================================================================================
+
+backend/mock_brokers/network.py — eight sources, India-first:
+
+  SLUG              NAME                    CTRY LEGAL CLASS            BEHAVIOUR
+  ----------------- ----------------------- ---- ---------------------- ------------
+  truecaller-in     Truecaller              IN   dpdp_erasure           prompt
+  justdial-in       JustDial                IN   dpdp_erasure           slow
+  naukri-in         Naukri Resume Database  IN   dpdp_erasure           compliant
+  leadkart-in       LeadKart India          IN   dpdp_erasure           stubborn
+  indiankanoon-in   Indian Kanoon           IN   judicial_record        not_servable
+  mcamirror-in      MCA Director Registry   IN   statutory_publication  not_servable
+  profilehub-eu     ProfileHub              EU   gdpr_erasure           compliant
+  datafind-us       DataFind Global         US   ccpa_deletion          slow
+
+  Six of eight are Indian. The two international ones exist so multi-jurisdiction
+  routing (GDPR / CCPA) is demonstrable in the same run.
+
+  SEEDING GUARANTEES three teaching cases on every run:
+      naukri-in       -> clean DPDP erasure of critical-severity CV data
+      leadkart-in     -> ignores the notice, drives the DPBI escalation path
+      indiankanoon-in -> erasure does not lie; the agent REFUSES to draft
+
+STATE MACHINE (network.check_status advances it):
+
+    compliant:   submit -> completed              [record deleted at submit]
+    prompt:      submit -> acknowledged -> poll1 -> completed
+    slow:        submit -> acknowledged -> poll1 -> acknowledged
+                                        -> poll2 -> completed
+    stubborn:    submit -> submitted    -> poll   -> submitted  (forever)
+
+Each broker exposes the surface a real one would:
+    list / privacy_policy (privacy_email, privacy_url, data_categories)
+    search   -> returns only records where removed=0
+    submit_erasure
+    check_status
+    record_exists    <- used by verify_removal
+
+SEEDING: deterministic per identity.
+    subject_key = sha256(email or name)[:16]
+    rng = Random(subject_key)
+    always: profilehub + leadmarket-pro
+    plus 1-2 random others
+
+    Result: the same person always produces the same exposure pattern, so a
+    rehearsed demo is stable — but ANY name a judge types also works, because
+    the records are generated on demand from their identity.
+
+RESET: network.reset_subject(name, email) wipes that person's records and
+       requests so the demo can be run again cleanly.
+
+
+================================================================================
+10. THE ALGORITHMS
+================================================================================
+
+--------------------------------------------------------------------------------
+10.1  VERHOEFF — Aadhaar validation  (recognizer.py)
+--------------------------------------------------------------------------------
+  Dihedral group D5. Multiplication table d[][], permutation table p[][],
+  inverse table inv[]. Walk the digits right-to-left:
+      c = d[c][ p[i % 8][digit] ]
+  Valid iff c == 0 after consuming all 12 digits.
+
+  Catches ~90% of random 12-digit strings — invoice numbers, transaction ids,
+  timestamps — that a bare \d{12} regex would flag as a national ID.
+
+  CRITICAL FIX MADE: the original code did this —
+      if not validator(match):
+          if entity_type == "AADHAAR":
+              confidence *= 0.6          # <-- still emitted it!
+  A failed checksum only LOWERED CONFIDENCE. Nothing was ever rejected, so
+  the algorithm filtered nothing. It now `continue`s. A failed checksum is
+  disqualifying, which is the entire point of having a check digit.
+
+--------------------------------------------------------------------------------
+10.2  LUHN — payment card validation
+--------------------------------------------------------------------------------
+  Standard mod-10. Doubles every second digit from the right, subtracts 9 if
+  the result exceeds 9, sum must be divisible by 10.
+
+--------------------------------------------------------------------------------
+10.3  OVERLAP RESOLUTION — the card/Aadhaar collision
+--------------------------------------------------------------------------------
+  THE BUG: the Aadhaar pattern [2-9]\d{3}\s?\d{4}\s?\d{4} matches the FIRST
+  12 DIGITS OF A 16-DIGIT PAYMENT CARD. Dedup compared exact (start,end)
+  spans, so a 12-char match nested inside a 16-char match never collided.
+  Pasting a real test card reported "your Aadhaar number was found".
+
+  THE FIX: gather ALL candidate matches from ALL patterns first, then resolve
+  overlaps by evidence strength rather than pattern declaration order:
+
+      candidates.sort(key=lambda c: (-algorithmically_valid,
+                                     -span_length,
+                                     -confidence,
+                                     start))
+      # then greedily accept non-overlapping spans
+
+  Checksum-validated beats unvalidated; longer beats shorter. A Luhn-valid
+  16-digit card wins its span against a Verhoeff-failing 12-digit substring.
+  This is a general fix, not a special case for cards.
+
+--------------------------------------------------------------------------------
+10.4  IDENTITY RESOLUTION — Jaro-Winkler + CORROBORATION  (resolver.py)
+--------------------------------------------------------------------------------
+  Per-field similarity:
+      exact fields  (email, phone, aadhaar, pan, upi, ip) -> 1.0 or 0.0
+      fuzzy fields  (name, address, city) -> max(jaro_winkler, token_set)
+
+  raw_score = weighted mean over fields present in BOTH records.
+
+  THE BUG THIS FIXES: averaging over only the fields that happen to be
+  present means a record containing NOTHING BUT A MATCHING NAME scores 1.0
+  and is labelled "definite". On a common Indian name that is a stranger —
+  and the agent would then serve a legal notice about someone else's record.
+
+  THE FIX — a corroboration multiplier:
+
+      STRONG_IDENTIFIERS = {email, phone, aadhaar, pan, upi}
+
+      >=1 strong identifier matched     -> 1.00  "corroborated by email"
+      0 strong, >=3 weak fields         -> 0.80
+      0 strong, 2 weak fields           -> 0.65  "possible, not confirmed"
+      0 strong, 1 weak field            -> 0.40  "insufficient to attribute"
+      nothing matched                   -> 0.00
+
+      overall_score = raw_score * corroboration
+
+  MEASURED RESULTS:
+      identical record                 1.00  definite  (match)
+      email only                       1.00  definite  (match)
+      name + city                      0.65  possible  (match)
+      name only                        0.40  unlikely  (NO match)
+      same name, contradicting fields  0.11  unlikely  (NO match)
+
+  Threshold for is_match is 0.45, so name-only now falls below it.
+  Every result carries an `evidence_note` explaining the decision in English.
+
+--------------------------------------------------------------------------------
+10.5  RISK SCORING  (risk_calculator.py)
+--------------------------------------------------------------------------------
+  THE BUG: the old model was
+      sensitivity = min(40, (total / 25) * 40)
+      source      = min(25, (total / 10) * 25)
+  Divisors so small that both components PINNED at roughly 12 exposures.
+  Past that the score was flat. Measured: 10 emails -> 63.2, 40 emails -> 67.0.
+  Removing data barely moved the number — which destroys the entire product
+  promise, because the promise is "your score falls as your data comes down".
+
+  THE FIX — smooth exponential saturation, no hard caps:
+
+      pressure = SUM over live exposures of
+                     sensitivity_weight x source_credibility x recency_factor
+
+      core_score    = 75 * (1 - exp(-pressure / 15))
+      broker_score  = 15 * (1 - exp(-broker_matches / 3))
+      breadth_score = 10 * (1 - exp(-distinct_sources / 4))
+
+      overall = min(100, core + broker + breadth)
+
+  Sensitivity weights: AADHAAR 10.0, PAN 9.0, BANK_ACCOUNT 9.0,
+      CREDIT_CARD 8.5, VOTER_ID 7.0, UPI 6.0, IFSC 4.0, PHONE_IN 4.0,
+      ADDRESS 3.5, EMAIL 3.0, IP 2.5, NAME 2.0, PIN_CODE 1.5
+
+  Source credibility: hibp_verified 1.0, data_broker 0.90,
+      dark_web_paste 0.85, combo_list 0.70, public_search 0.60, synthetic 0.30
+
+  Recency: <=7d 1.0 | <=30d 0.8 | <=90d 0.6 | <=365d 0.3 | older 0.15
+
+  MEASURED REMOVAL RESPONSE (what the demo depends on):
+      4 live broker records -> 63.7
+      3 live                -> 53.3
+      2 live                -> 39.8
+      1 live                -> 22.5
+      0 live                ->  0.0
+
+  Bands: >=80 Critical | >=60 High | >=40 Medium | >=20 Low | else Minimal
+
+
+================================================================================
+11. LEGAL ROUTING — how a statute gets chosen
+================================================================================
+
+    user_country     -> the data principal's own law
+    controller_country -> the law the controller must answer under
+
+    JURISDICTION_BY_COUNTRY = {
+        IN: dpdp,
+        EU/DE/FR/IE/NL: gdpr,
+        US/CA: ccpa,
+    }
+
+    For a data_broker exposure the CONTROLLER's location governs:
+        jurisdiction = ctrl_j
+    For anything else, the user's own law applies:
+        jurisdiction = user_j
+
+    So one Indian user in a single run produces:
+        ProfileHub      (EU) -> GDPR Art. 17            30-day
+        LeadMarket Pro  (IN) -> DPDP Act 2023 s.12/13   30-day
+        PublicLookup    (IN) -> DPDP Act 2023 s.12/13   30-day
+        DataFind Global (US) -> CCPA s.1798.105         45-day
+
+    That multi-jurisdiction fan-out in ONE scan is the strongest single beat
+    in the demo, and it falls out of the data rather than being scripted.
+
+    TEMPLATES: data/templates/{dpdp_erasure_notice,gdpr_art17_notice,
+    ccpa_deletion_notice}.txt — real citations, real deadlines.
+
+    INDIAN LEGAL CLASSIFICATION — the sharpest reasoning in the system
+    ------------------------------------------------------------------
+    In India "can I get this deleted?" is not one question. The agent
+    classifies every source and refuses to draft where erasure does not lie:
+
+      dpdp_erasure           DPDP Act 2023 s.12(1). Commercial processing —
+                             people-search sites, lead brokers, CV databases,
+                             matrimonial profiles. Erasure available.
+                             -> DRAFTS A NOTICE
+
+      dpdp_limited           DPDP applies but a statutory retention duty
+                             competes: CICRA 2005 (credit bureaus), telecom
+                             licence conditions, PMLA KYC.
+                             -> DISPUTE / CORRECT, no erasure
+
+      statutory_publication  Published under legal mandate: MCA21 filings
+                             (Companies Act 2013), electoral rolls
+                             (Representation of the People Act 1950), state
+                             land records. DPDP s.3(c)(ii) EXCLUDES personal
+                             data made public under a legal obligation, so
+                             the s.12 right is never engaged.
+                             -> CORRECTION ONLY. Note: commercial MIRRORS
+                                that re-host this data for profit ARE servable.
+
+      judicial_record        Court judgments and case records. A DPDP notice
+                             has no addressee here. Indian courts have granted
+                             redaction narrowly — Delhi HC, Jorawer Singh Mundy
+                             v. Union of India (2021), concerning an acquitted
+                             party — but that needs an application to the court
+                             that issued the judgment.
+                             -> COURT APPLICATION
+
+    WHY THIS MATTERS: a naive build drafts "please delete my data" letters at
+    Indian Kanoon and the MCA. Those letters cannot land. Telling a user they
+    have a remedy they do not have is worse than saying nothing. The agent
+    says NO ERASURE RIGHT, names the reason, and points at the real route.
+
+    THE INDIAN SOURCE REGISTRY (data/brokers/indian_sources.json, 22 entries)
+    ------------------------------------------------------------------------
+    Built by data/build_indian_sources.py. Covers the domestic surface the
+    Optery directory misses entirely — Optery is 956 brokers with NO country
+    field, only 4 of which are India-related, so it surfaced Alabama
+    court-record sites to Indian users.
+
+      dpdp_erasure (11)          Truecaller, JustDial, IndiaMART, Sulekha,
+                                 99acres, MagicBricks, Naukri, Shine, IIMJobs,
+                                 Shaadi.com, BharatMatrimony
+      statutory_publication (7)  Zauba Corp, Tofler, The Company Check, MCA21,
+                                 Electoral Roll, VAHAN/Parivahan, Bhulekh
+      judicial_record (2)        Indian Kanoon, eCourts Services
+      dpdp_limited (2)           CIBIL/Experian/Equifax India, Telecom KYC
+
+    Exposed via GET /api/sources/indian.
+
+    INDIA-WEIGHTED BREACH SELECTION
+    -------------------------------
+    The HIBP catalog carries 41 real Indian breaches. For a user with
+    country=IN the agent weights selection toward those — BigBasket (24.5M),
+    RailYatri (23.2M), Domino's India (22.5M), IndiaMART (20.2M), boAt (7.5M),
+    ABFRL, Yatra, Hathway, IIMJobs, Zoomcar, Dunzo, Paytm — rather than
+    handing an Indian judge a list of American companies.
+
+    ESCALATION AUTHORITIES:
+        dpdp -> Data Protection Board of India (DPBI), s.27
+        gdpr -> Lead Supervisory Authority, Art. 77
+        ccpa -> California Privacy Protection Agency (CPPA)
+
+
+================================================================================
+12. END-TO-END TRACE — one real run, annotated
+================================================================================
+
+Identity: Kavya Reddy / kavya.reddy@example.com / +91 9900112233 / Hyderabad
+
+PHASE 1 — DISCOVERY
+  [orchestrator] Planning with the deterministic pipeline           <- planner declared
+  [orchestrator] Recalling prior runs for this identity…            <- MEMORY
+  [orchestrator] No prior activity — this is a first scan.
+  [identity    ] Normalising identity and deriving aliases…         <- IDENTITY AGENT
+  [identity    ] Identity resolved: 4 alias(es) derived.
+  [discovery   ] Querying breach intelligence corpus…               <- DISCOVERY
+  [discovery   ] Breach scan complete: 3 breach exposure(s).
+  [discovery   ] Scanning data-broker network…
+  [discovery   ] Broker scan complete: 3 removable record(s).
+  [discovery   ] Scanning paste/leak corpus…
+  [discovery   ] Paste scan complete: 0 attributable leak(s).       <- filter worked
+  [risk        ] Computing Privacy Risk Score…                      <- RISK AGENT
+  [risk        ] Privacy Risk Score: 78.2 (High).
+  [legal       ] Assessing legal basis for ProfileHub…              <- LEGAL AGENT
+  [legal       ] ProfileHub: GDPR → request_erasure.                <- EU controller
+  [action      ] Drafting GDPR notice for ProfileHub…
+  [action      ] Notice drafted — awaiting user approval.           <- HARD STOP
+  [legal       ] LeadMarket Pro: DPDP Act 2023 → request_erasure.   <- IN controller
+  [action      ] Notice drafted — awaiting user approval.
+  [legal       ] DataFind Global: CCPA/CPRA → request_erasure.      <- US controller
+  [action      ] Notice drafted — awaiting user approval.
+  [orchestrator] Found 6 exposure(s)… Risk 78.2 (High). Drafted 3.
+
+  >>> STATE: 3 notices in `awaiting_approval`. Nothing sent.
+  >>> Breach exposures were NOT drafted — erasure unavailable.
+
+--- HUMAN TICKS BOXES AND CLICKS APPROVE ---
+
+PHASE 2 — REMEDIATION
+  [orchestrator] Dispatching 3 approved notice(s).
+  [action      ] Serving notice on DataFind Global…                 <- DISPATCH
+  [action      ] Notice served — confirmation DATAFINDGLOBAL-269C2FC5.
+  [followup    ] Following up on SP-CCPA-20260912-FA003696…         <- FOLLOW-UP
+  [followup    ] DataFind Global → acknowledged.                    <- "slow" broker
+  [followup    ] Following up again…
+  [followup    ] DataFind Global → completed.                       <- chased to done
+  [verification] Re-querying DataFind Global…                       <- VERIFY
+  [verification] removal VERIFIED — record no longer returned.
+  [action      ] Serving notice on LeadMarket Pro…
+  [followup    ] LeadMarket Pro → submitted.                        <- "stubborn"
+  [followup    ] LeadMarket Pro → submitted.                        <- still silent
+  [verification] LeadMarket Pro: record STILL PRESENT.              <- verify FAILED
+  [followup    ] Escalating to Data Protection Board of India…      <- ESCALATE
+  [followup    ] Escalation lodged with DPBI.
+  [action      ] Serving notice on ProfileHub…
+  [followup    ] ProfileHub → completed.                            <- "compliant"
+  [verification] removal VERIFIED.
+  [risk        ] Privacy Risk Score: 56.5 (Medium).                 <- RISK FELL
+
+  >>> 3 notices, 2 verified removals, 1 escalated.
+  >>> Risk 78.2 High -> 56.5 Medium
+
+
+================================================================================
+13. DESIGN DECISIONS — the five you will be asked about
+================================================================================
+
+Q1. "Is the AI actually doing anything, or is this scripted?"
+    Two planners over one tool surface. With a key, Claude chooses each tool
+    and its reasoning streams into the trace. Without one, a deterministic
+    pipeline calls the same 13 tools. The UI badge says which is live, and
+    GET /api/agent/info returns the planner, the model, and the tool list.
+    We do not claim LLM reasoning when it is not running.
+
+Q2. "Why doesn't it just send automatically? Isn't that less agentic?"
+    Serving a statutory notice is outward-facing, irreversible, and aimed at
+    a third party. A false attribution means demanding erasure of a
+    STRANGER'S record under a real law. We autonomised discovery, judgement
+    and drafting; we did not autonomise the irreversible act. The capability
+    is physically removed from the toolset during discovery — not a prompt
+    instruction the model could talk itself past.
+
+Q3. "How do you know a found record is actually that person?"
+    Corroboration (section 10.4). A name alone is not evidence — names are
+    not unique. A match needs a unique identifier, or several agreeing
+    non-unique fields. Name-only scores 0.40 and is rejected. There is a
+    regression test for exactly this in test_system.py.
+
+Q4. "Is the data real?"
+    The 1,035 HIBP breach records and 956 Optery broker entries are real.
+    Breach MEMBERSHIP for the demo identity is simulated and labelled —
+    a real membership check needs the paid HIBP API. The five-broker removal
+    network is simulated and disclosed in the UI. Everything being judged —
+    planning, legal reasoning, drafting, dispatch, follow-up, verification,
+    escalation — executes for real against those endpoints.
+
+Q5. "Your benchmark says 99.6%. That looks too good."
+    It is synthetic and self-generated, and the README says so. Treat it as
+    a regression guard, not field accuracy. The part that carries signal is
+    the NEGATIVE set: 30 samples that look like Indian identifiers but are
+    not, 20 of which are correctly-shaped 12-digit numbers with deliberately
+    wrong Verhoeff check digits. All 30 are rejected. The earlier 89.8%
+    figure was measured against a benchmark whose Aadhaar samples were
+    THEMSELVES checksum-invalid while the validator was non-binding — the
+    checksum was being scored against nothing.
+
+
+================================================================================
+13b. EVIDENCE MODEL — the rule that governs every claim
+================================================================================
+
+  THE RULE: never assert that a source holds a person's data unless we actually
+  checked and something came back, or the person told us themselves.
+
+  Every exposure row carries:
+      endpoint      the exact URL queried
+      queried_at    when
+      http_status   what came back
+      proof         the raw evidence, quotable
+      interpretation what it does and does NOT prove
+      reproduce     a shell command the user can run to confirm it
+
+  THREE EVIDENCE CLASSES
+      verified        A live endpoint returned a positive hit.
+      self_declared   The user stated they hold the account. Their own knowledge
+                      is valid grounds for a DPDP s.12 request.
+      sandbox         Synthetic demo record. OFF by default, always labelled.
+
+  CHECKS THAT GENUINELY RUN (free, unauthenticated)
+      Pwned Passwords   api.pwnedpasswords.com/range/{prefix}
+                        k-anonymous: only 5 chars of the SHA-1 are sent, the
+                        match is local. The server cannot learn the password.
+      Gravatar          gravatar.com/avatar/{md5}?d=404
+                        200 proves a public profile exists for that address.
+      HIBP catalog      real breach metadata (1,035 records).
+
+  CHECKS THAT NEED A KEY
+      HIBP account      haveibeenpwned.com/api/v3/breachedaccount/{email}
+                        Returns 401 without a subscription (~$3.95/mo).
+                        Reported as not_checked. NOT guessed, and NOT replaced
+                        by a domain heuristic.
+
+  WHAT IS DELIBERATELY NOT ATTEMPTED
+      No Indian people-search site publishes an API to check whether it holds a
+      given person. Scraping them, or probing signup/password-reset endpoints to
+      enumerate accounts, would breach their terms. So the tool asks the user.
+
+  WHAT WAS REMOVED
+      _simulated_breach_membership() picked real breaches at random and asserted
+      the user was in them. Tagging it "simulated" in a payload did not make it
+      honest — on screen it read as a finding. Deleted.
+
+  A DOMAIN-LEVEL FACT IS NOT A PERSONAL FINDING
+      "someone@adobe.com" means Adobe was breached. It does NOT mean that
+      mailbox was in the dump. This is reported as context and never becomes a
+      personal exposure row.
+
+================================================================================
+14. REAL vs SIMULATED — the honesty boundary
+================================================================================
+
+  REAL
+    1,035 HaveIBeenPwned breach records (names, dates, data classes, counts)
+    956 Optery data-broker directory entries
+    Verhoeff / Luhn / Jaro-Winkler implementations
+    Statutory templates and citations (DPDP s.12/13, GDPR Art.17, CCPA 1798.105)
+    Statutory deadlines (30 / 30 / 45 days)
+    SHA-256 audit hash chain, persisted and verifiable
+    The agent's planning, tool selection and reasoning
+    Identity resolution and attribution
+    Risk scoring
+    Notice drafting, dispatch, follow-up, verification, escalation logic
+
+  SIMULATED (and labelled as such in the UI and the payloads)
+    Breach MEMBERSHIP for a given identity  (real check = paid HIBP API)
+    The five-broker removal network         (real brokers take weeks +
+                                             identity verification)
+    The 50 paste dumps
+
+  NOT IMPLEMENTED (and no longer claimed anywhere)
+    k-anonymity SHA-1 prefix breach lookup
+    Client-side "zero-knowledge" hashing
+    Real SMTP dispatch of notices
+
+
+================================================================================
+15. FILE MAP
+================================================================================
+
+  backend/
+    app.py                  ~930 lines. HTTP/WS surface. 28 routes
+                            (20 legacy + 8 agent, incl. 2 WebSockets).
+    agent/
+      orchestrator.py  263  Planner selection, agent loop, fallback, EventStream
+      tools.py         633  The 13 capabilities
+      memory.py        406  SQLite. 9 tables. Durable state.
+      prompts.py        50  System prompt + phase goals
+    mock_brokers/
+      network.py       367  5 brokers, seeding, state machine
+    pii/
+      recognizer.py    348  14 patterns, Verhoeff, Luhn, overlap resolution
+      resolver.py      262  Jaro-Winkler + corroboration
+      risk_calculator.py 250 Exposure pressure model
+    scanners/
+      hibp_scanner.py  160
+      broker_scanner.py 176
+      paste_scanner.py 156
+    remediation/
+      notice_generator.py 159
+      audit_crypto.py  174  SHA-256 chain, now persisted
+      statutory_tracker.py 217
+
+  frontend/
+    index.html       538  Privacy Agent tab + 6 legacy tabs
+    app.js          1037  WS client, trace renderer, approval gate, ledger
+    styles.css      1457  Obsidian glassmorphism
+
+  data/
+    download_datasets.py 756  Dataset fetch + benchmark generation
+    breaches/hibp_breaches.json      1,035 records
+    brokers/optery_brokers.json        956 records
+    synthetic_pastes/pastes_corpus.json 50 dumps
+    benchmarks/pii_ground_truth.json   390 labelled samples
+    templates/*.txt                      3 statutory templates
+    sovereign.db                       runtime state (gitignored)
+
+  test_system.py     75 tests including 8 regression tests
+  DEMO.md            3-minute script + judge Q&A
+  WORKFLOW.txt       this file
+  run_demo.sh        demo launcher (no --reload)
+  scripts/dev.sh     dev launcher (with --reload)
+
+
+================================================================================
+16. RUNNING IT
+================================================================================
+
+  DEMO:
+      ./run_demo.sh
+      # or
+      .venv/bin/python -m uvicorn backend.app:app --host 0.0.0.0 --port 8000
+
+      Open http://localhost:8000 — Privacy Agent is the landing tab.
+
+  WITH LLM PLANNING:
+      export ANTHROPIC_API_KEY=sk-ant-...
+      ./run_demo.sh
+      Badge flips to "LLM PLANNER · claude-opus-5". No code change needed.
+
+  TUNING:
+      SOVEREIGN_MODEL   default claude-opus-5
+      SOVEREIGN_EFFORT  default high  (low|medium|high|xhigh|max)
+      SOVEREIGN_DB      default data/sovereign.db
+
+  TESTS:
+      .venv/bin/python test_system.py        # 75 tests
+
+  RESET A DEMO IDENTITY:
+      click "Reset this identity", or
+      POST /api/agent/reset  {"name":"...","email":"..."}
+
+  DO NOT use --reload for the demo. A reload drops live WebSocket
+  connections mid agent run. Use scripts/dev.sh while developing.
+
+
+================================================================================
+17. FAILURE MODES AND WHAT HAPPENS
+================================================================================
+
+  No API key                -> deterministic planner. Full functionality.
+                               Badge states it honestly.
+  API key set but network   -> exception caught, falls back to deterministic,
+  down / rate limited          logs the error in the trace, mode reported as
+                               "deterministic_fallback".
+  Model refuses             -> stop_reason=="refusal" breaks the loop, logged.
+  Server restarts           -> all state survives (SQLite). Audit chain
+                               reloads and re-verifies. Previously this reset
+                               the chain to genesis on every restart.
+  WebSocket drops           -> REST endpoints /api/agent/scan and
+                               /api/agent/approve do the same thing
+                               non-streaming.
+  Re-scan same identity     -> no duplicate exposures; a record that came back
+                               after removal is flagged "reappeared".
+  Broker never responds     -> verification fails, escalation to the regulator
+                               fires. This is the designed path, not an error.
+  Judge types their own name-> records seed on demand for that identity.
+                               Works for anyone.
+
+
+================================================================================
+18. KNOWN LIMITS
+================================================================================
+
+  1. Breach membership is simulated. Real membership needs the paid HIBP API.
+     Wiring it is a drop-in replacement for _simulated_breach_membership().
+
+  2. Removal runs against a controlled environment. Real broker removal needs
+     per-broker portal automation and identity verification.
+
+  3. No SMTP. Notices are served to the simulated network, not emailed.
+     notice_generator already produces the full rendered text.
+
+  4. No authentication. Every endpoint is open, and /api/compliance/update
+     lets anyone mutate any request by id. Fine for a local demo; not
+     deployable as-is.
+
+  5. CORS is allow_origins=["*"] with allow_credentials=True — a spec-invalid
+     combination browsers reject. Harmless locally, wrong for production.
+
+  6. The benchmark is synthetic. It guards regressions; it does not measure
+     real-world accuracy.
+
+  7. No continuous monitoring. The agent runs when invoked. A scheduler
+     re-running discovery daily and diffing against memory is the obvious
+     next step — the "reappeared" status already exists to support it.
+
+  8. The legacy tabs (Threat Scanner, Legal Studio, Compliance, Accuracy Lab)
+     still call the original non-agentic endpoints. They work, but the
+     Privacy Agent tab supersedes them.
+
+================================================================================
+END OF DOCUMENT
+================================================================================

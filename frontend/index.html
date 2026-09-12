@@ -26,7 +26,11 @@
             </div>
         </div>
         <div class="nav-links">
-            <button class="nav-link active" data-section="dashboard" id="nav-dashboard">
+            <button class="nav-link active" data-section="agent" id="nav-agent">
+                <svg viewBox="0 0 20 20" fill="currentColor"><path d="M10 2a1 1 0 011 1v1.07A6.002 6.002 0 0116 10v3l1.3 1.3a1 1 0 01-.7 1.7H3.4a1 1 0 01-.7-1.7L4 13v-3a6.002 6.002 0 015-5.93V3a1 1 0 011-1zm0 16a2 2 0 01-2-2h4a2 2 0 01-2 2z"/></svg>
+                Privacy Agent
+            </button>
+            <button class="nav-link" data-section="dashboard" id="nav-dashboard">
                 <svg viewBox="0 0 20 20" fill="currentColor"><path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z"/></svg>
                 Command Center
             </button>
@@ -60,8 +64,124 @@
     <!-- ═══ Main Content Area ═══ -->
     <main class="main-content">
 
+
+        <!-- ═══ SECTION: Privacy Agent ═══ -->
+        <section class="section active" id="section-agent">
+
+            <div class="agent-hero">
+                <div>
+                    <h1 class="agent-title">Autonomous Privacy Agent</h1>
+                    <p class="agent-sub">
+                        Discovers where your data is exposed, decides what is actually actionable,
+                        picks the statute that applies, drafts the notice, and — once you approve —
+                        serves it, chases it, and independently verifies the record is gone.
+                    </p>
+                </div>
+                <div class="planner-badge" id="planner-badge">
+                    <span class="planner-dot"></span>
+                    <div>
+                        <div class="planner-mode" id="planner-mode">checking…</div>
+                        <div class="planner-note" id="planner-note"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="agent-grid">
+                <!-- Identity + control -->
+                <div class="agent-panel">
+                    <h3 class="agent-panel-title">Your Identity</h3>
+                    <p class="agent-hint">Only what you type is used. Nothing is shared with a third party.</p>
+                    <div class="agent-form">
+                        <label>Full name<input type="text" id="ag-name" placeholder="Aarav Mehta" autocomplete="off"></label>
+                        <label>Email<input type="email" id="ag-email" placeholder="aarav@example.com" autocomplete="off"></label>
+                        <label>Phone<input type="tel" id="ag-phone" placeholder="+91 98765 43210" autocomplete="off"></label>
+                        <div class="agent-form-row">
+                            <label>City<input type="text" id="ag-city" placeholder="Bengaluru" autocomplete="off"></label>
+                            <label>Jurisdiction
+                                <select id="ag-country">
+                                    <option value="IN">India (DPDP 2023)</option>
+                                    <option value="EU">EU (GDPR)</option>
+                                    <option value="US">California (CCPA)</option>
+                                </select>
+                            </label>
+                        </div>
+                        <label>Services you hold an account with
+                            <textarea id="ag-declared" rows="3" placeholder="Truecaller, Naukri.com, Shaadi.com, JustDial"></textarea>
+                        </label>
+                        <label>Password to check <span class="agent-optional">optional</span>
+                            <input type="password" id="ag-password" placeholder="checked k-anonymously" autocomplete="off">
+                        </label>
+                    </div>
+                    <p class="agent-hint agent-hint-tight">
+                        No Indian people-search site publishes an API to check whether it holds you,
+                        and probing them would breach their terms — so nothing is guessed. You know
+                        which services you signed up for, and that knowledge is itself valid grounds
+                        for a DPDP&nbsp;s.12 request.
+                    </p>
+                    <p class="agent-hint agent-hint-tight">
+                        The password never leaves this machine: only the first 5 characters of its
+                        SHA-1 are sent, and the match is done locally.
+                    </p>
+                    <label class="agent-toggle">
+                        <input type="checkbox" id="ag-sandbox">
+                        <span>Enable demo sandbox <em>(adds synthetic records — not real findings)</em></span>
+                    </label>
+                    <button class="agent-btn primary" id="ag-run">Deploy Privacy Agent</button>
+                    <button class="agent-btn ghost" id="ag-reset">Reset this identity</button>
+                    <div class="agent-disclosure" id="ag-disclosure"></div>
+                </div>
+
+                <!-- Live trace -->
+                <div class="agent-panel trace-panel">
+                    <h3 class="agent-panel-title">
+                        Agent Activity
+                        <span class="trace-live" id="trace-live" hidden>● live</span>
+                    </h3>
+                    <div class="agent-trace" id="agent-trace">
+                        <div class="trace-empty">The agent's reasoning and every tool call will stream here in real time.</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Outcome -->
+            <div class="agent-outcome" id="agent-outcome" hidden>
+                <div class="risk-delta">
+                    <div class="risk-box">
+                        <div class="risk-label">Risk before</div>
+                        <div class="risk-num" id="risk-before">—</div>
+                    </div>
+                    <div class="risk-arrow">→</div>
+                    <div class="risk-box">
+                        <div class="risk-label">Risk now</div>
+                        <div class="risk-num" id="risk-after">—</div>
+                        <div class="risk-level" id="risk-level"></div>
+                    </div>
+                    <div class="risk-stats" id="risk-stats"></div>
+                </div>
+                <div class="agent-summary" id="agent-summary"></div>
+            </div>
+
+            <!-- Human-in-the-loop approval gate -->
+            <div class="agent-panel approval-panel" id="approval-panel" hidden>
+                <h3 class="agent-panel-title">Approval Required</h3>
+                <p class="agent-hint">
+                    The agent drafts autonomously but will not send anything on its own. Serving a
+                    statutory notice is an outward, irreversible act — you decide.
+                </p>
+                <div id="approval-list"></div>
+                <button class="agent-btn primary" id="ag-approve">Approve &amp; Dispatch Selected</button>
+            </div>
+
+            <!-- Exposure ledger -->
+            <div class="agent-panel" id="ledger-panel" hidden>
+                <h3 class="agent-panel-title">Exposure Ledger</h3>
+                <div class="ledger-wrap"><table class="ledger" id="ledger"></table></div>
+            </div>
+
+        </section>
+
         <!-- ═══ SECTION: Command Center Dashboard ═══ -->
-        <section class="section active" id="section-dashboard">
+        <section class="section" id="section-dashboard">
             <div class="section-header">
                 <h1>Command Center</h1>
                 <p class="section-subtitle">Real-time privacy intelligence overview</p>

@@ -362,22 +362,59 @@ function renderExposures(results) {
         });
     }
 
-    // Broker matches (top 20)
+    // Indian sources first — this is a DPDP Act product, so the domestic
+    // surface leads. Each carries its legal classification, because erasure
+    // is available against a people-search site and is NOT available against
+    // a court record or an MCA filing.
+    if (window.__indianSources?.length) {
+        const rank = { critical: 0, high: 1, medium: 2, low: 3 };
+        const erasable = { dpdp_erasure: 'DPDP s.12 — erasure available',
+                           dpdp_limited: 'Retention duty applies — dispute/correct only',
+                           statutory_publication: 'Statutory publication — erasure does not lie',
+                           judicial_record: 'Court record — needs a court application' };
+        [...window.__indianSources]
+            .sort((a, b) => (rank[a.severity] ?? 9) - (rank[b.severity] ?? 9))
+            .forEach(src => {
+                const servable = src.legal_class === 'dpdp_erasure';
+                cards.push(createExposureCard({
+                    title: src.name,
+                    source: 'broker',
+                    severity: src.severity || 'medium',
+                    domain: src.website,
+                    category: `${src.category} · India`,
+                    removalDifficulty: erasable[src.legal_class] || src.legal_class,
+                    optOutUrl: src.removal_url,
+                    type: servable ? 'Indian Source · Servable' : 'Indian Source · Not servable',
+                    companyName: src.name,
+                    companyEmail: '',
+                    noNotice: !servable,
+                }));
+            });
+    }
+
+    // Global directory context. These are CATEGORY HEURISTICS, not confirmed
+    // matches — "people-search sites of this kind typically hold records like
+    // yours". Previously this sliced the first 20 alphabetically, which handed
+    // an Indian user a screenful of Alabama court-record sites. Sort by
+    // likelihood, cap it, and label it honestly.
     if (results.brokers?.high_risk) {
-        results.brokers.high_risk.slice(0, 20).forEach(broker => {
-            cards.push(createExposureCard({
-                title: broker.broker_name,
-                source: 'broker',
-                severity: broker.exposure_likelihood >= 0.80 ? 'high' : 'medium',
-                domain: broker.website,
-                category: broker.category,
-                removalDifficulty: broker.removal_difficulty,
-                optOutUrl: broker.opt_out_url,
-                type: 'Data Broker',
-                companyName: broker.broker_name,
-                companyEmail: broker.privacy_email || '',
-            }));
-        });
+        [...results.brokers.high_risk]
+            .sort((a, b) => (b.exposure_likelihood || 0) - (a.exposure_likelihood || 0))
+            .slice(0, 9)
+            .forEach(broker => {
+                cards.push(createExposureCard({
+                    title: broker.broker_name,
+                    source: 'broker',
+                    severity: broker.exposure_likelihood >= 0.80 ? 'medium' : 'low',
+                    domain: broker.website,
+                    category: broker.category,
+                    removalDifficulty: broker.removal_difficulty,
+                    optOutUrl: broker.opt_out_url,
+                    type: `Global directory · likely (${Math.round((broker.exposure_likelihood || 0) * 100)}%)`,
+                    companyName: broker.broker_name,
+                    companyEmail: broker.privacy_email || '',
+                }));
+            });
     }
 
     if (cards.length === 0) {
@@ -404,7 +441,13 @@ function createExposureCard(data) {
     if (data.category) metaHtml += ` · <span>${data.category}</span>`;
     if (data.removalDifficulty) metaHtml += ` · Removal: ${data.removalDifficulty}`;
 
-    let actionsHtml = `<button class="exposure-action-btn" onclick="generateNoticeForExposure('${escapeHtml(data.companyName || '')}', '${escapeHtml(data.companyEmail || '')}')">Generate Legal Notice</button>`;
+    // A source that cannot lawfully be served must not offer a notice button.
+    // Drafting a DPDP erasure notice against a court judgment or an MCA filing
+    // produces a letter with no addressee in law — worse than useless, because
+    // it tells the user they have a remedy they do not have.
+    let actionsHtml = data.noNotice
+        ? `<span class="exposure-nonservable">Erasure not available — see basis</span>`
+        : `<button class="exposure-action-btn" onclick="generateNoticeForExposure('${escapeHtml(data.companyName || '')}', '${escapeHtml(data.companyEmail || '')}')">Generate Legal Notice</button>`;
     if (data.optOutUrl) {
         actionsHtml += `<a href="${escapeHtml(data.optOutUrl)}" target="_blank" class="exposure-action-btn danger">Opt-Out Link ↗</a>`;
     }
@@ -764,3 +807,312 @@ function showToast(message, type = 'info') {
         setTimeout(() => toast.remove(), 300);
     }, 4000);
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   PRIVACY AGENT
+   Streams the agent's real execution over /ws/agent. Every line appears when
+   the agent actually reaches that step — there is no scripted animation.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+const Agent = {
+    ws: null,
+    profile: null,
+    userId: null,
+    riskBefore: null,
+    drafted: [],
+    busy: false,
+};
+
+function agEl(id) { return document.getElementById(id); }
+
+function agProfile() {
+    return {
+        name: agEl('ag-name').value.trim(),
+        email: agEl('ag-email').value.trim(),
+        phone: agEl('ag-phone').value.trim(),
+        city: agEl('ag-city').value.trim(),
+        country: agEl('ag-country').value,
+        declared_accounts: (agEl('ag-declared')?.value || '').trim(),
+        password: (agEl('ag-password')?.value || ''),
+        sandbox: !!agEl('ag-sandbox')?.checked,
+    };
+}
+
+function traceClear() {
+    agEl('agent-trace').innerHTML =
+        '<div class="trace-empty">The agent\'s reasoning and every tool call will stream here in real time.</div>';
+}
+
+function traceAdd(agent, message, status) {
+    const box = agEl('agent-trace');
+    const empty = box.querySelector('.trace-empty');
+    if (empty) empty.remove();
+    const row = document.createElement('div');
+    row.className = 'trace-row' + (status === 'error' ? ' err' : '') +
+                    (status === 'awaiting_approval' ? ' approval' : '');
+    const a = document.createElement('span');
+    a.className = 'trace-agent a-' + (agent || 'orchestrator');
+    a.textContent = agent || 'agent';
+    const m = document.createElement('span');
+    m.className = 'trace-msg';
+    m.textContent = message;
+    row.append(a, m);
+    box.appendChild(row);
+    box.scrollTop = box.scrollHeight;
+}
+
+function traceReasoning(text) {
+    const box = agEl('agent-trace');
+    const empty = box.querySelector('.trace-empty');
+    if (empty) empty.remove();
+    const d = document.createElement('div');
+    d.className = 'trace-reasoning';
+    d.textContent = text;
+    box.appendChild(d);
+    box.scrollTop = box.scrollHeight;
+}
+
+async function agentInit() {
+    try {
+        const info = await (await fetch('/api/agent/info')).json();
+        const badge = agEl('planner-badge');
+        agEl('planner-mode').textContent = info.llm_active
+            ? `LLM PLANNER · ${info.model}` : 'DETERMINISTIC PLANNER';
+        agEl('planner-note').textContent = info.note;
+        badge.classList.toggle('live', !!info.llm_active);
+    } catch (e) { /* badge is cosmetic */ }
+
+    try {
+        const b = await (await fetch('/api/agent/brokers')).json();
+        agEl('ag-disclosure').textContent = b.disclosure;
+    } catch (e) { /* disclosure is cosmetic */ }
+}
+
+function agentConnect() {
+    return new Promise((resolve, reject) => {
+        if (Agent.ws && Agent.ws.readyState === WebSocket.OPEN) return resolve(Agent.ws);
+        const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const ws = new WebSocket(`${proto}//${location.host}/ws/agent`);
+        ws.onopen = () => { Agent.ws = ws; resolve(ws); };
+        ws.onerror = () => reject(new Error('WebSocket failed'));
+        ws.onmessage = (ev) => agentOnMessage(JSON.parse(ev.data));
+        ws.onclose = () => { Agent.ws = null; };
+    });
+}
+
+function agentOnMessage(msg) {
+    if (msg.type === 'agent_event') {
+        traceAdd(msg.agent, msg.message, msg.status);
+    } else if (msg.type === 'agent_reasoning') {
+        traceReasoning(msg.text);
+    } else if (msg.type === 'phase_complete') {
+        agentRender(msg);
+        agentSetBusy(false);
+    } else if (msg.type === 'error') {
+        traceAdd('orchestrator', msg.message, 'error');
+        agentSetBusy(false);
+    }
+}
+
+function agentSetBusy(busy) {
+    Agent.busy = busy;
+    agEl('ag-run').disabled = busy;
+    agEl('ag-reset').disabled = busy;
+    const approve = agEl('ag-approve');
+    if (approve) approve.disabled = busy;
+    agEl('trace-live').hidden = !busy;
+    agEl('ag-run').textContent = busy ? 'Agent working…' : 'Deploy Privacy Agent';
+}
+
+function agentRender(msg) {
+    const st = msg.state;
+    Agent.userId = msg.user_id;
+    const s = st.summary;
+
+    // Risk delta
+    const riskAfter = msg.risk_after != null ? msg.risk_after : null;
+    agEl('agent-outcome').hidden = false;
+    if (msg.action === 'scan') {
+        Agent.riskBefore = agentScoreFrom(msg) ?? Agent.riskBefore;
+        agEl('risk-before').textContent = '—';
+        agEl('risk-after').textContent = Agent.riskBefore != null ? Agent.riskBefore : '—';
+    } else {
+        agEl('risk-before').textContent = Agent.riskBefore != null ? Agent.riskBefore : '—';
+        agEl('risk-after').textContent = agentScoreFrom(msg) ?? '—';
+    }
+    const lvl = agentLevelFor(parseFloat(agEl('risk-after').textContent));
+    agEl('risk-level').textContent = lvl.label;
+    agEl('risk-level').style.color = lvl.color;
+    agEl('risk-after').style.color = lvl.color;
+
+    agEl('risk-stats').innerHTML = [
+        ['Exposures', s.exposures_total],
+        ['High risk', s.high_risk],
+        ['Notices sent', s.requests_submitted],
+        ['Verified removed', s.removals_verified],
+    ].map(([l, v]) => `<div class="risk-stat"><div class="risk-stat-v">${v}</div><div class="risk-stat-l">${l}</div></div>`).join('');
+
+    agEl('agent-summary').textContent = msg.summary || '';
+
+    // Approval gate
+    Agent.drafted = st.requests.filter(r => r.status === 'awaiting_approval');
+    const panel = agEl('approval-panel');
+    if (Agent.drafted.length) {
+        panel.hidden = false;
+        agEl('approval-list').innerHTML = Agent.drafted.map((r, i) => `
+            <div class="approval-item">
+                <input type="checkbox" id="apv-${i}" value="${r.id}" checked>
+                <div class="approval-body">
+                    <div class="approval-head">
+                        <span class="approval-broker">${agEsc(r.source_name)}</span>
+                        <span class="approval-statute">${agEsc(r.statute)}</span>
+                    </div>
+                    <div class="approval-meta">Ref ${agEsc(r.reference_id)} · respond within ${r.deadline_days} days</div>
+                    <button class="approval-toggle" data-t="${i}">Read the notice</button>
+                    <pre class="approval-text" id="apt-${i}" hidden>${agEsc(r.request_text)}</pre>
+                </div>
+            </div>`).join('');
+        agEl('approval-list').querySelectorAll('.approval-toggle').forEach(b => {
+            b.addEventListener('click', () => {
+                const pre = agEl('apt-' + b.dataset.t);
+                pre.hidden = !pre.hidden;
+                b.textContent = pre.hidden ? 'Read the notice' : 'Hide the notice';
+            });
+        });
+    } else {
+        panel.hidden = true;
+    }
+
+    // Ledger
+    agEl('ledger-panel').hidden = st.exposures.length === 0;
+    // Every row states HOW it is known, and can show the raw proof. Nothing
+    // appears in this table that was not either checked or declared.
+    agEl('ledger').innerHTML =
+        '<thead><tr><th>Source</th><th>How we know</th><th>Data exposed</th><th>Proof</th><th>Status</th></tr></thead><tbody>' +
+        st.exposures.map((e, i) => {
+            const cls = e.evidence_class || 'unknown';
+            const evs = e.evidence || [];
+            const proof = evs.map(v => {
+                const lines = [
+                    `<b>check</b>      ${agEsc(v.check || '')}`,
+                    `<b>endpoint</b>   ${agEsc(v.endpoint || '')}`,
+                    `<b>queried</b>    ${agEsc(v.queried_at || '')}`,
+                    v.http_status != null ? `<b>HTTP</b>       ${agEsc(v.http_status)}` : '',
+                    `<b>evidence</b>   ${agEsc(v.proof || '')}`,
+                    `<b>means</b>      ${agEsc(v.interpretation || '')}`,
+                    v.reproduce ? `<b>verify it</b>  ${agEsc(v.reproduce)}` : '',
+                ].filter(Boolean);
+                return lines.join('\n');
+            }).join('\n\n');
+            return `
+            <tr>
+                <td class="src">${agEsc(e.source_name)}</td>
+                <td><span class="ev-badge ev-${agEsc(cls)}">${agEsc(cls.replace('_', ' '))}</span></td>
+                <td>${agEsc((e.data_found || []).slice(0, 5).join(', ')) || '—'}</td>
+                <td>${evs.length ? `<button class="proof-toggle" data-p="${i}">show proof</button>` : '—'}</td>
+                <td><span class="pill ${agEsc(e.status)}">${agEsc(e.status)}</span>
+                    ${e.verified_at ? ' <span class="verified-tag">✓ REMOVAL VERIFIED</span>' : ''}</td>
+            </tr>
+            ${evs.length ? `<tr id="proof-${i}" hidden><td colspan="5"><div class="proof-box">${proof}</div></td></tr>` : ''}`;
+        }).join('') + '</tbody>';
+
+    agEl('ledger').querySelectorAll('.proof-toggle').forEach(b => {
+        b.addEventListener('click', () => {
+            const row = agEl('proof-' + b.dataset.p);
+            row.hidden = !row.hidden;
+            b.textContent = row.hidden ? 'show proof' : 'hide proof';
+        });
+    });
+}
+
+function agentScoreFrom(msg) {
+    if (msg.risk_after != null) return msg.risk_after;
+    const m = (msg.summary || '').match(/Risk Score ([\d.]+)/);
+    return m ? parseFloat(m[1]) : null;
+}
+
+function agentLevelFor(score) {
+    if (isNaN(score)) return { label: '', color: 'var(--text-primary)' };
+    if (score >= 80) return { label: 'Critical', color: '#ef4444' };
+    if (score >= 60) return { label: 'High', color: '#f97316' };
+    if (score >= 40) return { label: 'Medium', color: '#eab308' };
+    if (score >= 20) return { label: 'Low', color: '#22c55e' };
+    return { label: 'Minimal', color: '#10b981' };
+}
+
+function agEsc(v) {
+    return String(v == null ? '' : v).replace(/[&<>"']/g,
+        c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+async function agentRun() {
+    const profile = agProfile();
+    if (!profile.name && !profile.email) {
+        alert('Enter at least a name or an email address.');
+        return;
+    }
+    Agent.profile = profile;
+    Agent.riskBefore = null;
+    traceClear();
+    agEl('agent-outcome').hidden = true;
+    agEl('approval-panel').hidden = true;
+    agEl('ledger-panel').hidden = true;
+    agentSetBusy(true);
+    try {
+        const ws = await agentConnect();
+        ws.send(JSON.stringify({ action: 'scan', profile }));
+    } catch (e) {
+        traceAdd('orchestrator', 'Could not reach the agent: ' + e.message, 'error');
+        agentSetBusy(false);
+    }
+}
+
+async function agentApprove() {
+    const ids = Array.from(document.querySelectorAll('#approval-list input:checked')).map(i => i.value);
+    if (!ids.length) { alert('Select at least one notice to dispatch.'); return; }
+    agentSetBusy(true);
+    traceAdd('orchestrator', `User approved ${ids.length} notice(s) for dispatch.`, 'ok');
+    try {
+        const ws = await agentConnect();
+        ws.send(JSON.stringify({ action: 'approve', profile: Agent.profile, request_ids: ids }));
+    } catch (e) {
+        traceAdd('orchestrator', 'Could not reach the agent: ' + e.message, 'error');
+        agentSetBusy(false);
+    }
+}
+
+async function agentReset() {
+    const profile = agProfile();
+    if (!profile.name && !profile.email) { alert('Enter the identity you want to reset.'); return; }
+    agentSetBusy(true);
+    try {
+        await fetch('/api/agent/reset', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(profile),
+        });
+        traceClear();
+        agEl('agent-outcome').hidden = true;
+        agEl('approval-panel').hidden = true;
+        agEl('ledger-panel').hidden = true;
+        traceAdd('orchestrator', 'Identity reset. The demo can be run again from a clean slate.', 'ok');
+    } catch (e) {
+        traceAdd('orchestrator', 'Reset failed: ' + e.message, 'error');
+    }
+    agentSetBusy(false);
+}
+
+async function loadIndianSources() {
+    try {
+        const d = await (await fetch('/api/sources/indian')).json();
+        window.__indianSources = d.sources || [];
+    } catch (e) { window.__indianSources = []; }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    loadIndianSources();
+    if (!document.getElementById('section-agent')) return;
+    agentInit();
+    agEl('ag-run').addEventListener('click', agentRun);
+    agEl('ag-approve').addEventListener('click', agentApprove);
+    agEl('ag-reset').addEventListener('click', agentReset);
+});

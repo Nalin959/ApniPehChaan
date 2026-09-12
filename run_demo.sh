@@ -29,7 +29,11 @@ echo "[2/4] Installing dependencies..."
 
 # Step 3: Build datasets
 echo "[3/4] Building datasets..."
-"$VENV_DIR/bin/python" "$SCRIPT_DIR/data/download_datasets.py"
+if [ ! -f "$SCRIPT_DIR/data/breaches/hibp_breaches.json" ]; then
+    "$VENV_DIR/bin/python" "$SCRIPT_DIR/data/download_datasets.py"
+else
+    echo "    Datasets already present — skipping download."
+fi
 
 # Step 4: Launch server
 echo ""
@@ -41,4 +45,8 @@ echo "  API Docs:  http://127.0.0.1:$PORT/docs"
 echo "═══════════════════════════════════════════════════════════════"
 echo ""
 
-"$VENV_DIR/bin/python" -m uvicorn backend.app:app --host 0.0.0.0 --port $PORT --reload --reload-dir "$SCRIPT_DIR"
+# No --reload. It watches the project directory, and a file touched mid-demo
+# restarts the process. State now lives in sqlite so a restart is survivable,
+# but a reload still drops live WebSocket connections mid-agent-run.
+# Use scripts/dev.sh if you want auto-reload while developing.
+"$VENV_DIR/bin/python" -m uvicorn backend.app:app --host 0.0.0.0 --port $PORT

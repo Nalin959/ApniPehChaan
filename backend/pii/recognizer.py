@@ -168,7 +168,7 @@ def _compile_patterns():
         # ── Indian Phone Number (various formats) ──
         # +91-XXXXXXXXXX, +91 XXXXX XXXXX, 0XXXXXXXXXX, etc.
         (
-            r'(?:\+91[\s\-]?|91[\s\-]?|0)([6-9]\d{4}[\s\-]?\d{5})\b',
+            r'(?<![0-9])(?:\+91[\s\-]?|91[\s\-]?|0)([6-9]\d{4}[\s\-]?\d{5})(?![0-9])',
             "PHONE_IN",
             None,
             0.90,
@@ -253,37 +253,35 @@ class PIIRecognizer:
         """
         Scan text and return all detected PII entities.
 
-        Returns a deduplicated list of PIIEntity objects, sorted by position.
+        Candidates from every pattern are gathered first, then overlaps are
+        resolved by evidence strength rather than by pattern declaration order.
+        This matters: the Aadhaar pattern matches the first 12 digits of a
+        16-digit payment card, so a naive first-wins scan reports a card number
+        as somebody's national ID. Preferring checksum-validated, longer matches
+        resolves that correctly and in general.
         """
-        entities = []
-        self._seen_positions = set()
+        candidates: list[tuple[int, int, int, PIIEntity]] = []
 
         for regex, entity_type, validator, base_confidence, extractor in _PII_PATTERNS:
             for match in regex.finditer(text):
-                # Deduplicate overlapping matches
-                pos_key = (match.start(), match.end())
-                if pos_key in self._seen_positions:
-                    continue
-
-                # Run validator if present
                 confidence = base_confidence
                 validation_method = "regex"
+                algorithmically_valid = 0
+
                 if validator is not None:
                     try:
                         if not validator(match):
-                            # For Aadhaar, still accept but lower confidence
-                            if entity_type == "AADHAAR":
-                                confidence *= 0.6
-                                validation_method = "regex_only"
-                            else:
-                                continue
-                        else:
-                            confidence = min(confidence * 1.15, 1.0)
-                            validation_method = "regex+algorithm"
+                            # A failed checksum is disqualifying. Aadhaar, card and
+                            # account numbers all carry check digits precisely so a
+                            # number-shaped string can be rejected; honouring that is
+                            # the entire value of the algorithm.
+                            continue
+                        confidence = min(confidence * 1.15, 1.0)
+                        validation_method = "regex+algorithm"
+                        algorithmically_valid = 1
                     except Exception:
                         continue
 
-                # Extract the normalized value
                 try:
                     value = extractor(match)
                 except Exception:
@@ -298,22 +296,29 @@ class PIIRecognizer:
                     confidence=round(confidence, 3),
                     validation_method=validation_method,
                 )
-                entities.append(entity)
-                self._seen_positions.add(pos_key)
+                span = match.end() - match.start()
+                candidates.append((algorithmically_valid, span, int(confidence * 1000), entity))
 
-        # Sort by position, then deduplicate by value+type
-        entities.sort(key=lambda e: (e.start, -e.confidence))
+        # Strongest evidence wins its span: checksum-validated first, then the
+        # longer match, then the more confident one.
+        candidates.sort(key=lambda c: (-c[0], -c[1], -c[2], c[3].start))
 
-        # Remove duplicates where the same value was matched by multiple patterns
-        seen_values = set()
-        deduped = []
-        for entity in entities:
+        accepted: list[PIIEntity] = []
+        claimed: list[tuple[int, int]] = []
+        seen_values: set = set()
+
+        for _, _, _, entity in candidates:
+            if any(entity.start < c_end and c_start < entity.end for c_start, c_end in claimed):
+                continue  # overlaps a span already explained by stronger evidence
             key = (entity.entity_type, entity.value)
-            if key not in seen_values:
-                seen_values.add(key)
-                deduped.append(entity)
+            if key in seen_values:
+                continue
+            seen_values.add(key)
+            claimed.append((entity.start, entity.end))
+            accepted.append(entity)
 
-        return deduped
+        accepted.sort(key=lambda e: e.start)
+        return accepted
 
     def recognize_dict(self, text: str) -> list[dict]:
         """Return entities as a list of dictionaries."""

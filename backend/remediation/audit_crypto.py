@@ -32,6 +32,18 @@ class AuditReceipt:
         }, sort_keys=True, default=str)
         self.hash = hashlib.sha256(content.encode()).hexdigest()
 
+    @classmethod
+    def from_dict(cls, row: dict) -> "AuditReceipt":
+        """Rebuild a stored receipt verbatim, preserving its original hash."""
+        obj = cls.__new__(cls)
+        obj.receipt_id = row["receipt_id"]
+        obj.timestamp = row["timestamp"]
+        obj.action = row["action"]
+        obj.details = row.get("details") or {}
+        obj.previous_hash = row["previous_hash"]
+        obj.hash = row["hash"]
+        return obj
+
     def to_dict(self) -> dict:
         return {
             "receipt_id": self.receipt_id,
@@ -62,16 +74,42 @@ class AuditTrail:
     forming a tamper-evident chain (similar to blockchain blocks).
     """
 
-    def __init__(self):
+    def __init__(self, store=None):
+        """
+        Args:
+            store: optional persistence backend exposing load_receipts() and
+                   append_receipt(dict). Without it the chain is in-process only
+                   and resets to genesis on every restart — which made the
+                   "tamper-evident ledger" claim hollow, since any restart
+                   silently rewrote history.
+        """
         self._receipts: list[AuditReceipt] = []
+        self._store = store
 
-        # Genesis receipt
+        if store is not None:
+            try:
+                rows = store.load_receipts()
+            except Exception:
+                rows = []
+            if rows:
+                self._receipts = [AuditReceipt.from_dict(r) for r in rows]
+                return
+
         genesis = AuditReceipt(
             action="AUDIT_TRAIL_INITIALIZED",
             details={"agent": "SovereignPrivacy AI", "version": "1.0.0"},
             previous_hash="0" * 64,
         )
         self._receipts.append(genesis)
+        self._persist(genesis)
+
+    def _persist(self, receipt: "AuditReceipt"):
+        if self._store is None:
+            return
+        try:
+            self._store.append_receipt(receipt.to_dict())
+        except Exception:
+            pass   # a storage failure must not break the running chain
 
     def add(self, action: str, details: dict) -> AuditReceipt:
         """
@@ -87,6 +125,7 @@ class AuditTrail:
         previous_hash = self._receipts[-1].hash if self._receipts else "0" * 64
         receipt = AuditReceipt(action=action, details=details, previous_hash=previous_hash)
         self._receipts.append(receipt)
+        self._persist(receipt)
         return receipt
 
     def get_all(self) -> list[dict]:

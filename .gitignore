@@ -24,3 +24,8 @@ push_to_github.sh
 Thumbs.db
 *.swp
 *~
+
+# Agent runtime state (memory, broker environment, audit chain)
+data/sovereign.db
+data/sovereign.db-wal
+data/sovereign.db-shm

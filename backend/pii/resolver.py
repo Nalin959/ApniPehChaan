@@ -97,10 +97,16 @@ class IdentityMatch:
     unmatched_fields: list[str]
     is_match: bool
     confidence_label: str  # "definite", "likely", "possible", "unlikely"
+    raw_score: float = 0.0       # similarity before corroboration is applied
+    corroboration: float = 1.0   # discount for thin evidence (see _corroboration)
+    evidence_note: str = ""
 
     def to_dict(self):
         return {
             "overall_score": round(self.overall_score, 4),
+            "raw_score": round(self.raw_score, 4),
+            "corroboration": round(self.corroboration, 3),
+            "evidence_note": self.evidence_note,
             "field_scores": {k: round(v, 4) for k, v in self.field_scores.items()},
             "matched_fields": self.matched_fields,
             "unmatched_fields": self.unmatched_fields,
@@ -127,11 +133,15 @@ class IdentityResolver:
         "address": 0.05,
         "ip_address": 0.05,
         "upi": 0.05,
+        "city": 0.05,
     }
+
+    # Identifiers unique enough to identify a person on their own.
+    STRONG_IDENTIFIERS = {"email", "phone", "aadhaar", "pan", "upi"}
 
     # Thresholds for field-level match
     EXACT_FIELDS = {"email", "phone", "aadhaar", "pan", "upi", "ip_address"}
-    FUZZY_FIELDS = {"name", "address"}
+    FUZZY_FIELDS = {"name", "address", "city"}
     FUZZY_THRESHOLD = 0.80
 
     def resolve(self, user_profile: dict, detected_record: dict) -> IdentityMatch:
@@ -178,7 +188,15 @@ class IdentityResolver:
             weighted_sum += score * w
             total_weight += w
 
-        overall_score = weighted_sum / total_weight if total_weight > 0 else 0.0
+        raw_score = weighted_sum / total_weight if total_weight > 0 else 0.0
+
+        # Discount thin evidence. Averaging only over the fields that happen to be
+        # present means a record containing nothing but a matching name scores 1.0
+        # — and on a common name that is a stranger, not the user. Acting on that
+        # would serve a legal notice about somebody else's record, so a match must
+        # be corroborated by more than one non-unique identifier.
+        corroboration, evidence_note = self._corroboration(matched_fields)
+        overall_score = raw_score * corroboration
 
         # Determine confidence label
         if overall_score >= 0.90:
@@ -197,7 +215,33 @@ class IdentityResolver:
             unmatched_fields=unmatched_fields,
             is_match=overall_score >= 0.45,
             confidence_label=label,
+            raw_score=raw_score,
+            corroboration=corroboration,
+            evidence_note=evidence_note,
         )
+
+    def _corroboration(self, matched_fields: list[str]) -> tuple[float, str]:
+        """
+        How much independent evidence supports this being the same person?
+
+        A matching email or phone number is close to conclusive on its own.
+        A matching name is not: it is shared by thousands of people. So a match
+        resting only on non-unique fields is discounted until corroborated.
+        """
+        strong = [f for f in matched_fields if f in self.STRONG_IDENTIFIERS]
+        weak = [f for f in matched_fields if f not in self.STRONG_IDENTIFIERS]
+
+        if strong:
+            return 1.0, f"Corroborated by unique identifier(s): {', '.join(strong)}."
+        if len(weak) >= 3:
+            return 0.80, f"No unique identifier; supported by {len(weak)} non-unique fields."
+        if len(weak) == 2:
+            return 0.65, (f"No unique identifier; only {' + '.join(weak)} agree. "
+                          "Treated as possible, not confirmed.")
+        if len(weak) == 1:
+            return 0.40, (f"Only '{weak[0]}' matches, which is not unique to this person. "
+                          "Insufficient to attribute this record.")
+        return 0.0, "No fields matched." 
 
     def _normalize(self, field: str, value: str) -> str:
         """Normalize a field value for comparison."""

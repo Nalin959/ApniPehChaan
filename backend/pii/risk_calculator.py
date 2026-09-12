@@ -9,6 +9,7 @@ Computes a composite privacy vulnerability score (0–100) based on:
   • Data broker coverage
 """
 
+import math
 from datetime import datetime, timedelta
 from dataclasses import dataclass
 
@@ -102,67 +103,47 @@ class RiskCalculator:
                 exposures_by_severity={},
             )
 
-        # ── Component 1: Data Sensitivity Score (0–40 points) ──
-        sensitivity_total = 0
-        entity_counts = {}
+        # ── Exposure pressure ──
+        # Each exposure contributes sensitivity x source-credibility x recency.
+        # The previous model summed these into components capped at 40/25/20/15
+        # with divisors so small that two of them pinned at ~12 exposures: past
+        # that point the score stopped responding, so removing data barely moved
+        # it. Since the entire product promise is "your score falls when your
+        # data comes down", the components now saturate smoothly (exponential
+        # diminishing returns) instead of clipping. Every removal moves the number.
+        now = datetime.now()
+        pressure = 0.0
+        entity_counts: dict = {}
+        source_counts: dict = {}
+        sources_seen: set = set()
+
         for exp in exposures:
             etype = exp.get("entity_type", "UNKNOWN")
-            weight = SENSITIVITY_WEIGHTS.get(etype, 1.0)
-            sensitivity_total += weight
-            entity_counts[etype] = entity_counts.get(etype, 0) + 1
-
-        # Normalize: 40 points for score >= 25 raw sensitivity
-        # (3 critical items like Aadhaar+PAN+Card = ~27.5, should max out)
-        sensitivity_score = min(40, (sensitivity_total / 25) * 40)
-
-        # ── Component 2: Source Credibility Risk (0–25 points) ──
-        source_total = 0
-        source_counts = {}
-        for exp in exposures:
             stype = exp.get("source_type", "synthetic")
+            weight = SENSITIVITY_WEIGHTS.get(etype, 1.0)
             cred = SOURCE_CREDIBILITY.get(stype, 0.5)
-            source_total += cred
+            recency = self._recency_factor(exp.get("date_found"), now)
+
+            pressure += weight * cred * recency
+            entity_counts[etype] = entity_counts.get(etype, 0) + 1
             source_counts[stype] = source_counts.get(stype, 0) + 1
+            sources_seen.add(f"{stype}:{exp.get('value', '')[:24]}")
 
-        source_score = min(25, (source_total / 10) * 25)
+        # Core: what is exposed, how credible the source, how fresh (0-75).
+        core_score = 75.0 * (1.0 - math.exp(-pressure / 15.0))
 
-        # ── Component 3: Recency Risk (0–20 points) ──
-        recency_scores = []
-        now = datetime.now()
-        for exp in exposures:
-            date_str = exp.get("date_found")
-            if date_str:
-                try:
-                    found_date = datetime.fromisoformat(date_str.replace("Z", "+00:00")).replace(tzinfo=None)
-                    days_ago = (now - found_date).days
-                    if days_ago <= 7:
-                        recency_scores.append(1.0)
-                    elif days_ago <= 30:
-                        recency_scores.append(0.8)
-                    elif days_ago <= 90:
-                        recency_scores.append(0.6)
-                    elif days_ago <= 365:
-                        recency_scores.append(0.3)
-                    else:
-                        recency_scores.append(0.1)
-                except (ValueError, TypeError):
-                    recency_scores.append(0.5)
-            else:
-                recency_scores.append(0.5)
+        # Broker coverage: commercial resale is a distinct harm (0-15).
+        broker_score = 15.0 * (1.0 - math.exp(-broker_matches / 3.0)) if broker_matches else 0.0
 
-        avg_recency = sum(recency_scores) / len(recency_scores) if recency_scores else 0
-        recency_score = avg_recency * 20
+        # Breadth: the same datum in many places is harder to contain (0-10).
+        breadth_score = 10.0 * (1.0 - math.exp(-len(sources_seen) / 4.0)) if sources_seen else 0.0
 
-        # ── Component 4: Data Broker Exposure (0–15 points) ──
-        if total_brokers_checked > 0:
-            broker_ratio = broker_matches / total_brokers_checked
-            broker_score = min(15, broker_ratio * 150)  # 10% match = 15 points
-        else:
-            broker_score = 0
+        overall = min(100.0, max(0.0, core_score + broker_score + breadth_score))
 
-        # ── Compute overall score ──
-        overall = sensitivity_score + source_score + recency_score + broker_score
-        overall = min(100, max(0, overall))
+        # Keep the published breakdown shape stable for the UI.
+        sensitivity_score = core_score * 0.60
+        source_score = core_score * 0.25
+        recency_score = core_score * 0.15
 
         # ── Determine risk level ──
         if overall >= 80:
@@ -217,6 +198,26 @@ class RiskCalculator:
             recommendations=recommendations,
             exposures_by_severity=exposures_by_severity,
         )
+
+    @staticmethod
+    def _recency_factor(date_str, now) -> float:
+        """Fresh exposures are more dangerous than decade-old ones."""
+        if not date_str:
+            return 0.5
+        try:
+            found = datetime.fromisoformat(str(date_str).replace("Z", "+00:00")).replace(tzinfo=None)
+        except (ValueError, TypeError):
+            return 0.5
+        days = (now - found).days
+        if days <= 7:
+            return 1.0
+        if days <= 30:
+            return 0.8
+        if days <= 90:
+            return 0.6
+        if days <= 365:
+            return 0.3
+        return 0.15
 
     def _generate_recommendations(
         self, entity_counts: dict, source_counts: dict, broker_matches: int, score: float

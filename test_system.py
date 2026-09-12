@@ -116,10 +116,40 @@ def test_pii_recognizer():
 
     recognizer = PIIRecognizer()
 
-    # Aadhaar detection
-    entities = recognizer.recognize("My Aadhaar is 2345 6789 0123")
+    # Aadhaar detection. 2345 6789 0124 carries a correct Verhoeff check digit;
+    # 2345 6789 0123 does not, and must now be rejected rather than downgraded.
+    entities = recognizer.recognize("My Aadhaar is 2345 6789 0124")
     aadhaar_found = any(e.entity_type == "AADHAAR" for e in entities)
     test("Detects Aadhaar number", aadhaar_found)
+
+    # ── Regression tests for defects found during the agentic rebuild ──
+
+    # A failed Verhoeff checksum must disqualify, not merely lower confidence.
+    bad = recognizer.recognize("Reference number 234567890123 on file")
+    test("Rejects Aadhaar with bad checksum",
+         not any(e.entity_type == "AADHAAR" for e in bad))
+
+    # A timestamp-shaped 12-digit number must not be reported as a national ID.
+    ts = recognizer.recognize("Transaction id 202609121633 posted")
+    test("Timestamp is not misread as Aadhaar",
+         not any(e.entity_type == "AADHAAR" for e in ts))
+
+    # The Aadhaar pattern matches the first 12 digits of a 16-digit card. A card
+    # must win its own span, or the tool tells users their Aadhaar leaked.
+    card = recognizer.recognize("card 4111111111111111 on file")
+    types = [e.entity_type for e in card]
+    test("Payment card is not misread as Aadhaar",
+         "CREDIT_CARD" in types and "AADHAAR" not in types)
+
+    # A 10-digit run inside a longer number is not an Indian mobile number.
+    inner = recognizer.recognize("Order number 809209727560 confirmed")
+    test("No phone match inside a longer digit run",
+         not any(e.entity_type == "PHONE_IN" for e in inner))
+
+    # PAN encodes a holder-type character in position 4; ABCDE1234F is not valid.
+    test("PAN holder-type character is enforced",
+         not any(e.entity_type == "PAN" for e in recognizer.recognize("PAN ABCDE1234F"))
+         and any(e.entity_type == "PAN" for e in recognizer.recognize("PAN ABCPE1234F")))
 
     # PAN detection
     entities = recognizer.recognize("PAN: ABCPD1234E")
@@ -213,6 +243,22 @@ def test_identity_resolver():
     )
     test("Non-match scores < 0.45", result.overall_score < 0.45)
 
+
+    # A record containing only a matching name scored 1.0 "definite" before this
+    # fix. On a common name that is a stranger — and the agent would then serve a
+    # legal notice about somebody else's record.
+    name_only = resolver.resolve(
+        {"name": "Aarav Sharma", "email": "aarav.sharma@example.com",
+         "phone": "+919876543210", "city": "New Delhi"},
+        {"name": "Aarav Sharma"})
+    test("Name-only record is not a match", not name_only.is_match)
+    test("Name-only record is not 'definite'", name_only.confidence_label != "definite")
+
+    # A unique identifier on its own is still conclusive.
+    email_only = resolver.resolve(
+        {"name": "Aarav Sharma", "email": "aarav.sharma@example.com"},
+        {"email": "aarav.sharma@example.com"})
+    test("Unique identifier alone is a match", email_only.is_match)
     # Jaro-Winkler
     sim = jaro_winkler_similarity("Sharma", "Sharma")
     test("JW identical strings = 1.0", sim == 1.0)

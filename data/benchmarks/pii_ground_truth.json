@@ -1,97 +1,22 @@
 [
   {
-    "id": "aadhaar_invalid_003",
-    "text": "Invalid reference: 151279768221",
-    "expected_entities": [],
-    "category": "aadhaar_negative"
-  },
-  {
-    "id": "upi_028",
-    "text": "Pay via UPI: kiran71@ybl",
+    "id": "phone_in_039",
+    "text": "Call me at +918760560500",
     "expected_entities": [
-      {
-        "type": "UPI",
-        "value": "kiran71@ybl"
-      }
-    ],
-    "category": "upi"
-  },
-  {
-    "id": "mixed_017",
-    "text": "Customer Priya Singh (email: priya.singh@gmail.com, phone: +91 7928633995) has PAN XCKAX1101F.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "priya.singh@gmail.com"
-      },
       {
         "type": "PHONE_IN",
-        "value": "7928633995"
-      },
-      {
-        "type": "PAN",
-        "value": "XCKAX1101F"
+        "value": "8760560500"
       }
     ],
-    "category": "mixed"
+    "category": "phone_indian"
   },
   {
-    "id": "email_012",
-    "text": "Contact me at meera.patel54@yahoo.co.in for details.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "meera.patel54@yahoo.co.in"
-      }
-    ],
-    "category": "email"
-  },
-  {
-    "id": "ip_011",
-    "text": "Login from IP 106.186.155.244",
-    "expected_entities": [
-      {
-        "type": "IP_ADDRESS",
-        "value": "106.186.155.244"
-      }
-    ],
-    "category": "ip_address"
-  },
-  {
-    "id": "upi_003",
-    "text": "Pay via UPI: kiran90@okaxis",
-    "expected_entities": [
-      {
-        "type": "UPI",
-        "value": "kiran90@okaxis"
-      }
-    ],
-    "category": "upi"
-  },
-  {
-    "id": "aadhaar_invalid_009",
-    "text": "Invalid reference: 179386816528",
-    "expected_entities": [],
-    "category": "aadhaar_negative"
-  },
-  {
-    "id": "pan_016",
-    "text": "PAN Card: ZQGLI9960C",
-    "expected_entities": [
-      {
-        "type": "PAN",
-        "value": "ZQGLI9960C"
-      }
-    ],
-    "category": "pan"
-  },
-  {
-    "id": "aadhaar_034",
-    "text": "My Aadhaar number is 2011 9176 3553",
+    "id": "aadhaar_013",
+    "text": "My Aadhaar number is 5541 3851 7479",
     "expected_entities": [
       {
         "type": "AADHAAR",
-        "value": "201191763553",
+        "value": "554138517479",
         "start": 23,
         "end": 37
       }
@@ -99,42 +24,53 @@
     "category": "aadhaar"
   },
   {
-    "id": "mixed_002",
-    "text": "Customer Ananya Kumar (email: ananya.kumar@gmail.com, phone: +91 8114224520) has PAN ZYPCE3712M.",
+    "id": "mixed_024",
+    "text": "Customer Ananya Patel (email: ananya.patel@gmail.com, phone: +91 9411107683) has PAN TIAGV3514V.",
     "expected_entities": [
       {
         "type": "EMAIL",
-        "value": "ananya.kumar@gmail.com"
+        "value": "ananya.patel@gmail.com"
       },
       {
         "type": "PHONE_IN",
-        "value": "8114224520"
+        "value": "9411107683"
       },
       {
         "type": "PAN",
-        "value": "ZYPCE3712M"
+        "value": "TIAGV3514V"
       }
     ],
     "category": "mixed"
   },
   {
-    "id": "ip_015",
-    "text": "Login from IP 7.134.234.43",
+    "id": "phone_in_028",
+    "text": "Call me at +917602424597",
     "expected_entities": [
       {
-        "type": "IP_ADDRESS",
-        "value": "7.134.234.43"
+        "type": "PHONE_IN",
+        "value": "7602424597"
       }
     ],
-    "category": "ip_address"
+    "category": "phone_indian"
   },
   {
-    "id": "aadhaar_029",
-    "text": "My Aadhaar number is 4774 2879 5935",
+    "id": "phone_in_011",
+    "text": "Call me at +91 6969724865",
+    "expected_entities": [
+      {
+        "type": "PHONE_IN",
+        "value": "6969724865"
+      }
+    ],
+    "category": "phone_indian"
+  },
+  {
+    "id": "aadhaar_011",
+    "text": "My Aadhaar number is 4854 7412 3033",
     "expected_entities": [
       {
         "type": "AADHAAR",
-        "value": "477428795935",
+        "value": "485474123033",
         "start": 23,
         "end": 37
       }
@@ -142,647 +78,127 @@
     "category": "aadhaar"
   },
   {
-    "id": "pan_030",
-    "text": "PAN Card: JJUFU3496E",
+    "id": "pan_040",
+    "text": "PAN Card: CRYHS2770X",
     "expected_entities": [
       {
         "type": "PAN",
-        "value": "JJUFU3496E"
+        "value": "CRYHS2770X"
       }
     ],
     "category": "pan"
   },
   {
-    "id": "email_003",
-    "text": "Contact me at meera.patel19@outlook.com for details.",
+    "id": "mixed_041",
+    "text": "Customer Aarav Singh (email: aarav.singh@gmail.com, phone: +91 7175429012) has PAN NLHCA5140K.",
     "expected_entities": [
       {
         "type": "EMAIL",
-        "value": "meera.patel19@outlook.com"
+        "value": "aarav.singh@gmail.com"
+      },
+      {
+        "type": "PHONE_IN",
+        "value": "7175429012"
+      },
+      {
+        "type": "PAN",
+        "value": "NLHCA5140K"
+      }
+    ],
+    "category": "mixed"
+  },
+  {
+    "id": "mixed_027",
+    "text": "Customer Rahul Sharma (email: rahul.sharma@gmail.com, phone: +91 9811207278) has PAN UDLAY6346E.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "rahul.sharma@gmail.com"
+      },
+      {
+        "type": "PHONE_IN",
+        "value": "9811207278"
+      },
+      {
+        "type": "PAN",
+        "value": "UDLAY6346E"
+      }
+    ],
+    "category": "mixed"
+  },
+  {
+    "id": "email_047",
+    "text": "Contact me at arjun.sharma33@company.org for details.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "arjun.sharma33@company.org"
       }
     ],
     "category": "email"
   },
   {
-    "id": "ifsc_010",
-    "text": "IFSC code: HDFC094440",
-    "expected_entities": [
-      {
-        "type": "IFSC",
-        "value": "HDFC094440"
-      }
-    ],
-    "category": "ifsc"
-  },
-  {
-    "id": "mixed_004",
-    "text": "Customer Priya Patel (email: priya.patel@gmail.com, phone: +91 7506303652) has PAN KTHCP1368V.",
+    "id": "email_016",
+    "text": "Contact me at anita.kumar43@yahoo.co.in for details.",
     "expected_entities": [
       {
         "type": "EMAIL",
-        "value": "priya.patel@gmail.com"
-      },
-      {
-        "type": "PHONE_IN",
-        "value": "7506303652"
-      },
-      {
-        "type": "PAN",
-        "value": "KTHCP1368V"
-      }
-    ],
-    "category": "mixed"
-  },
-  {
-    "id": "aadhaar_invalid_008",
-    "text": "Invalid reference: 135245285463",
-    "expected_entities": [],
-    "category": "aadhaar_negative"
-  },
-  {
-    "id": "pan_044",
-    "text": "PAN Card: YPUPD6258C",
-    "expected_entities": [
-      {
-        "type": "PAN",
-        "value": "YPUPD6258C"
-      }
-    ],
-    "category": "pan"
-  },
-  {
-    "id": "email_037",
-    "text": "Contact me at priya.sharma27@company.org for details.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "priya.sharma27@company.org"
-      }
-    ],
-    "category": "email"
-  },
-  {
-    "id": "mixed_013",
-    "text": "Customer Priya Singh (email: priya.singh@gmail.com, phone: +91 9161889182) has PAN GQNAH7772N.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "priya.singh@gmail.com"
-      },
-      {
-        "type": "PHONE_IN",
-        "value": "9161889182"
-      },
-      {
-        "type": "PAN",
-        "value": "GQNAH7772N"
-      }
-    ],
-    "category": "mixed"
-  },
-  {
-    "id": "ifsc_018",
-    "text": "IFSC code: BARB003721",
-    "expected_entities": [
-      {
-        "type": "IFSC",
-        "value": "BARB003721"
-      }
-    ],
-    "category": "ifsc"
-  },
-  {
-    "id": "email_028",
-    "text": "Contact me at aarav.patel65@outlook.com for details.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "aarav.patel65@outlook.com"
-      }
-    ],
-    "category": "email"
-  },
-  {
-    "id": "aadhaar_043",
-    "text": "My Aadhaar number is 4153 3410 0633",
-    "expected_entities": [
-      {
-        "type": "AADHAAR",
-        "value": "415334100633",
-        "start": 23,
-        "end": 37
-      }
-    ],
-    "category": "aadhaar"
-  },
-  {
-    "id": "upi_005",
-    "text": "Pay via UPI: kiran66@upi",
-    "expected_entities": [
-      {
-        "type": "UPI",
-        "value": "kiran66@upi"
-      }
-    ],
-    "category": "upi"
-  },
-  {
-    "id": "phone_in_018",
-    "text": "Call me at +91 91224 36222",
-    "expected_entities": [
-      {
-        "type": "PHONE_IN",
-        "value": "9122436222"
-      }
-    ],
-    "category": "phone_indian"
-  },
-  {
-    "id": "email_039",
-    "text": "Contact me at meera.gupta91@company.org for details.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "meera.gupta91@company.org"
-      }
-    ],
-    "category": "email"
-  },
-  {
-    "id": "aadhaar_invalid_012",
-    "text": "Invalid reference: 134785366225",
-    "expected_entities": [],
-    "category": "aadhaar_negative"
-  },
-  {
-    "id": "phone_in_038",
-    "text": "Call me at 916074651468",
-    "expected_entities": [
-      {
-        "type": "PHONE_IN",
-        "value": "6074651468"
-      }
-    ],
-    "category": "phone_indian"
-  },
-  {
-    "id": "aadhaar_003",
-    "text": "My Aadhaar number is 2822 3967 1368",
-    "expected_entities": [
-      {
-        "type": "AADHAAR",
-        "value": "282239671368",
-        "start": 23,
-        "end": 37
-      }
-    ],
-    "category": "aadhaar"
-  },
-  {
-    "id": "mixed_007",
-    "text": "Customer Aarav Sharma (email: aarav.sharma@gmail.com, phone: +91 7951463277) has PAN YPOBF2404A.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "aarav.sharma@gmail.com"
-      },
-      {
-        "type": "PHONE_IN",
-        "value": "7951463277"
-      },
-      {
-        "type": "PAN",
-        "value": "YPOBF2404A"
-      }
-    ],
-    "category": "mixed"
-  },
-  {
-    "id": "aadhaar_invalid_002",
-    "text": "Invalid reference: 165737653541",
-    "expected_entities": [],
-    "category": "aadhaar_negative"
-  },
-  {
-    "id": "mixed_050",
-    "text": "Customer Aarav Sharma (email: aarav.sharma@gmail.com, phone: +91 7626255957) has PAN BHBCQ1763P.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "aarav.sharma@gmail.com"
-      },
-      {
-        "type": "PHONE_IN",
-        "value": "7626255957"
-      },
-      {
-        "type": "PAN",
-        "value": "BHBCQ1763P"
-      }
-    ],
-    "category": "mixed"
-  },
-  {
-    "id": "mixed_033",
-    "text": "Customer Kiran Patel (email: kiran.patel@gmail.com, phone: +91 9339847602) has PAN XABPL5199H.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "kiran.patel@gmail.com"
-      },
-      {
-        "type": "PHONE_IN",
-        "value": "9339847602"
-      },
-      {
-        "type": "PAN",
-        "value": "XABPL5199H"
-      }
-    ],
-    "category": "mixed"
-  },
-  {
-    "id": "phone_in_041",
-    "text": "Call me at 8740693457",
-    "expected_entities": [
-      {
-        "type": "PHONE_IN",
-        "value": "8740693457"
-      }
-    ],
-    "category": "phone_indian"
-  },
-  {
-    "id": "phone_in_017",
-    "text": "Call me at +91 72005 41885",
-    "expected_entities": [
-      {
-        "type": "PHONE_IN",
-        "value": "7200541885"
-      }
-    ],
-    "category": "phone_indian"
-  },
-  {
-    "id": "phone_in_047",
-    "text": "Call me at 09728007010",
-    "expected_entities": [
-      {
-        "type": "PHONE_IN",
-        "value": "9728007010"
-      }
-    ],
-    "category": "phone_indian"
-  },
-  {
-    "id": "card_022",
-    "text": "Card ending in 6011 0562 8620 6118",
-    "expected_entities": [
-      {
-        "type": "CREDIT_CARD",
-        "value": "6011056286206118"
-      }
-    ],
-    "category": "credit_card"
-  },
-  {
-    "id": "phone_in_037",
-    "text": "Call me at +91 68039 24967",
-    "expected_entities": [
-      {
-        "type": "PHONE_IN",
-        "value": "6803924967"
-      }
-    ],
-    "category": "phone_indian"
-  },
-  {
-    "id": "pan_037",
-    "text": "PAN Card: JHMFW9564W",
-    "expected_entities": [
-      {
-        "type": "PAN",
-        "value": "JHMFW9564W"
-      }
-    ],
-    "category": "pan"
-  },
-  {
-    "id": "card_013",
-    "text": "Card ending in 4641 1968 5862 9761",
-    "expected_entities": [
-      {
-        "type": "CREDIT_CARD",
-        "value": "4641196858629761"
-      }
-    ],
-    "category": "credit_card"
-  },
-  {
-    "id": "phone_in_023",
-    "text": "Call me at 919796047773",
-    "expected_entities": [
-      {
-        "type": "PHONE_IN",
-        "value": "9796047773"
-      }
-    ],
-    "category": "phone_indian"
-  },
-  {
-    "id": "phone_in_002",
-    "text": "Call me at 9086903552",
-    "expected_entities": [
-      {
-        "type": "PHONE_IN",
-        "value": "9086903552"
-      }
-    ],
-    "category": "phone_indian"
-  },
-  {
-    "id": "pan_028",
-    "text": "PAN Card: WXQLQ3593E",
-    "expected_entities": [
-      {
-        "type": "PAN",
-        "value": "WXQLQ3593E"
-      }
-    ],
-    "category": "pan"
-  },
-  {
-    "id": "upi_009",
-    "text": "Pay via UPI: rahul58@ibl",
-    "expected_entities": [
-      {
-        "type": "UPI",
-        "value": "rahul58@ibl"
-      }
-    ],
-    "category": "upi"
-  },
-  {
-    "id": "upi_015",
-    "text": "Pay via UPI: kiran51@ibl",
-    "expected_entities": [
-      {
-        "type": "UPI",
-        "value": "kiran51@ibl"
-      }
-    ],
-    "category": "upi"
-  },
-  {
-    "id": "email_040",
-    "text": "Contact me at vikram.sharma76@university.ac.in for details.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "vikram.sharma76@university.ac.in"
-      }
-    ],
-    "category": "email"
-  },
-  {
-    "id": "ifsc_011",
-    "text": "IFSC code: BARB040266",
-    "expected_entities": [
-      {
-        "type": "IFSC",
-        "value": "BARB040266"
-      }
-    ],
-    "category": "ifsc"
-  },
-  {
-    "id": "pan_007",
-    "text": "PAN Card: FLFAQ4500N",
-    "expected_entities": [
-      {
-        "type": "PAN",
-        "value": "FLFAQ4500N"
-      }
-    ],
-    "category": "pan"
-  },
-  {
-    "id": "card_030",
-    "text": "Card ending in 4591 4117 2380 0229",
-    "expected_entities": [
-      {
-        "type": "CREDIT_CARD",
-        "value": "4591411723800229"
-      }
-    ],
-    "category": "credit_card"
-  },
-  {
-    "id": "phone_in_019",
-    "text": "Call me at +91 94880 05854",
-    "expected_entities": [
-      {
-        "type": "PHONE_IN",
-        "value": "9488005854"
-      }
-    ],
-    "category": "phone_indian"
-  },
-  {
-    "id": "aadhaar_030",
-    "text": "My Aadhaar number is 9201 1914 2229",
-    "expected_entities": [
-      {
-        "type": "AADHAAR",
-        "value": "920119142229",
-        "start": 23,
-        "end": 37
-      }
-    ],
-    "category": "aadhaar"
-  },
-  {
-    "id": "ip_030",
-    "text": "Login from IP 126.123.7.228",
-    "expected_entities": [
-      {
-        "type": "IP_ADDRESS",
-        "value": "126.123.7.228"
-      }
-    ],
-    "category": "ip_address"
-  },
-  {
-    "id": "upi_012",
-    "text": "Pay via UPI: rahul86@sbi",
-    "expected_entities": [
-      {
-        "type": "UPI",
-        "value": "rahul86@sbi"
-      }
-    ],
-    "category": "upi"
-  },
-  {
-    "id": "upi_026",
-    "text": "Pay via UPI: kiran69@ybl",
-    "expected_entities": [
-      {
-        "type": "UPI",
-        "value": "kiran69@ybl"
-      }
-    ],
-    "category": "upi"
-  },
-  {
-    "id": "aadhaar_008",
-    "text": "My Aadhaar number is 6123 2216 6522",
-    "expected_entities": [
-      {
-        "type": "AADHAAR",
-        "value": "612322166522",
-        "start": 23,
-        "end": 37
-      }
-    ],
-    "category": "aadhaar"
-  },
-  {
-    "id": "pan_031",
-    "text": "PAN Card: PZBPP2417H",
-    "expected_entities": [
-      {
-        "type": "PAN",
-        "value": "PZBPP2417H"
-      }
-    ],
-    "category": "pan"
-  },
-  {
-    "id": "ifsc_006",
-    "text": "IFSC code: KKBK042526",
-    "expected_entities": [
-      {
-        "type": "IFSC",
-        "value": "KKBK042526"
-      }
-    ],
-    "category": "ifsc"
-  },
-  {
-    "id": "pan_023",
-    "text": "PAN Card: QLBTR7890X",
-    "expected_entities": [
-      {
-        "type": "PAN",
-        "value": "QLBTR7890X"
-      }
-    ],
-    "category": "pan"
-  },
-  {
-    "id": "mixed_011",
-    "text": "Customer Kiran Kumar (email: kiran.kumar@gmail.com, phone: +91 8869010480) has PAN ASRLA4236F.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "kiran.kumar@gmail.com"
-      },
-      {
-        "type": "PHONE_IN",
-        "value": "8869010480"
-      },
-      {
-        "type": "PAN",
-        "value": "ASRLA4236F"
-      }
-    ],
-    "category": "mixed"
-  },
-  {
-    "id": "upi_022",
-    "text": "Pay via UPI: deepa81@ybl",
-    "expected_entities": [
-      {
-        "type": "UPI",
-        "value": "deepa81@ybl"
-      }
-    ],
-    "category": "upi"
-  },
-  {
-    "id": "pan_046",
-    "text": "PAN Card: RCJBG4540U",
-    "expected_entities": [
-      {
-        "type": "PAN",
-        "value": "RCJBG4540U"
-      }
-    ],
-    "category": "pan"
-  },
-  {
-    "id": "card_020",
-    "text": "Card ending in 5798 6199 5920 8058",
-    "expected_entities": [
-      {
-        "type": "CREDIT_CARD",
-        "value": "5798619959208058"
-      }
-    ],
-    "category": "credit_card"
-  },
-  {
-    "id": "pan_004",
-    "text": "PAN Card: BQPBR8038M",
-    "expected_entities": [
-      {
-        "type": "PAN",
-        "value": "BQPBR8038M"
-      }
-    ],
-    "category": "pan"
-  },
-  {
-    "id": "phone_in_020",
-    "text": "Call me at +916523269451",
-    "expected_entities": [
-      {
-        "type": "PHONE_IN",
-        "value": "6523269451"
-      }
-    ],
-    "category": "phone_indian"
-  },
-  {
-    "id": "email_030",
-    "text": "Contact me at anita.sharma25@university.ac.in for details.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "anita.sharma25@university.ac.in"
+        "value": "anita.kumar43@yahoo.co.in"
       }
     ],
     "category": "email"
   },
   {
     "id": "card_001",
-    "text": "Card ending in 3788 3039 7353 2205",
+    "text": "Card ending in 3714 6884 7807 7061",
     "expected_entities": [
       {
         "type": "CREDIT_CARD",
-        "value": "3788303973532205"
+        "value": "3714688478077061"
       }
     ],
     "category": "credit_card"
   },
   {
-    "id": "aadhaar_049",
-    "text": "My Aadhaar number is 6270 2315 4396",
+    "id": "phone_in_003",
+    "text": "Call me at 916326779709",
+    "expected_entities": [
+      {
+        "type": "PHONE_IN",
+        "value": "6326779709"
+      }
+    ],
+    "category": "phone_indian"
+  },
+  {
+    "id": "upi_019",
+    "text": "Pay via UPI: rahul8@ybl",
+    "expected_entities": [
+      {
+        "type": "UPI",
+        "value": "rahul8@ybl"
+      }
+    ],
+    "category": "upi"
+  },
+  {
+    "id": "phone_in_037",
+    "text": "Call me at 7041225410",
+    "expected_entities": [
+      {
+        "type": "PHONE_IN",
+        "value": "7041225410"
+      }
+    ],
+    "category": "phone_indian"
+  },
+  {
+    "id": "aadhaar_025",
+    "text": "My Aadhaar number is 5820 3303 9661",
     "expected_entities": [
       {
         "type": "AADHAAR",
-        "value": "627023154396",
+        "value": "582033039661",
         "start": 23,
         "end": 37
       }
@@ -790,489 +206,222 @@
     "category": "aadhaar"
   },
   {
-    "id": "email_026",
-    "text": "Contact me at anita.patel50@gmail.com for details.",
+    "id": "ip_020",
+    "text": "Login from IP 77.169.7.152",
+    "expected_entities": [
+      {
+        "type": "IP_ADDRESS",
+        "value": "77.169.7.152"
+      }
+    ],
+    "category": "ip_address"
+  },
+  {
+    "id": "mixed_036",
+    "text": "Customer Ananya Patel (email: ananya.patel@gmail.com, phone: +91 9728956724) has PAN UXCHO8109K.",
     "expected_entities": [
       {
         "type": "EMAIL",
-        "value": "anita.patel50@gmail.com"
-      }
-    ],
-    "category": "email"
-  },
-  {
-    "id": "upi_027",
-    "text": "Pay via UPI: kiran55@okaxis",
-    "expected_entities": [
-      {
-        "type": "UPI",
-        "value": "kiran55@okaxis"
-      }
-    ],
-    "category": "upi"
-  },
-  {
-    "id": "email_035",
-    "text": "Contact me at rahul.kumar83@outlook.com for details.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "rahul.kumar83@outlook.com"
-      }
-    ],
-    "category": "email"
-  },
-  {
-    "id": "phone_in_009",
-    "text": "Call me at 07218335454",
-    "expected_entities": [
-      {
-        "type": "PHONE_IN",
-        "value": "7218335454"
-      }
-    ],
-    "category": "phone_indian"
-  },
-  {
-    "id": "phone_in_015",
-    "text": "Call me at 919900569740",
-    "expected_entities": [
-      {
-        "type": "PHONE_IN",
-        "value": "9900569740"
-      }
-    ],
-    "category": "phone_indian"
-  },
-  {
-    "id": "email_048",
-    "text": "Contact me at priya.gupta58@yahoo.co.in for details.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "priya.gupta58@yahoo.co.in"
-      }
-    ],
-    "category": "email"
-  },
-  {
-    "id": "phone_in_050",
-    "text": "Call me at 8004580082",
-    "expected_entities": [
-      {
-        "type": "PHONE_IN",
-        "value": "8004580082"
-      }
-    ],
-    "category": "phone_indian"
-  },
-  {
-    "id": "upi_024",
-    "text": "Pay via UPI: kiran74@okaxis",
-    "expected_entities": [
-      {
-        "type": "UPI",
-        "value": "kiran74@okaxis"
-      }
-    ],
-    "category": "upi"
-  },
-  {
-    "id": "email_033",
-    "text": "Contact me at kiran.patel63@yahoo.co.in for details.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "kiran.patel63@yahoo.co.in"
-      }
-    ],
-    "category": "email"
-  },
-  {
-    "id": "phone_in_008",
-    "text": "Call me at 8644283977",
-    "expected_entities": [
-      {
-        "type": "PHONE_IN",
-        "value": "8644283977"
-      }
-    ],
-    "category": "phone_indian"
-  },
-  {
-    "id": "aadhaar_invalid_018",
-    "text": "Invalid reference: 182801843488",
-    "expected_entities": [],
-    "category": "aadhaar_negative"
-  },
-  {
-    "id": "email_008",
-    "text": "Contact me at vikram.sharma13@outlook.com for details.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "vikram.sharma13@outlook.com"
-      }
-    ],
-    "category": "email"
-  },
-  {
-    "id": "email_020",
-    "text": "Contact me at priya.kumar96@gmail.com for details.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "priya.kumar96@gmail.com"
-      }
-    ],
-    "category": "email"
-  },
-  {
-    "id": "card_019",
-    "text": "Card ending in 4642 8020 2010 7256",
-    "expected_entities": [
-      {
-        "type": "CREDIT_CARD",
-        "value": "4642802020107256"
-      }
-    ],
-    "category": "credit_card"
-  },
-  {
-    "id": "mixed_010",
-    "text": "Customer Rahul Gupta (email: rahul.gupta@gmail.com, phone: +91 9577958740) has PAN NVWGR5920I.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "rahul.gupta@gmail.com"
+        "value": "ananya.patel@gmail.com"
       },
       {
         "type": "PHONE_IN",
-        "value": "9577958740"
+        "value": "9728956724"
       },
       {
         "type": "PAN",
-        "value": "NVWGR5920I"
+        "value": "UXCHO8109K"
       }
     ],
     "category": "mixed"
   },
   {
-    "id": "mixed_043",
-    "text": "Customer Aarav Sharma (email: aarav.sharma@gmail.com, phone: +91 8526531798) has PAN AWFJW7620M.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "aarav.sharma@gmail.com"
-      },
-      {
-        "type": "PHONE_IN",
-        "value": "8526531798"
-      },
-      {
-        "type": "PAN",
-        "value": "AWFJW7620M"
-      }
-    ],
-    "category": "mixed"
-  },
-  {
-    "id": "phone_in_033",
-    "text": "Call me at +917405945349",
-    "expected_entities": [
-      {
-        "type": "PHONE_IN",
-        "value": "7405945349"
-      }
-    ],
-    "category": "phone_indian"
-  },
-  {
-    "id": "pan_019",
-    "text": "PAN Card: KOIJV9109F",
+    "id": "pan_013",
+    "text": "PAN Card: CQJGX8010Y",
     "expected_entities": [
       {
         "type": "PAN",
-        "value": "KOIJV9109F"
+        "value": "CQJGX8010Y"
       }
     ],
     "category": "pan"
   },
   {
-    "id": "phone_in_042",
-    "text": "Call me at 08674480808",
+    "id": "phone_in_021",
+    "text": "Call me at +91-6373768159",
     "expected_entities": [
       {
         "type": "PHONE_IN",
-        "value": "8674480808"
+        "value": "6373768159"
       }
     ],
     "category": "phone_indian"
   },
   {
-    "id": "ip_020",
-    "text": "Login from IP 210.73.51.214",
-    "expected_entities": [
-      {
-        "type": "IP_ADDRESS",
-        "value": "210.73.51.214"
-      }
-    ],
-    "category": "ip_address"
-  },
-  {
-    "id": "upi_013",
-    "text": "Pay via UPI: aarav65@sbi",
+    "id": "upi_028",
+    "text": "Pay via UPI: deepa4@upi",
     "expected_entities": [
       {
         "type": "UPI",
-        "value": "aarav65@sbi"
+        "value": "deepa4@upi"
       }
     ],
     "category": "upi"
   },
   {
-    "id": "ip_005",
-    "text": "Login from IP 5.100.86.44",
+    "id": "mixed_047",
+    "text": "Customer Ananya Gupta (email: ananya.gupta@gmail.com, phone: +91 7917450556) has PAN UPYLT7384C.",
     "expected_entities": [
       {
-        "type": "IP_ADDRESS",
-        "value": "5.100.86.44"
+        "type": "EMAIL",
+        "value": "ananya.gupta@gmail.com"
+      },
+      {
+        "type": "PHONE_IN",
+        "value": "7917450556"
+      },
+      {
+        "type": "PAN",
+        "value": "UPYLT7384C"
       }
     ],
-    "category": "ip_address"
+    "category": "mixed"
   },
   {
-    "id": "ip_007",
-    "text": "Login from IP 32.178.175.203",
+    "id": "upi_029",
+    "text": "Pay via UPI: rahul30@ibl",
     "expected_entities": [
       {
-        "type": "IP_ADDRESS",
-        "value": "32.178.175.203"
+        "type": "UPI",
+        "value": "rahul30@ibl"
       }
     ],
-    "category": "ip_address"
+    "category": "upi"
   },
   {
-    "id": "aadhaar_invalid_016",
-    "text": "Invalid reference: 125322392193",
+    "id": "phone_in_038",
+    "text": "Call me at 6163842749",
+    "expected_entities": [
+      {
+        "type": "PHONE_IN",
+        "value": "6163842749"
+      }
+    ],
+    "category": "phone_indian"
+  },
+  {
+    "id": "phone_in_005",
+    "text": "Call me at +91 72938 41682",
+    "expected_entities": [
+      {
+        "type": "PHONE_IN",
+        "value": "7293841682"
+      }
+    ],
+    "category": "phone_indian"
+  },
+  {
+    "id": "upi_021",
+    "text": "Pay via UPI: rahul50@sbi",
+    "expected_entities": [
+      {
+        "type": "UPI",
+        "value": "rahul50@sbi"
+      }
+    ],
+    "category": "upi"
+  },
+  {
+    "id": "pan_029",
+    "text": "PAN Card: PTJJH1293Q",
+    "expected_entities": [
+      {
+        "type": "PAN",
+        "value": "PTJJH1293Q"
+      }
+    ],
+    "category": "pan"
+  },
+  {
+    "id": "mixed_025",
+    "text": "Customer Rahul Patel (email: rahul.patel@gmail.com, phone: +91 8908585357) has PAN ZEATZ7918V.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "rahul.patel@gmail.com"
+      },
+      {
+        "type": "PHONE_IN",
+        "value": "8908585357"
+      },
+      {
+        "type": "PAN",
+        "value": "ZEATZ7918V"
+      }
+    ],
+    "category": "mixed"
+  },
+  {
+    "id": "aadhaar_invalid_006",
+    "text": "Invalid reference: 025085060335",
     "expected_entities": [],
     "category": "aadhaar_negative"
   },
   {
-    "id": "aadhaar_invalid_011",
-    "text": "Invalid reference: 183416957755",
-    "expected_entities": [],
-    "category": "aadhaar_negative"
+    "id": "pan_028",
+    "text": "PAN Card: XHRJZ2322F",
+    "expected_entities": [
+      {
+        "type": "PAN",
+        "value": "XHRJZ2322F"
+      }
+    ],
+    "category": "pan"
   },
   {
-    "id": "card_017",
-    "text": "Card ending in 6011 0822 3094 1518",
+    "id": "aadhaar_032",
+    "text": "My Aadhaar number is 9347 3041 3140",
+    "expected_entities": [
+      {
+        "type": "AADHAAR",
+        "value": "934730413140",
+        "start": 23,
+        "end": 37
+      }
+    ],
+    "category": "aadhaar"
+  },
+  {
+    "id": "aadhaar_026",
+    "text": "My Aadhaar number is 5314 9271 7321",
+    "expected_entities": [
+      {
+        "type": "AADHAAR",
+        "value": "531492717321",
+        "start": 23,
+        "end": 37
+      }
+    ],
+    "category": "aadhaar"
+  },
+  {
+    "id": "card_004",
+    "text": "Card ending in 3765 9186 9550 7105",
     "expected_entities": [
       {
         "type": "CREDIT_CARD",
-        "value": "6011082230941518"
+        "value": "3765918695507105"
       }
     ],
     "category": "credit_card"
   },
   {
-    "id": "ifsc_005",
-    "text": "IFSC code: PUNB005683",
-    "expected_entities": [
-      {
-        "type": "IFSC",
-        "value": "PUNB005683"
-      }
-    ],
-    "category": "ifsc"
-  },
-  {
-    "id": "aadhaar_024",
-    "text": "My Aadhaar number is 2448 5854 8988",
+    "id": "aadhaar_018",
+    "text": "My Aadhaar number is 8448 0626 8863",
     "expected_entities": [
       {
         "type": "AADHAAR",
-        "value": "244858548988",
-        "start": 23,
-        "end": 37
-      }
-    ],
-    "category": "aadhaar"
-  },
-  {
-    "id": "mixed_044",
-    "text": "Customer Kiran Patel (email: kiran.patel@gmail.com, phone: +91 8348575353) has PAN RZTLB4064X.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "kiran.patel@gmail.com"
-      },
-      {
-        "type": "PHONE_IN",
-        "value": "8348575353"
-      },
-      {
-        "type": "PAN",
-        "value": "RZTLB4064X"
-      }
-    ],
-    "category": "mixed"
-  },
-  {
-    "id": "mixed_003",
-    "text": "Customer Ananya Sharma (email: ananya.sharma@gmail.com, phone: +91 8695613913) has PAN FSFJH6051Z.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "ananya.sharma@gmail.com"
-      },
-      {
-        "type": "PHONE_IN",
-        "value": "8695613913"
-      },
-      {
-        "type": "PAN",
-        "value": "FSFJH6051Z"
-      }
-    ],
-    "category": "mixed"
-  },
-  {
-    "id": "email_045",
-    "text": "Contact me at anita.kumar61@yahoo.co.in for details.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "anita.kumar61@yahoo.co.in"
-      }
-    ],
-    "category": "email"
-  },
-  {
-    "id": "aadhaar_046",
-    "text": "My Aadhaar number is 6411 4879 2948",
-    "expected_entities": [
-      {
-        "type": "AADHAAR",
-        "value": "641148792948",
-        "start": 23,
-        "end": 37
-      }
-    ],
-    "category": "aadhaar"
-  },
-  {
-    "id": "aadhaar_006",
-    "text": "My Aadhaar number is 7743 4336 5636",
-    "expected_entities": [
-      {
-        "type": "AADHAAR",
-        "value": "774343365636",
-        "start": 23,
-        "end": 37
-      }
-    ],
-    "category": "aadhaar"
-  },
-  {
-    "id": "email_042",
-    "text": "Contact me at kiran.kumar81@university.ac.in for details.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "kiran.kumar81@university.ac.in"
-      }
-    ],
-    "category": "email"
-  },
-  {
-    "id": "aadhaar_012",
-    "text": "My Aadhaar number is 3888 6781 2644",
-    "expected_entities": [
-      {
-        "type": "AADHAAR",
-        "value": "388867812644",
-        "start": 23,
-        "end": 37
-      }
-    ],
-    "category": "aadhaar"
-  },
-  {
-    "id": "card_002",
-    "text": "Card ending in 4316 1010 3771 5016",
-    "expected_entities": [
-      {
-        "type": "CREDIT_CARD",
-        "value": "4316101037715016"
-      }
-    ],
-    "category": "credit_card"
-  },
-  {
-    "id": "aadhaar_010",
-    "text": "My Aadhaar number is 7274 2394 8445",
-    "expected_entities": [
-      {
-        "type": "AADHAAR",
-        "value": "727423948445",
-        "start": 23,
-        "end": 37
-      }
-    ],
-    "category": "aadhaar"
-  },
-  {
-    "id": "aadhaar_033",
-    "text": "My Aadhaar number is 3657 2127 4886",
-    "expected_entities": [
-      {
-        "type": "AADHAAR",
-        "value": "365721274886",
-        "start": 23,
-        "end": 37
-      }
-    ],
-    "category": "aadhaar"
-  },
-  {
-    "id": "ifsc_007",
-    "text": "IFSC code: BARB055831",
-    "expected_entities": [
-      {
-        "type": "IFSC",
-        "value": "BARB055831"
-      }
-    ],
-    "category": "ifsc"
-  },
-  {
-    "id": "mixed_040",
-    "text": "Customer Rahul Kumar (email: rahul.kumar@gmail.com, phone: +91 9727969820) has PAN MPUCQ8058T.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "rahul.kumar@gmail.com"
-      },
-      {
-        "type": "PHONE_IN",
-        "value": "9727969820"
-      },
-      {
-        "type": "PAN",
-        "value": "MPUCQ8058T"
-      }
-    ],
-    "category": "mixed"
-  },
-  {
-    "id": "aadhaar_045",
-    "text": "My Aadhaar number is 4922 6119 6973",
-    "expected_entities": [
-      {
-        "type": "AADHAAR",
-        "value": "492261196973",
+        "value": "844806268863",
         "start": 23,
         "end": 37
       }
@@ -1281,1623 +430,85 @@
   },
   {
     "id": "aadhaar_invalid_001",
-    "text": "Invalid reference: 026502981262",
+    "text": "Invalid reference: 013757111163",
     "expected_entities": [],
     "category": "aadhaar_negative"
   },
   {
-    "id": "phone_in_004",
-    "text": "Call me at +916708070261",
-    "expected_entities": [
-      {
-        "type": "PHONE_IN",
-        "value": "6708070261"
-      }
-    ],
-    "category": "phone_indian"
-  },
-  {
-    "id": "ip_010",
-    "text": "Login from IP 15.142.202.124",
-    "expected_entities": [
-      {
-        "type": "IP_ADDRESS",
-        "value": "15.142.202.124"
-      }
-    ],
-    "category": "ip_address"
-  },
-  {
-    "id": "pan_005",
-    "text": "PAN Card: ENFLW4024M",
-    "expected_entities": [
-      {
-        "type": "PAN",
-        "value": "ENFLW4024M"
-      }
-    ],
-    "category": "pan"
-  },
-  {
-    "id": "mixed_027",
-    "text": "Customer Priya Kumar (email: priya.kumar@gmail.com, phone: +91 9917961618) has PAN CEQTK2388F.",
+    "id": "email_012",
+    "text": "Contact me at anita.patel97@gmail.com for details.",
     "expected_entities": [
       {
         "type": "EMAIL",
-        "value": "priya.kumar@gmail.com"
-      },
-      {
-        "type": "PHONE_IN",
-        "value": "9917961618"
-      },
-      {
-        "type": "PAN",
-        "value": "CEQTK2388F"
-      }
-    ],
-    "category": "mixed"
-  },
-  {
-    "id": "phone_in_031",
-    "text": "Call me at 916656385215",
-    "expected_entities": [
-      {
-        "type": "PHONE_IN",
-        "value": "6656385215"
-      }
-    ],
-    "category": "phone_indian"
-  },
-  {
-    "id": "ip_018",
-    "text": "Login from IP 153.125.18.176",
-    "expected_entities": [
-      {
-        "type": "IP_ADDRESS",
-        "value": "153.125.18.176"
-      }
-    ],
-    "category": "ip_address"
-  },
-  {
-    "id": "pan_034",
-    "text": "PAN Card: XUAGF6126V",
-    "expected_entities": [
-      {
-        "type": "PAN",
-        "value": "XUAGF6126V"
-      }
-    ],
-    "category": "pan"
-  },
-  {
-    "id": "aadhaar_019",
-    "text": "My Aadhaar number is 8494 9717 0618",
-    "expected_entities": [
-      {
-        "type": "AADHAAR",
-        "value": "849497170618",
-        "start": 23,
-        "end": 37
-      }
-    ],
-    "category": "aadhaar"
-  },
-  {
-    "id": "pan_038",
-    "text": "PAN Card: VWZPQ3685X",
-    "expected_entities": [
-      {
-        "type": "PAN",
-        "value": "VWZPQ3685X"
-      }
-    ],
-    "category": "pan"
-  },
-  {
-    "id": "ip_004",
-    "text": "Login from IP 9.44.53.24",
-    "expected_entities": [
-      {
-        "type": "IP_ADDRESS",
-        "value": "9.44.53.24"
-      }
-    ],
-    "category": "ip_address"
-  },
-  {
-    "id": "phone_in_030",
-    "text": "Call me at +91 80093 74525",
-    "expected_entities": [
-      {
-        "type": "PHONE_IN",
-        "value": "8009374525"
-      }
-    ],
-    "category": "phone_indian"
-  },
-  {
-    "id": "phone_in_025",
-    "text": "Call me at 8579611812",
-    "expected_entities": [
-      {
-        "type": "PHONE_IN",
-        "value": "8579611812"
-      }
-    ],
-    "category": "phone_indian"
-  },
-  {
-    "id": "email_011",
-    "text": "Contact me at rahul.sharma25@university.ac.in for details.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "rahul.sharma25@university.ac.in"
+        "value": "anita.patel97@gmail.com"
       }
     ],
     "category": "email"
   },
   {
-    "id": "phone_in_046",
-    "text": "Call me at 8950926655",
-    "expected_entities": [
-      {
-        "type": "PHONE_IN",
-        "value": "8950926655"
-      }
-    ],
-    "category": "phone_indian"
-  },
-  {
-    "id": "mixed_023",
-    "text": "Customer Priya Sharma (email: priya.sharma@gmail.com, phone: +91 7423092652) has PAN IKQJN3964E.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "priya.sharma@gmail.com"
-      },
-      {
-        "type": "PHONE_IN",
-        "value": "7423092652"
-      },
-      {
-        "type": "PAN",
-        "value": "IKQJN3964E"
-      }
-    ],
-    "category": "mixed"
-  },
-  {
-    "id": "aadhaar_018",
-    "text": "My Aadhaar number is 9587 1935 7223",
-    "expected_entities": [
-      {
-        "type": "AADHAAR",
-        "value": "958719357223",
-        "start": 23,
-        "end": 37
-      }
-    ],
-    "category": "aadhaar"
-  },
-  {
-    "id": "email_046",
-    "text": "Contact me at anita.kumar54@gmail.com for details.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "anita.kumar54@gmail.com"
-      }
-    ],
-    "category": "email"
-  },
-  {
-    "id": "ifsc_009",
-    "text": "IFSC code: BARB028614",
-    "expected_entities": [
-      {
-        "type": "IFSC",
-        "value": "BARB028614"
-      }
-    ],
-    "category": "ifsc"
-  },
-  {
-    "id": "ifsc_019",
-    "text": "IFSC code: ICIC097302",
-    "expected_entities": [
-      {
-        "type": "IFSC",
-        "value": "ICIC097302"
-      }
-    ],
-    "category": "ifsc"
-  },
-  {
-    "id": "card_006",
-    "text": "Card ending in 6011 0396 3848 6824",
-    "expected_entities": [
-      {
-        "type": "CREDIT_CARD",
-        "value": "6011039638486824"
-      }
-    ],
-    "category": "credit_card"
-  },
-  {
-    "id": "ip_009",
-    "text": "Login from IP 160.115.133.153",
-    "expected_entities": [
-      {
-        "type": "IP_ADDRESS",
-        "value": "160.115.133.153"
-      }
-    ],
-    "category": "ip_address"
-  },
-  {
-    "id": "pan_008",
-    "text": "PAN Card: ZHQJW6799A",
-    "expected_entities": [
-      {
-        "type": "PAN",
-        "value": "ZHQJW6799A"
-      }
-    ],
-    "category": "pan"
-  },
-  {
-    "id": "upi_023",
-    "text": "Pay via UPI: priya5@ibl",
+    "id": "upi_020",
+    "text": "Pay via UPI: aarav72@ybl",
     "expected_entities": [
       {
         "type": "UPI",
-        "value": "priya5@ibl"
+        "value": "aarav72@ybl"
       }
     ],
     "category": "upi"
   },
   {
-    "id": "pan_040",
-    "text": "PAN Card: PHITU2086O",
-    "expected_entities": [
-      {
-        "type": "PAN",
-        "value": "PHITU2086O"
-      }
-    ],
-    "category": "pan"
-  },
-  {
-    "id": "phone_in_006",
-    "text": "Call me at 09231160723",
-    "expected_entities": [
-      {
-        "type": "PHONE_IN",
-        "value": "9231160723"
-      }
-    ],
-    "category": "phone_indian"
-  },
-  {
-    "id": "upi_014",
-    "text": "Pay via UPI: deepa96@ybl",
-    "expected_entities": [
-      {
-        "type": "UPI",
-        "value": "deepa96@ybl"
-      }
-    ],
-    "category": "upi"
-  },
-  {
-    "id": "pan_026",
-    "text": "PAN Card: ZBFLX8007Q",
-    "expected_entities": [
-      {
-        "type": "PAN",
-        "value": "ZBFLX8007Q"
-      }
-    ],
-    "category": "pan"
-  },
-  {
-    "id": "aadhaar_014",
-    "text": "My Aadhaar number is 4043 3837 6009",
-    "expected_entities": [
-      {
-        "type": "AADHAAR",
-        "value": "404338376009",
-        "start": 23,
-        "end": 37
-      }
-    ],
-    "category": "aadhaar"
-  },
-  {
-    "id": "aadhaar_013",
-    "text": "My Aadhaar number is 2902 3975 2311",
-    "expected_entities": [
-      {
-        "type": "AADHAAR",
-        "value": "290239752311",
-        "start": 23,
-        "end": 37
-      }
-    ],
-    "category": "aadhaar"
-  },
-  {
-    "id": "phone_in_045",
-    "text": "Call me at 08571270044",
-    "expected_entities": [
-      {
-        "type": "PHONE_IN",
-        "value": "8571270044"
-      }
-    ],
-    "category": "phone_indian"
-  },
-  {
-    "id": "aadhaar_042",
-    "text": "My Aadhaar number is 4775 6359 1222",
-    "expected_entities": [
-      {
-        "type": "AADHAAR",
-        "value": "477563591222",
-        "start": 23,
-        "end": 37
-      }
-    ],
-    "category": "aadhaar"
-  },
-  {
-    "id": "pan_027",
-    "text": "PAN Card: QCPLQ1955D",
-    "expected_entities": [
-      {
-        "type": "PAN",
-        "value": "QCPLQ1955D"
-      }
-    ],
-    "category": "pan"
-  },
-  {
-    "id": "upi_021",
-    "text": "Pay via UPI: rahul89@upi",
-    "expected_entities": [
-      {
-        "type": "UPI",
-        "value": "rahul89@upi"
-      }
-    ],
-    "category": "upi"
-  },
-  {
-    "id": "email_043",
-    "text": "Contact me at sanjay.sharma79@gmail.com for details.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "sanjay.sharma79@gmail.com"
-      }
-    ],
-    "category": "email"
-  },
-  {
-    "id": "phone_in_021",
-    "text": "Call me at 917089896815",
-    "expected_entities": [
-      {
-        "type": "PHONE_IN",
-        "value": "7089896815"
-      }
-    ],
-    "category": "phone_indian"
-  },
-  {
-    "id": "pan_021",
-    "text": "PAN Card: XUGFY7280V",
-    "expected_entities": [
-      {
-        "type": "PAN",
-        "value": "XUGFY7280V"
-      }
-    ],
-    "category": "pan"
-  },
-  {
-    "id": "aadhaar_invalid_014",
-    "text": "Invalid reference: 084171431893",
-    "expected_entities": [],
-    "category": "aadhaar_negative"
-  },
-  {
-    "id": "aadhaar_015",
-    "text": "My Aadhaar number is 2734 6131 6126",
-    "expected_entities": [
-      {
-        "type": "AADHAAR",
-        "value": "273461316126",
-        "start": 23,
-        "end": 37
-      }
-    ],
-    "category": "aadhaar"
-  },
-  {
-    "id": "phone_in_044",
-    "text": "Call me at 08163607462",
-    "expected_entities": [
-      {
-        "type": "PHONE_IN",
-        "value": "8163607462"
-      }
-    ],
-    "category": "phone_indian"
-  },
-  {
-    "id": "pan_017",
-    "text": "PAN Card: UZHFG8155I",
-    "expected_entities": [
-      {
-        "type": "PAN",
-        "value": "UZHFG8155I"
-      }
-    ],
-    "category": "pan"
-  },
-  {
-    "id": "phone_in_022",
-    "text": "Call me at 8810624614",
-    "expected_entities": [
-      {
-        "type": "PHONE_IN",
-        "value": "8810624614"
-      }
-    ],
-    "category": "phone_indian"
-  },
-  {
-    "id": "aadhaar_027",
-    "text": "My Aadhaar number is 6734 1467 5152",
-    "expected_entities": [
-      {
-        "type": "AADHAAR",
-        "value": "673414675152",
-        "start": 23,
-        "end": 37
-      }
-    ],
-    "category": "aadhaar"
-  },
-  {
-    "id": "ifsc_003",
-    "text": "IFSC code: UTIB081564",
-    "expected_entities": [
-      {
-        "type": "IFSC",
-        "value": "UTIB081564"
-      }
-    ],
-    "category": "ifsc"
-  },
-  {
-    "id": "mixed_012",
-    "text": "Customer Aarav Sharma (email: aarav.sharma@gmail.com, phone: +91 7440396940) has PAN RAELR2295G.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "aarav.sharma@gmail.com"
-      },
-      {
-        "type": "PHONE_IN",
-        "value": "7440396940"
-      },
-      {
-        "type": "PAN",
-        "value": "RAELR2295G"
-      }
-    ],
-    "category": "mixed"
-  },
-  {
-    "id": "ip_026",
-    "text": "Login from IP 42.2.16.118",
-    "expected_entities": [
-      {
-        "type": "IP_ADDRESS",
-        "value": "42.2.16.118"
-      }
-    ],
-    "category": "ip_address"
-  },
-  {
-    "id": "pan_010",
-    "text": "PAN Card: QPMPK2607A",
-    "expected_entities": [
-      {
-        "type": "PAN",
-        "value": "QPMPK2607A"
-      }
-    ],
-    "category": "pan"
-  },
-  {
-    "id": "phone_in_003",
-    "text": "Call me at 09681767172",
-    "expected_entities": [
-      {
-        "type": "PHONE_IN",
-        "value": "9681767172"
-      }
-    ],
-    "category": "phone_indian"
-  },
-  {
-    "id": "mixed_039",
-    "text": "Customer Aarav Kumar (email: aarav.kumar@gmail.com, phone: +91 9353159080) has PAN RYGFY6357V.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "aarav.kumar@gmail.com"
-      },
-      {
-        "type": "PHONE_IN",
-        "value": "9353159080"
-      },
-      {
-        "type": "PAN",
-        "value": "RYGFY6357V"
-      }
-    ],
-    "category": "mixed"
-  },
-  {
-    "id": "email_014",
-    "text": "Contact me at aarav.patel38@outlook.com for details.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "aarav.patel38@outlook.com"
-      }
-    ],
-    "category": "email"
-  },
-  {
-    "id": "email_049",
-    "text": "Contact me at vikram.gupta61@company.org for details.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "vikram.gupta61@company.org"
-      }
-    ],
-    "category": "email"
-  },
-  {
-    "id": "card_009",
-    "text": "Card ending in 4474 6081 6827 6709",
+    "id": "card_017",
+    "text": "Card ending in 6011 9135 9716 0991",
     "expected_entities": [
       {
         "type": "CREDIT_CARD",
-        "value": "4474608168276709"
+        "value": "6011913597160991"
       }
     ],
     "category": "credit_card"
   },
   {
-    "id": "email_044",
-    "text": "Contact me at vikram.sharma86@university.ac.in for details.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "vikram.sharma86@university.ac.in"
-      }
-    ],
-    "category": "email"
-  },
-  {
-    "id": "phone_in_039",
-    "text": "Call me at 8464485436",
-    "expected_entities": [
-      {
-        "type": "PHONE_IN",
-        "value": "8464485436"
-      }
-    ],
-    "category": "phone_indian"
-  },
-  {
-    "id": "ip_016",
-    "text": "Login from IP 28.51.66.110",
-    "expected_entities": [
-      {
-        "type": "IP_ADDRESS",
-        "value": "28.51.66.110"
-      }
-    ],
-    "category": "ip_address"
-  },
-  {
-    "id": "aadhaar_011",
-    "text": "My Aadhaar number is 2755 9185 0695",
-    "expected_entities": [
-      {
-        "type": "AADHAAR",
-        "value": "275591850695",
-        "start": 23,
-        "end": 37
-      }
-    ],
-    "category": "aadhaar"
-  },
-  {
-    "id": "phone_in_016",
-    "text": "Call me at +91-8050397790",
-    "expected_entities": [
-      {
-        "type": "PHONE_IN",
-        "value": "8050397790"
-      }
-    ],
-    "category": "phone_indian"
-  },
-  {
-    "id": "ip_022",
-    "text": "Login from IP 223.191.85.103",
-    "expected_entities": [
-      {
-        "type": "IP_ADDRESS",
-        "value": "223.191.85.103"
-      }
-    ],
-    "category": "ip_address"
-  },
-  {
-    "id": "email_004",
-    "text": "Contact me at kiran.gupta89@gmail.com for details.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "kiran.gupta89@gmail.com"
-      }
-    ],
-    "category": "email"
-  },
-  {
-    "id": "upi_029",
-    "text": "Pay via UPI: deepa58@upi",
-    "expected_entities": [
-      {
-        "type": "UPI",
-        "value": "deepa58@upi"
-      }
-    ],
-    "category": "upi"
-  },
-  {
-    "id": "ifsc_015",
-    "text": "IFSC code: KKBK018750",
-    "expected_entities": [
-      {
-        "type": "IFSC",
-        "value": "KKBK018750"
-      }
-    ],
-    "category": "ifsc"
-  },
-  {
-    "id": "phone_in_013",
-    "text": "Call me at 08755151743",
-    "expected_entities": [
-      {
-        "type": "PHONE_IN",
-        "value": "8755151743"
-      }
-    ],
-    "category": "phone_indian"
-  },
-  {
-    "id": "ip_024",
-    "text": "Login from IP 33.104.129.172",
-    "expected_entities": [
-      {
-        "type": "IP_ADDRESS",
-        "value": "33.104.129.172"
-      }
-    ],
-    "category": "ip_address"
-  },
-  {
-    "id": "card_007",
-    "text": "Card ending in 6011 9989 1928 0948",
+    "id": "card_013",
+    "text": "Card ending in 3758 7453 6564 0729",
     "expected_entities": [
       {
         "type": "CREDIT_CARD",
-        "value": "6011998919280948"
+        "value": "3758745365640729"
       }
     ],
     "category": "credit_card"
-  },
-  {
-    "id": "email_019",
-    "text": "Contact me at meera.kumar11@company.org for details.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "meera.kumar11@company.org"
-      }
-    ],
-    "category": "email"
-  },
-  {
-    "id": "card_012",
-    "text": "Card ending in 4152 6505 2506 1208",
-    "expected_entities": [
-      {
-        "type": "CREDIT_CARD",
-        "value": "4152650525061208"
-      }
-    ],
-    "category": "credit_card"
-  },
-  {
-    "id": "ip_021",
-    "text": "Login from IP 178.178.144.186",
-    "expected_entities": [
-      {
-        "type": "IP_ADDRESS",
-        "value": "178.178.144.186"
-      }
-    ],
-    "category": "ip_address"
-  },
-  {
-    "id": "aadhaar_025",
-    "text": "My Aadhaar number is 8733 1521 2809",
-    "expected_entities": [
-      {
-        "type": "AADHAAR",
-        "value": "873315212809",
-        "start": 23,
-        "end": 37
-      }
-    ],
-    "category": "aadhaar"
-  },
-  {
-    "id": "mixed_025",
-    "text": "Customer Kiran Sharma (email: kiran.sharma@gmail.com, phone: +91 9577755771) has PAN IRHTA2627J.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "kiran.sharma@gmail.com"
-      },
-      {
-        "type": "PHONE_IN",
-        "value": "9577755771"
-      },
-      {
-        "type": "PAN",
-        "value": "IRHTA2627J"
-      }
-    ],
-    "category": "mixed"
-  },
-  {
-    "id": "card_021",
-    "text": "Card ending in 3784 4058 5904 4305",
-    "expected_entities": [
-      {
-        "type": "CREDIT_CARD",
-        "value": "3784405859044305"
-      }
-    ],
-    "category": "credit_card"
-  },
-  {
-    "id": "aadhaar_050",
-    "text": "My Aadhaar number is 5079 0631 1514",
-    "expected_entities": [
-      {
-        "type": "AADHAAR",
-        "value": "507906311514",
-        "start": 23,
-        "end": 37
-      }
-    ],
-    "category": "aadhaar"
-  },
-  {
-    "id": "mixed_020",
-    "text": "Customer Ananya Patel (email: ananya.patel@gmail.com, phone: +91 8350054239) has PAN BKHGW9539H.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "ananya.patel@gmail.com"
-      },
-      {
-        "type": "PHONE_IN",
-        "value": "8350054239"
-      },
-      {
-        "type": "PAN",
-        "value": "BKHGW9539H"
-      }
-    ],
-    "category": "mixed"
-  },
-  {
-    "id": "mixed_021",
-    "text": "Customer Priya Singh (email: priya.singh@gmail.com, phone: +91 9800862371) has PAN LFOGG3646E.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "priya.singh@gmail.com"
-      },
-      {
-        "type": "PHONE_IN",
-        "value": "9800862371"
-      },
-      {
-        "type": "PAN",
-        "value": "LFOGG3646E"
-      }
-    ],
-    "category": "mixed"
-  },
-  {
-    "id": "email_006",
-    "text": "Contact me at meera.kumar9@outlook.com for details.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "meera.kumar9@outlook.com"
-      }
-    ],
-    "category": "email"
-  },
-  {
-    "id": "mixed_030",
-    "text": "Customer Kiran Singh (email: kiran.singh@gmail.com, phone: +91 8682570820) has PAN HENGZ9993Y.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "kiran.singh@gmail.com"
-      },
-      {
-        "type": "PHONE_IN",
-        "value": "8682570820"
-      },
-      {
-        "type": "PAN",
-        "value": "HENGZ9993Y"
-      }
-    ],
-    "category": "mixed"
-  },
-  {
-    "id": "pan_029",
-    "text": "PAN Card: MXUGX1655R",
-    "expected_entities": [
-      {
-        "type": "PAN",
-        "value": "MXUGX1655R"
-      }
-    ],
-    "category": "pan"
-  },
-  {
-    "id": "pan_042",
-    "text": "PAN Card: LHOPF6689Q",
-    "expected_entities": [
-      {
-        "type": "PAN",
-        "value": "LHOPF6689Q"
-      }
-    ],
-    "category": "pan"
-  },
-  {
-    "id": "card_010",
-    "text": "Card ending in 4991 7952 0683 2173",
-    "expected_entities": [
-      {
-        "type": "CREDIT_CARD",
-        "value": "4991795206832173"
-      }
-    ],
-    "category": "credit_card"
-  },
-  {
-    "id": "aadhaar_020",
-    "text": "My Aadhaar number is 6641 0001 8378",
-    "expected_entities": [
-      {
-        "type": "AADHAAR",
-        "value": "664100018378",
-        "start": 23,
-        "end": 37
-      }
-    ],
-    "category": "aadhaar"
-  },
-  {
-    "id": "aadhaar_021",
-    "text": "My Aadhaar number is 9394 8696 2416",
-    "expected_entities": [
-      {
-        "type": "AADHAAR",
-        "value": "939486962416",
-        "start": 23,
-        "end": 37
-      }
-    ],
-    "category": "aadhaar"
-  },
-  {
-    "id": "aadhaar_028",
-    "text": "My Aadhaar number is 7140 4964 7588",
-    "expected_entities": [
-      {
-        "type": "AADHAAR",
-        "value": "714049647588",
-        "start": 23,
-        "end": 37
-      }
-    ],
-    "category": "aadhaar"
-  },
-  {
-    "id": "card_029",
-    "text": "Card ending in 3727 4409 3600 8101",
-    "expected_entities": [
-      {
-        "type": "CREDIT_CARD",
-        "value": "3727440936008101"
-      }
-    ],
-    "category": "credit_card"
-  },
-  {
-    "id": "aadhaar_invalid_020",
-    "text": "Invalid reference: 045979307355",
-    "expected_entities": [],
-    "category": "aadhaar_negative"
-  },
-  {
-    "id": "mixed_024",
-    "text": "Customer Aarav Gupta (email: aarav.gupta@gmail.com, phone: +91 9330095327) has PAN MROFW2943A.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "aarav.gupta@gmail.com"
-      },
-      {
-        "type": "PHONE_IN",
-        "value": "9330095327"
-      },
-      {
-        "type": "PAN",
-        "value": "MROFW2943A"
-      }
-    ],
-    "category": "mixed"
-  },
-  {
-    "id": "ip_012",
-    "text": "Login from IP 143.51.179.100",
-    "expected_entities": [
-      {
-        "type": "IP_ADDRESS",
-        "value": "143.51.179.100"
-      }
-    ],
-    "category": "ip_address"
-  },
-  {
-    "id": "email_015",
-    "text": "Contact me at deepa.kumar61@outlook.com for details.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "deepa.kumar61@outlook.com"
-      }
-    ],
-    "category": "email"
-  },
-  {
-    "id": "card_025",
-    "text": "Card ending in 4043 4301 0333 3801",
-    "expected_entities": [
-      {
-        "type": "CREDIT_CARD",
-        "value": "4043430103333801"
-      }
-    ],
-    "category": "credit_card"
-  },
-  {
-    "id": "ifsc_002",
-    "text": "IFSC code: KKBK017223",
-    "expected_entities": [
-      {
-        "type": "IFSC",
-        "value": "KKBK017223"
-      }
-    ],
-    "category": "ifsc"
-  },
-  {
-    "id": "aadhaar_040",
-    "text": "My Aadhaar number is 3576 3896 9084",
-    "expected_entities": [
-      {
-        "type": "AADHAAR",
-        "value": "357638969084",
-        "start": 23,
-        "end": 37
-      }
-    ],
-    "category": "aadhaar"
-  },
-  {
-    "id": "upi_011",
-    "text": "Pay via UPI: aarav17@ibl",
-    "expected_entities": [
-      {
-        "type": "UPI",
-        "value": "aarav17@ibl"
-      }
-    ],
-    "category": "upi"
-  },
-  {
-    "id": "pan_025",
-    "text": "PAN Card: RNSGO1722L",
-    "expected_entities": [
-      {
-        "type": "PAN",
-        "value": "RNSGO1722L"
-      }
-    ],
-    "category": "pan"
-  },
-  {
-    "id": "pan_039",
-    "text": "PAN Card: MKTJU8439V",
-    "expected_entities": [
-      {
-        "type": "PAN",
-        "value": "MKTJU8439V"
-      }
-    ],
-    "category": "pan"
-  },
-  {
-    "id": "mixed_018",
-    "text": "Customer Aarav Sharma (email: aarav.sharma@gmail.com, phone: +91 9146720989) has PAN FUDJS9319T.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "aarav.sharma@gmail.com"
-      },
-      {
-        "type": "PHONE_IN",
-        "value": "9146720989"
-      },
-      {
-        "type": "PAN",
-        "value": "FUDJS9319T"
-      }
-    ],
-    "category": "mixed"
-  },
-  {
-    "id": "mixed_022",
-    "text": "Customer Aarav Gupta (email: aarav.gupta@gmail.com, phone: +91 9594446470) has PAN BOKBX6779M.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "aarav.gupta@gmail.com"
-      },
-      {
-        "type": "PHONE_IN",
-        "value": "9594446470"
-      },
-      {
-        "type": "PAN",
-        "value": "BOKBX6779M"
-      }
-    ],
-    "category": "mixed"
-  },
-  {
-    "id": "pan_011",
-    "text": "PAN Card: OGSCG6147D",
-    "expected_entities": [
-      {
-        "type": "PAN",
-        "value": "OGSCG6147D"
-      }
-    ],
-    "category": "pan"
-  },
-  {
-    "id": "ip_023",
-    "text": "Login from IP 81.147.121.164",
-    "expected_entities": [
-      {
-        "type": "IP_ADDRESS",
-        "value": "81.147.121.164"
-      }
-    ],
-    "category": "ip_address"
-  },
-  {
-    "id": "ifsc_017",
-    "text": "IFSC code: BARB031276",
-    "expected_entities": [
-      {
-        "type": "IFSC",
-        "value": "BARB031276"
-      }
-    ],
-    "category": "ifsc"
-  },
-  {
-    "id": "upi_008",
-    "text": "Pay via UPI: priya93@paytm",
-    "expected_entities": [
-      {
-        "type": "UPI",
-        "value": "priya93@paytm"
-      }
-    ],
-    "category": "upi"
-  },
-  {
-    "id": "card_004",
-    "text": "Card ending in 3734 9271 6159 9987",
-    "expected_entities": [
-      {
-        "type": "CREDIT_CARD",
-        "value": "3734927161599987"
-      }
-    ],
-    "category": "credit_card"
-  },
-  {
-    "id": "aadhaar_001",
-    "text": "My Aadhaar number is 3985 1000 2501",
-    "expected_entities": [
-      {
-        "type": "AADHAAR",
-        "value": "398510002501",
-        "start": 23,
-        "end": 37
-      }
-    ],
-    "category": "aadhaar"
-  },
-  {
-    "id": "ip_019",
-    "text": "Login from IP 49.228.163.155",
-    "expected_entities": [
-      {
-        "type": "IP_ADDRESS",
-        "value": "49.228.163.155"
-      }
-    ],
-    "category": "ip_address"
-  },
-  {
-    "id": "pan_015",
-    "text": "PAN Card: ONHBI7934Q",
-    "expected_entities": [
-      {
-        "type": "PAN",
-        "value": "ONHBI7934Q"
-      }
-    ],
-    "category": "pan"
-  },
-  {
-    "id": "ip_014",
-    "text": "Login from IP 163.210.149.220",
-    "expected_entities": [
-      {
-        "type": "IP_ADDRESS",
-        "value": "163.210.149.220"
-      }
-    ],
-    "category": "ip_address"
-  },
-  {
-    "id": "mixed_035",
-    "text": "Customer Rahul Gupta (email: rahul.gupta@gmail.com, phone: +91 7698555451) has PAN QHKFA8578W.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "rahul.gupta@gmail.com"
-      },
-      {
-        "type": "PHONE_IN",
-        "value": "7698555451"
-      },
-      {
-        "type": "PAN",
-        "value": "QHKFA8578W"
-      }
-    ],
-    "category": "mixed"
-  },
-  {
-    "id": "phone_in_029",
-    "text": "Call me at 9396606140",
-    "expected_entities": [
-      {
-        "type": "PHONE_IN",
-        "value": "9396606140"
-      }
-    ],
-    "category": "phone_indian"
-  },
-  {
-    "id": "card_015",
-    "text": "Card ending in 5349 0528 0260 1253",
-    "expected_entities": [
-      {
-        "type": "CREDIT_CARD",
-        "value": "5349052802601253"
-      }
-    ],
-    "category": "credit_card"
-  },
-  {
-    "id": "pan_020",
-    "text": "PAN Card: WYKAF3080G",
-    "expected_entities": [
-      {
-        "type": "PAN",
-        "value": "WYKAF3080G"
-      }
-    ],
-    "category": "pan"
-  },
-  {
-    "id": "ifsc_016",
-    "text": "IFSC code: BARB050658",
-    "expected_entities": [
-      {
-        "type": "IFSC",
-        "value": "BARB050658"
-      }
-    ],
-    "category": "ifsc"
-  },
-  {
-    "id": "mixed_049",
-    "text": "Customer Ananya Sharma (email: ananya.sharma@gmail.com, phone: +91 8570472424) has PAN DYRPN2372R.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "ananya.sharma@gmail.com"
-      },
-      {
-        "type": "PHONE_IN",
-        "value": "8570472424"
-      },
-      {
-        "type": "PAN",
-        "value": "DYRPN2372R"
-      }
-    ],
-    "category": "mixed"
-  },
-  {
-    "id": "mixed_048",
-    "text": "Customer Priya Sharma (email: priya.sharma@gmail.com, phone: +91 9806877451) has PAN TLNJH1902F.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "priya.sharma@gmail.com"
-      },
-      {
-        "type": "PHONE_IN",
-        "value": "9806877451"
-      },
-      {
-        "type": "PAN",
-        "value": "TLNJH1902F"
-      }
-    ],
-    "category": "mixed"
-  },
-  {
-    "id": "aadhaar_invalid_005",
-    "text": "Invalid reference: 013051528337",
-    "expected_entities": [],
-    "category": "aadhaar_negative"
-  },
-  {
-    "id": "card_023",
-    "text": "Card ending in 4529 7697 5189 7684",
-    "expected_entities": [
-      {
-        "type": "CREDIT_CARD",
-        "value": "4529769751897684"
-      }
-    ],
-    "category": "credit_card"
-  },
-  {
-    "id": "aadhaar_017",
-    "text": "My Aadhaar number is 7479 3104 5940",
-    "expected_entities": [
-      {
-        "type": "AADHAAR",
-        "value": "747931045940",
-        "start": 23,
-        "end": 37
-      }
-    ],
-    "category": "aadhaar"
-  },
-  {
-    "id": "ip_013",
-    "text": "Login from IP 107.56.144.32",
-    "expected_entities": [
-      {
-        "type": "IP_ADDRESS",
-        "value": "107.56.144.32"
-      }
-    ],
-    "category": "ip_address"
-  },
-  {
-    "id": "email_032",
-    "text": "Contact me at priya.gupta43@outlook.com for details.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "priya.gupta43@outlook.com"
-      }
-    ],
-    "category": "email"
-  },
-  {
-    "id": "email_038",
-    "text": "Contact me at rahul.patel92@university.ac.in for details.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "rahul.patel92@university.ac.in"
-      }
-    ],
-    "category": "email"
-  },
-  {
-    "id": "email_036",
-    "text": "Contact me at deepa.kumar1@company.org for details.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "deepa.kumar1@company.org"
-      }
-    ],
-    "category": "email"
-  },
-  {
-    "id": "email_017",
-    "text": "Contact me at deepa.kumar14@yahoo.co.in for details.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "deepa.kumar14@yahoo.co.in"
-      }
-    ],
-    "category": "email"
-  },
-  {
-    "id": "ip_002",
-    "text": "Login from IP 3.169.9.228",
-    "expected_entities": [
-      {
-        "type": "IP_ADDRESS",
-        "value": "3.169.9.228"
-      }
-    ],
-    "category": "ip_address"
-  },
-  {
-    "id": "aadhaar_036",
-    "text": "My Aadhaar number is 8792 8642 4321",
-    "expected_entities": [
-      {
-        "type": "AADHAAR",
-        "value": "879286424321",
-        "start": 23,
-        "end": 37
-      }
-    ],
-    "category": "aadhaar"
-  },
-  {
-    "id": "pan_001",
-    "text": "PAN Card: BGKFI9131H",
-    "expected_entities": [
-      {
-        "type": "PAN",
-        "value": "BGKFI9131H"
-      }
-    ],
-    "category": "pan"
-  },
-  {
-    "id": "aadhaar_031",
-    "text": "My Aadhaar number is 8086 5876 2487",
-    "expected_entities": [
-      {
-        "type": "AADHAAR",
-        "value": "808658762487",
-        "start": 23,
-        "end": 37
-      }
-    ],
-    "category": "aadhaar"
-  },
-  {
-    "id": "pan_041",
-    "text": "PAN Card: FTDAV2327R",
-    "expected_entities": [
-      {
-        "type": "PAN",
-        "value": "FTDAV2327R"
-      }
-    ],
-    "category": "pan"
-  },
-  {
-    "id": "aadhaar_invalid_013",
-    "text": "Invalid reference: 082053620840",
-    "expected_entities": [],
-    "category": "aadhaar_negative"
-  },
-  {
-    "id": "ip_006",
-    "text": "Login from IP 139.139.195.58",
-    "expected_entities": [
-      {
-        "type": "IP_ADDRESS",
-        "value": "139.139.195.58"
-      }
-    ],
-    "category": "ip_address"
-  },
-  {
-    "id": "card_008",
-    "text": "Card ending in 5919 2327 4069 7458",
-    "expected_entities": [
-      {
-        "type": "CREDIT_CARD",
-        "value": "5919232740697458"
-      }
-    ],
-    "category": "credit_card"
-  },
-  {
-    "id": "aadhaar_007",
-    "text": "My Aadhaar number is 5313 2420 8893",
-    "expected_entities": [
-      {
-        "type": "AADHAAR",
-        "value": "531324208893",
-        "start": 23,
-        "end": 37
-      }
-    ],
-    "category": "aadhaar"
-  },
-  {
-    "id": "email_041",
-    "text": "Contact me at anita.kumar30@company.org for details.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "anita.kumar30@company.org"
-      }
-    ],
-    "category": "email"
-  },
-  {
-    "id": "phone_in_048",
-    "text": "Call me at 7051037895",
-    "expected_entities": [
-      {
-        "type": "PHONE_IN",
-        "value": "7051037895"
-      }
-    ],
-    "category": "phone_indian"
-  },
-  {
-    "id": "email_021",
-    "text": "Contact me at kiran.gupta41@yahoo.co.in for details.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "kiran.gupta41@yahoo.co.in"
-      }
-    ],
-    "category": "email"
-  },
-  {
-    "id": "upi_016",
-    "text": "Pay via UPI: priya91@paytm",
-    "expected_entities": [
-      {
-        "type": "UPI",
-        "value": "priya91@paytm"
-      }
-    ],
-    "category": "upi"
-  },
-  {
-    "id": "ip_027",
-    "text": "Login from IP 60.250.174.153",
-    "expected_entities": [
-      {
-        "type": "IP_ADDRESS",
-        "value": "60.250.174.153"
-      }
-    ],
-    "category": "ip_address"
-  },
-  {
-    "id": "aadhaar_022",
-    "text": "My Aadhaar number is 2574 5563 3199",
-    "expected_entities": [
-      {
-        "type": "AADHAAR",
-        "value": "257455633199",
-        "start": 23,
-        "end": 37
-      }
-    ],
-    "category": "aadhaar"
-  },
-  {
-    "id": "email_013",
-    "text": "Contact me at kiran.kumar37@gmail.com for details.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "kiran.kumar37@gmail.com"
-      }
-    ],
-    "category": "email"
-  },
-  {
-    "id": "pan_003",
-    "text": "PAN Card: FFZCZ7638B",
-    "expected_entities": [
-      {
-        "type": "PAN",
-        "value": "FFZCZ7638B"
-      }
-    ],
-    "category": "pan"
   },
   {
     "id": "aadhaar_005",
-    "text": "My Aadhaar number is 4184 9965 8894",
+    "text": "My Aadhaar number is 9145 0053 6712",
     "expected_entities": [
       {
         "type": "AADHAAR",
-        "value": "418499658894",
+        "value": "914500536712",
+        "start": 23,
+        "end": 37
+      }
+    ],
+    "category": "aadhaar"
+  },
+  {
+    "id": "ip_022",
+    "text": "Login from IP 207.23.54.208",
+    "expected_entities": [
+      {
+        "type": "IP_ADDRESS",
+        "value": "207.23.54.208"
+      }
+    ],
+    "category": "ip_address"
+  },
+  {
+    "id": "aadhaar_040",
+    "text": "My Aadhaar number is 6184 0193 2286",
+    "expected_entities": [
+      {
+        "type": "AADHAAR",
+        "value": "618401932286",
         "start": 23,
         "end": 37
       }
@@ -2906,311 +517,88 @@
   },
   {
     "id": "pan_012",
-    "text": "PAN Card: FCXTI9523V",
+    "text": "PAN Card: CXGTP5505Y",
     "expected_entities": [
       {
         "type": "PAN",
-        "value": "FCXTI9523V"
+        "value": "CXGTP5505Y"
       }
     ],
     "category": "pan"
   },
   {
-    "id": "phone_in_027",
-    "text": "Call me at +91-8790867671",
-    "expected_entities": [
-      {
-        "type": "PHONE_IN",
-        "value": "8790867671"
-      }
-    ],
-    "category": "phone_indian"
-  },
-  {
-    "id": "card_027",
-    "text": "Card ending in 6011 0958 6679 3222",
-    "expected_entities": [
-      {
-        "type": "CREDIT_CARD",
-        "value": "6011095866793222"
-      }
-    ],
-    "category": "credit_card"
-  },
-  {
-    "id": "pan_014",
-    "text": "PAN Card: MXCFO7997M",
-    "expected_entities": [
-      {
-        "type": "PAN",
-        "value": "MXCFO7997M"
-      }
-    ],
-    "category": "pan"
-  },
-  {
-    "id": "ip_028",
-    "text": "Login from IP 192.152.251.175",
-    "expected_entities": [
-      {
-        "type": "IP_ADDRESS",
-        "value": "192.152.251.175"
-      }
-    ],
-    "category": "ip_address"
-  },
-  {
-    "id": "aadhaar_037",
-    "text": "My Aadhaar number is 9241 2835 7456",
-    "expected_entities": [
-      {
-        "type": "AADHAAR",
-        "value": "924128357456",
-        "start": 23,
-        "end": 37
-      }
-    ],
-    "category": "aadhaar"
-  },
-  {
-    "id": "aadhaar_016",
-    "text": "My Aadhaar number is 8346 9370 0068",
-    "expected_entities": [
-      {
-        "type": "AADHAAR",
-        "value": "834693700068",
-        "start": 23,
-        "end": 37
-      }
-    ],
-    "category": "aadhaar"
-  },
-  {
-    "id": "pan_002",
-    "text": "PAN Card: XMFAK8253L",
-    "expected_entities": [
-      {
-        "type": "PAN",
-        "value": "XMFAK8253L"
-      }
-    ],
-    "category": "pan"
-  },
-  {
-    "id": "ip_003",
-    "text": "Login from IP 151.128.58.194",
-    "expected_entities": [
-      {
-        "type": "IP_ADDRESS",
-        "value": "151.128.58.194"
-      }
-    ],
-    "category": "ip_address"
-  },
-  {
-    "id": "pan_047",
-    "text": "PAN Card: FBECY4141L",
-    "expected_entities": [
-      {
-        "type": "PAN",
-        "value": "FBECY4141L"
-      }
-    ],
-    "category": "pan"
-  },
-  {
-    "id": "mixed_005",
-    "text": "Customer Aarav Singh (email: aarav.singh@gmail.com, phone: +91 7812036731) has PAN OCCCH6496J.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "aarav.singh@gmail.com"
-      },
-      {
-        "type": "PHONE_IN",
-        "value": "7812036731"
-      },
-      {
-        "type": "PAN",
-        "value": "OCCCH6496J"
-      }
-    ],
-    "category": "mixed"
-  },
-  {
-    "id": "aadhaar_invalid_015",
-    "text": "Invalid reference: 094186274441",
-    "expected_entities": [],
-    "category": "aadhaar_negative"
-  },
-  {
-    "id": "email_024",
-    "text": "Contact me at deepa.sharma10@university.ac.in for details.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "deepa.sharma10@university.ac.in"
-      }
-    ],
-    "category": "email"
-  },
-  {
-    "id": "ip_025",
-    "text": "Login from IP 19.64.9.87",
-    "expected_entities": [
-      {
-        "type": "IP_ADDRESS",
-        "value": "19.64.9.87"
-      }
-    ],
-    "category": "ip_address"
-  },
-  {
-    "id": "email_027",
-    "text": "Contact me at sanjay.gupta86@yahoo.co.in for details.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "sanjay.gupta86@yahoo.co.in"
-      }
-    ],
-    "category": "email"
-  },
-  {
-    "id": "card_028",
-    "text": "Card ending in 5934 3299 6427 3186",
-    "expected_entities": [
-      {
-        "type": "CREDIT_CARD",
-        "value": "5934329964273186"
-      }
-    ],
-    "category": "credit_card"
-  },
-  {
-    "id": "mixed_032",
-    "text": "Customer Kiran Sharma (email: kiran.sharma@gmail.com, phone: +91 9814160738) has PAN CFOPO6264U.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "kiran.sharma@gmail.com"
-      },
-      {
-        "type": "PHONE_IN",
-        "value": "9814160738"
-      },
-      {
-        "type": "PAN",
-        "value": "CFOPO6264U"
-      }
-    ],
-    "category": "mixed"
-  },
-  {
-    "id": "pan_050",
-    "text": "PAN Card: HUELL6373H",
-    "expected_entities": [
-      {
-        "type": "PAN",
-        "value": "HUELL6373H"
-      }
-    ],
-    "category": "pan"
-  },
-  {
-    "id": "aadhaar_048",
-    "text": "My Aadhaar number is 7971 4190 9397",
-    "expected_entities": [
-      {
-        "type": "AADHAAR",
-        "value": "797141909397",
-        "start": 23,
-        "end": 37
-      }
-    ],
-    "category": "aadhaar"
-  },
-  {
-    "id": "mixed_001",
-    "text": "Customer Aarav Patel (email: aarav.patel@gmail.com, phone: +91 8184789454) has PAN VEUAF6839E.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "aarav.patel@gmail.com"
-      },
-      {
-        "type": "PHONE_IN",
-        "value": "8184789454"
-      },
-      {
-        "type": "PAN",
-        "value": "VEUAF6839E"
-      }
-    ],
-    "category": "mixed"
-  },
-  {
-    "id": "ip_017",
-    "text": "Login from IP 202.229.39.24",
-    "expected_entities": [
-      {
-        "type": "IP_ADDRESS",
-        "value": "202.229.39.24"
-      }
-    ],
-    "category": "ip_address"
-  },
-  {
-    "id": "upi_017",
-    "text": "Pay via UPI: kiran75@ybl",
+    "id": "upi_009",
+    "text": "Pay via UPI: rahul29@ibl",
     "expected_entities": [
       {
         "type": "UPI",
-        "value": "kiran75@ybl"
+        "value": "rahul29@ibl"
       }
     ],
     "category": "upi"
   },
   {
-    "id": "phone_in_007",
-    "text": "Call me at +91 9660747445",
+    "id": "ip_003",
+    "text": "Login from IP 116.198.4.73",
     "expected_entities": [
       {
-        "type": "PHONE_IN",
-        "value": "9660747445"
+        "type": "IP_ADDRESS",
+        "value": "116.198.4.73"
       }
     ],
-    "category": "phone_indian"
+    "category": "ip_address"
   },
   {
-    "id": "email_016",
-    "text": "Contact me at arjun.gupta54@yahoo.co.in for details.",
+    "id": "ifsc_006",
+    "text": "IFSC code: UTIB0789016",
     "expected_entities": [
       {
-        "type": "EMAIL",
-        "value": "arjun.gupta54@yahoo.co.in"
+        "type": "IFSC",
+        "value": "UTIB0789016"
       }
     ],
-    "category": "email"
+    "category": "ifsc"
   },
   {
-    "id": "phone_in_043",
-    "text": "Call me at +916168368591",
+    "id": "pan_002",
+    "text": "PAN Card: XBBLJ9309U",
     "expected_entities": [
       {
-        "type": "PHONE_IN",
-        "value": "6168368591"
+        "type": "PAN",
+        "value": "XBBLJ9309U"
       }
     ],
-    "category": "phone_indian"
+    "category": "pan"
   },
   {
-    "id": "aadhaar_047",
-    "text": "My Aadhaar number is 5369 1292 8616",
+    "id": "ifsc_018",
+    "text": "IFSC code: KKBK0740523",
+    "expected_entities": [
+      {
+        "type": "IFSC",
+        "value": "KKBK0740523"
+      }
+    ],
+    "category": "ifsc"
+  },
+  {
+    "id": "ip_023",
+    "text": "Login from IP 121.132.88.151",
+    "expected_entities": [
+      {
+        "type": "IP_ADDRESS",
+        "value": "121.132.88.151"
+      }
+    ],
+    "category": "ip_address"
+  },
+  {
+    "id": "aadhaar_016",
+    "text": "My Aadhaar number is 2745 2549 4215",
     "expected_entities": [
       {
         "type": "AADHAAR",
-        "value": "536912928616",
+        "value": "274525494215",
         "start": 23,
         "end": 37
       }
@@ -3218,8 +606,126 @@
     "category": "aadhaar"
   },
   {
-    "id": "mixed_031",
-    "text": "Customer Aarav Kumar (email: aarav.kumar@gmail.com, phone: +91 7618744371) has PAN XONLJ6914W.",
+    "id": "ip_018",
+    "text": "Login from IP 213.57.170.178",
+    "expected_entities": [
+      {
+        "type": "IP_ADDRESS",
+        "value": "213.57.170.178"
+      }
+    ],
+    "category": "ip_address"
+  },
+  {
+    "id": "phone_in_024",
+    "text": "Call me at 08279110986",
+    "expected_entities": [
+      {
+        "type": "PHONE_IN",
+        "value": "8279110986"
+      }
+    ],
+    "category": "phone_indian"
+  },
+  {
+    "id": "mixed_021",
+    "text": "Customer Rahul Singh (email: rahul.singh@gmail.com, phone: +91 9776614296) has PAN SGCJY9697Y.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "rahul.singh@gmail.com"
+      },
+      {
+        "type": "PHONE_IN",
+        "value": "9776614296"
+      },
+      {
+        "type": "PAN",
+        "value": "SGCJY9697Y"
+      }
+    ],
+    "category": "mixed"
+  },
+  {
+    "id": "pan_043",
+    "text": "PAN Card: IILBT9714T",
+    "expected_entities": [
+      {
+        "type": "PAN",
+        "value": "IILBT9714T"
+      }
+    ],
+    "category": "pan"
+  },
+  {
+    "id": "ifsc_011",
+    "text": "IFSC code: SBIN0606788",
+    "expected_entities": [
+      {
+        "type": "IFSC",
+        "value": "SBIN0606788"
+      }
+    ],
+    "category": "ifsc"
+  },
+  {
+    "id": "pan_038",
+    "text": "PAN Card: BHPBD7576W",
+    "expected_entities": [
+      {
+        "type": "PAN",
+        "value": "BHPBD7576W"
+      }
+    ],
+    "category": "pan"
+  },
+  {
+    "id": "phone_in_001",
+    "text": "Call me at 06719702132",
+    "expected_entities": [
+      {
+        "type": "PHONE_IN",
+        "value": "6719702132"
+      }
+    ],
+    "category": "phone_indian"
+  },
+  {
+    "id": "ifsc_013",
+    "text": "IFSC code: HDFC0046408",
+    "expected_entities": [
+      {
+        "type": "IFSC",
+        "value": "HDFC0046408"
+      }
+    ],
+    "category": "ifsc"
+  },
+  {
+    "id": "upi_018",
+    "text": "Pay via UPI: kiran80@ybl",
+    "expected_entities": [
+      {
+        "type": "UPI",
+        "value": "kiran80@ybl"
+      }
+    ],
+    "category": "upi"
+  },
+  {
+    "id": "phone_in_050",
+    "text": "Call me at 7383650274",
+    "expected_entities": [
+      {
+        "type": "PHONE_IN",
+        "value": "7383650274"
+      }
+    ],
+    "category": "phone_indian"
+  },
+  {
+    "id": "mixed_011",
+    "text": "Customer Aarav Kumar (email: aarav.kumar@gmail.com, phone: +91 7666844757) has PAN CUWGB2872F.",
     "expected_entities": [
       {
         "type": "EMAIL",
@@ -3227,569 +733,85 @@
       },
       {
         "type": "PHONE_IN",
-        "value": "7618744371"
+        "value": "7666844757"
       },
       {
         "type": "PAN",
-        "value": "XONLJ6914W"
+        "value": "CUWGB2872F"
       }
     ],
     "category": "mixed"
   },
   {
-    "id": "mixed_045",
-    "text": "Customer Aarav Gupta (email: aarav.gupta@gmail.com, phone: +91 9543989184) has PAN QEVBR7747A.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "aarav.gupta@gmail.com"
-      },
-      {
-        "type": "PHONE_IN",
-        "value": "9543989184"
-      },
-      {
-        "type": "PAN",
-        "value": "QEVBR7747A"
-      }
-    ],
-    "category": "mixed"
-  },
-  {
-    "id": "phone_in_011",
-    "text": "Call me at 919104504112",
-    "expected_entities": [
-      {
-        "type": "PHONE_IN",
-        "value": "9104504112"
-      }
-    ],
-    "category": "phone_indian"
-  },
-  {
-    "id": "aadhaar_002",
-    "text": "My Aadhaar number is 6981 3857 3572",
-    "expected_entities": [
-      {
-        "type": "AADHAAR",
-        "value": "698138573572",
-        "start": 23,
-        "end": 37
-      }
-    ],
-    "category": "aadhaar"
-  },
-  {
-    "id": "phone_in_010",
-    "text": "Call me at +91 8699172961",
-    "expected_entities": [
-      {
-        "type": "PHONE_IN",
-        "value": "8699172961"
-      }
-    ],
-    "category": "phone_indian"
-  },
-  {
-    "id": "pan_018",
-    "text": "PAN Card: JHCHF7659O",
-    "expected_entities": [
-      {
-        "type": "PAN",
-        "value": "JHCHF7659O"
-      }
-    ],
-    "category": "pan"
-  },
-  {
-    "id": "phone_in_034",
-    "text": "Call me at 7729012322",
-    "expected_entities": [
-      {
-        "type": "PHONE_IN",
-        "value": "7729012322"
-      }
-    ],
-    "category": "phone_indian"
-  },
-  {
-    "id": "aadhaar_032",
-    "text": "My Aadhaar number is 2381 1902 4667",
-    "expected_entities": [
-      {
-        "type": "AADHAAR",
-        "value": "238119024667",
-        "start": 23,
-        "end": 37
-      }
-    ],
-    "category": "aadhaar"
-  },
-  {
-    "id": "mixed_047",
-    "text": "Customer Kiran Gupta (email: kiran.gupta@gmail.com, phone: +91 9369139432) has PAN YQQJF8781J.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "kiran.gupta@gmail.com"
-      },
-      {
-        "type": "PHONE_IN",
-        "value": "9369139432"
-      },
-      {
-        "type": "PAN",
-        "value": "YQQJF8781J"
-      }
-    ],
-    "category": "mixed"
-  },
-  {
-    "id": "upi_018",
-    "text": "Pay via UPI: aarav9@sbi",
-    "expected_entities": [
-      {
-        "type": "UPI",
-        "value": "aarav9@sbi"
-      }
-    ],
-    "category": "upi"
-  },
-  {
-    "id": "upi_010",
-    "text": "Pay via UPI: deepa62@paytm",
-    "expected_entities": [
-      {
-        "type": "UPI",
-        "value": "deepa62@paytm"
-      }
-    ],
-    "category": "upi"
-  },
-  {
-    "id": "email_050",
-    "text": "Contact me at kiran.gupta17@company.org for details.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "kiran.gupta17@company.org"
-      }
-    ],
-    "category": "email"
-  },
-  {
-    "id": "mixed_037",
-    "text": "Customer Rahul Patel (email: rahul.patel@gmail.com, phone: +91 7567222971) has PAN NGPJU2024D.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "rahul.patel@gmail.com"
-      },
-      {
-        "type": "PHONE_IN",
-        "value": "7567222971"
-      },
-      {
-        "type": "PAN",
-        "value": "NGPJU2024D"
-      }
-    ],
-    "category": "mixed"
-  },
-  {
-    "id": "aadhaar_invalid_004",
-    "text": "Invalid reference: 062174208378",
-    "expected_entities": [],
-    "category": "aadhaar_negative"
-  },
-  {
-    "id": "mixed_041",
-    "text": "Customer Kiran Kumar (email: kiran.kumar@gmail.com, phone: +91 8454313963) has PAN MZNJX5313Q.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "kiran.kumar@gmail.com"
-      },
-      {
-        "type": "PHONE_IN",
-        "value": "8454313963"
-      },
-      {
-        "type": "PAN",
-        "value": "MZNJX5313Q"
-      }
-    ],
-    "category": "mixed"
-  },
-  {
-    "id": "aadhaar_invalid_017",
-    "text": "Invalid reference: 008163164857",
-    "expected_entities": [],
-    "category": "aadhaar_negative"
-  },
-  {
-    "id": "email_001",
-    "text": "Contact me at deepa.kumar38@company.org for details.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "deepa.kumar38@company.org"
-      }
-    ],
-    "category": "email"
-  },
-  {
-    "id": "ip_001",
-    "text": "Login from IP 177.60.57.121",
+    "id": "ip_027",
+    "text": "Login from IP 81.59.23.8",
     "expected_entities": [
       {
         "type": "IP_ADDRESS",
-        "value": "177.60.57.121"
+        "value": "81.59.23.8"
       }
     ],
     "category": "ip_address"
   },
   {
-    "id": "aadhaar_invalid_007",
-    "text": "Invalid reference: 033429897643",
-    "expected_entities": [],
-    "category": "aadhaar_negative"
-  },
-  {
-    "id": "phone_in_040",
-    "text": "Call me at 9869349082",
-    "expected_entities": [
-      {
-        "type": "PHONE_IN",
-        "value": "9869349082"
-      }
-    ],
-    "category": "phone_indian"
-  },
-  {
-    "id": "pan_043",
-    "text": "PAN Card: YECGB4016F",
-    "expected_entities": [
-      {
-        "type": "PAN",
-        "value": "YECGB4016F"
-      }
-    ],
-    "category": "pan"
-  },
-  {
-    "id": "email_005",
-    "text": "Contact me at kiran.gupta98@university.ac.in for details.",
+    "id": "email_028",
+    "text": "Contact me at arjun.patel45@gmail.com for details.",
     "expected_entities": [
       {
         "type": "EMAIL",
-        "value": "kiran.gupta98@university.ac.in"
+        "value": "arjun.patel45@gmail.com"
       }
     ],
     "category": "email"
   },
   {
-    "id": "phone_in_028",
-    "text": "Call me at 916488209509",
-    "expected_entities": [
-      {
-        "type": "PHONE_IN",
-        "value": "6488209509"
-      }
-    ],
-    "category": "phone_indian"
-  },
-  {
-    "id": "upi_020",
-    "text": "Pay via UPI: deepa1@ybl",
-    "expected_entities": [
-      {
-        "type": "UPI",
-        "value": "deepa1@ybl"
-      }
-    ],
-    "category": "upi"
-  },
-  {
-    "id": "mixed_026",
-    "text": "Customer Priya Kumar (email: priya.kumar@gmail.com, phone: +91 9386434395) has PAN DIPPX1902P.",
+    "id": "mixed_023",
+    "text": "Customer Aarav Kumar (email: aarav.kumar@gmail.com, phone: +91 8320550220) has PAN QTIBI4380F.",
     "expected_entities": [
       {
         "type": "EMAIL",
-        "value": "priya.kumar@gmail.com"
+        "value": "aarav.kumar@gmail.com"
       },
       {
         "type": "PHONE_IN",
-        "value": "9386434395"
+        "value": "8320550220"
       },
       {
         "type": "PAN",
-        "value": "DIPPX1902P"
+        "value": "QTIBI4380F"
       }
     ],
     "category": "mixed"
-  },
-  {
-    "id": "card_011",
-    "text": "Card ending in 6011 4854 7911 6929",
-    "expected_entities": [
-      {
-        "type": "CREDIT_CARD",
-        "value": "6011485479116929"
-      }
-    ],
-    "category": "credit_card"
-  },
-  {
-    "id": "pan_022",
-    "text": "PAN Card: UDCCO3552U",
-    "expected_entities": [
-      {
-        "type": "PAN",
-        "value": "UDCCO3552U"
-      }
-    ],
-    "category": "pan"
-  },
-  {
-    "id": "upi_001",
-    "text": "Pay via UPI: deepa50@ibl",
-    "expected_entities": [
-      {
-        "type": "UPI",
-        "value": "deepa50@ibl"
-      }
-    ],
-    "category": "upi"
-  },
-  {
-    "id": "mixed_015",
-    "text": "Customer Rahul Sharma (email: rahul.sharma@gmail.com, phone: +91 9158265634) has PAN QHEJC2445C.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "rahul.sharma@gmail.com"
-      },
-      {
-        "type": "PHONE_IN",
-        "value": "9158265634"
-      },
-      {
-        "type": "PAN",
-        "value": "QHEJC2445C"
-      }
-    ],
-    "category": "mixed"
-  },
-  {
-    "id": "ip_008",
-    "text": "Login from IP 47.31.96.167",
-    "expected_entities": [
-      {
-        "type": "IP_ADDRESS",
-        "value": "47.31.96.167"
-      }
-    ],
-    "category": "ip_address"
-  },
-  {
-    "id": "phone_in_001",
-    "text": "Call me at +91 8505087132",
-    "expected_entities": [
-      {
-        "type": "PHONE_IN",
-        "value": "8505087132"
-      }
-    ],
-    "category": "phone_indian"
-  },
-  {
-    "id": "aadhaar_035",
-    "text": "My Aadhaar number is 3803 4931 9187",
-    "expected_entities": [
-      {
-        "type": "AADHAAR",
-        "value": "380349319187",
-        "start": 23,
-        "end": 37
-      }
-    ],
-    "category": "aadhaar"
-  },
-  {
-    "id": "phone_in_035",
-    "text": "Call me at +918807306534",
-    "expected_entities": [
-      {
-        "type": "PHONE_IN",
-        "value": "8807306534"
-      }
-    ],
-    "category": "phone_indian"
-  },
-  {
-    "id": "email_029",
-    "text": "Contact me at deepa.gupta65@university.ac.in for details.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "deepa.gupta65@university.ac.in"
-      }
-    ],
-    "category": "email"
-  },
-  {
-    "id": "ifsc_012",
-    "text": "IFSC code: SBIN073187",
-    "expected_entities": [
-      {
-        "type": "IFSC",
-        "value": "SBIN073187"
-      }
-    ],
-    "category": "ifsc"
-  },
-  {
-    "id": "ifsc_001",
-    "text": "IFSC code: SBIN086248",
-    "expected_entities": [
-      {
-        "type": "IFSC",
-        "value": "SBIN086248"
-      }
-    ],
-    "category": "ifsc"
   },
   {
     "id": "card_018",
-    "text": "Card ending in 4864 4877 9842 1441",
+    "text": "Card ending in 3772 5790 8786 0048",
     "expected_entities": [
       {
         "type": "CREDIT_CARD",
-        "value": "4864487798421441"
+        "value": "3772579087860048"
       }
     ],
     "category": "credit_card"
   },
   {
-    "id": "email_047",
-    "text": "Contact me at sanjay.patel48@outlook.com for details.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "sanjay.patel48@outlook.com"
-      }
-    ],
-    "category": "email"
-  },
-  {
-    "id": "upi_007",
-    "text": "Pay via UPI: priya87@ibl",
+    "id": "upi_030",
+    "text": "Pay via UPI: deepa94@ibl",
     "expected_entities": [
       {
         "type": "UPI",
-        "value": "priya87@ibl"
+        "value": "deepa94@ibl"
       }
     ],
     "category": "upi"
   },
   {
-    "id": "upi_004",
-    "text": "Pay via UPI: deepa6@sbi",
-    "expected_entities": [
-      {
-        "type": "UPI",
-        "value": "deepa6@sbi"
-      }
-    ],
-    "category": "upi"
-  },
-  {
-    "id": "mixed_046",
-    "text": "Customer Ananya Kumar (email: ananya.kumar@gmail.com, phone: +91 9395153740) has PAN XNQFM9478T.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "ananya.kumar@gmail.com"
-      },
-      {
-        "type": "PHONE_IN",
-        "value": "9395153740"
-      },
-      {
-        "type": "PAN",
-        "value": "XNQFM9478T"
-      }
-    ],
-    "category": "mixed"
-  },
-  {
-    "id": "mixed_042",
-    "text": "Customer Aarav Sharma (email: aarav.sharma@gmail.com, phone: +91 8286616648) has PAN IQHTZ9398W.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "aarav.sharma@gmail.com"
-      },
-      {
-        "type": "PHONE_IN",
-        "value": "8286616648"
-      },
-      {
-        "type": "PAN",
-        "value": "IQHTZ9398W"
-      }
-    ],
-    "category": "mixed"
-  },
-  {
-    "id": "mixed_014",
-    "text": "Customer Kiran Kumar (email: kiran.kumar@gmail.com, phone: +91 8179419179) has PAN VBABP9187M.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "kiran.kumar@gmail.com"
-      },
-      {
-        "type": "PHONE_IN",
-        "value": "8179419179"
-      },
-      {
-        "type": "PAN",
-        "value": "VBABP9187M"
-      }
-    ],
-    "category": "mixed"
-  },
-  {
-    "id": "email_007",
-    "text": "Contact me at rahul.patel66@company.org for details.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "rahul.patel66@company.org"
-      }
-    ],
-    "category": "email"
-  },
-  {
-    "id": "pan_035",
-    "text": "PAN Card: UFTFR5771S",
-    "expected_entities": [
-      {
-        "type": "PAN",
-        "value": "UFTFR5771S"
-      }
-    ],
-    "category": "pan"
-  },
-  {
-    "id": "aadhaar_039",
-    "text": "My Aadhaar number is 6394 0059 4607",
+    "id": "aadhaar_027",
+    "text": "My Aadhaar number is 2475 0755 6109",
     "expected_entities": [
       {
         "type": "AADHAAR",
-        "value": "639400594607",
+        "value": "247507556109",
         "start": 23,
         "end": 37
       }
@@ -3797,19 +819,540 @@
     "category": "aadhaar"
   },
   {
-    "id": "card_014",
-    "text": "Card ending in 5938 6848 0808 4071",
+    "id": "aadhaar_008",
+    "text": "My Aadhaar number is 5984 1155 2880",
+    "expected_entities": [
+      {
+        "type": "AADHAAR",
+        "value": "598411552880",
+        "start": 23,
+        "end": 37
+      }
+    ],
+    "category": "aadhaar"
+  },
+  {
+    "id": "aadhaar_checksum_fail_013",
+    "text": "Invoice reference 282194293009 dated today",
+    "expected_entities": [],
+    "category": "aadhaar_negative"
+  },
+  {
+    "id": "ip_005",
+    "text": "Login from IP 2.84.5.230",
+    "expected_entities": [
+      {
+        "type": "IP_ADDRESS",
+        "value": "2.84.5.230"
+      }
+    ],
+    "category": "ip_address"
+  },
+  {
+    "id": "ip_017",
+    "text": "Login from IP 164.214.254.235",
+    "expected_entities": [
+      {
+        "type": "IP_ADDRESS",
+        "value": "164.214.254.235"
+      }
+    ],
+    "category": "ip_address"
+  },
+  {
+    "id": "upi_023",
+    "text": "Pay via UPI: kiran65@ybl",
+    "expected_entities": [
+      {
+        "type": "UPI",
+        "value": "kiran65@ybl"
+      }
+    ],
+    "category": "upi"
+  },
+  {
+    "id": "ip_019",
+    "text": "Login from IP 96.165.132.125",
+    "expected_entities": [
+      {
+        "type": "IP_ADDRESS",
+        "value": "96.165.132.125"
+      }
+    ],
+    "category": "ip_address"
+  },
+  {
+    "id": "pan_049",
+    "text": "PAN Card: AYEAC6755Z",
+    "expected_entities": [
+      {
+        "type": "PAN",
+        "value": "AYEAC6755Z"
+      }
+    ],
+    "category": "pan"
+  },
+  {
+    "id": "email_035",
+    "text": "Contact me at vikram.gupta50@company.org for details.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "vikram.gupta50@company.org"
+      }
+    ],
+    "category": "email"
+  },
+  {
+    "id": "phone_in_020",
+    "text": "Call me at +91 83404 38479",
+    "expected_entities": [
+      {
+        "type": "PHONE_IN",
+        "value": "8340438479"
+      }
+    ],
+    "category": "phone_indian"
+  },
+  {
+    "id": "aadhaar_021",
+    "text": "My Aadhaar number is 8322 1015 8951",
+    "expected_entities": [
+      {
+        "type": "AADHAAR",
+        "value": "832210158951",
+        "start": 23,
+        "end": 37
+      }
+    ],
+    "category": "aadhaar"
+  },
+  {
+    "id": "pan_032",
+    "text": "PAN Card: OKTAU3389S",
+    "expected_entities": [
+      {
+        "type": "PAN",
+        "value": "OKTAU3389S"
+      }
+    ],
+    "category": "pan"
+  },
+  {
+    "id": "phone_in_002",
+    "text": "Call me at 917352660230",
+    "expected_entities": [
+      {
+        "type": "PHONE_IN",
+        "value": "7352660230"
+      }
+    ],
+    "category": "phone_indian"
+  },
+  {
+    "id": "aadhaar_invalid_010",
+    "text": "Invalid reference: 049104880648",
+    "expected_entities": [],
+    "category": "aadhaar_negative"
+  },
+  {
+    "id": "ip_024",
+    "text": "Login from IP 152.133.137.42",
+    "expected_entities": [
+      {
+        "type": "IP_ADDRESS",
+        "value": "152.133.137.42"
+      }
+    ],
+    "category": "ip_address"
+  },
+  {
+    "id": "phone_in_036",
+    "text": "Call me at 06196941582",
+    "expected_entities": [
+      {
+        "type": "PHONE_IN",
+        "value": "6196941582"
+      }
+    ],
+    "category": "phone_indian"
+  },
+  {
+    "id": "mixed_044",
+    "text": "Customer Priya Singh (email: priya.singh@gmail.com, phone: +91 9120064170) has PAN GIGJI1584P.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "priya.singh@gmail.com"
+      },
+      {
+        "type": "PHONE_IN",
+        "value": "9120064170"
+      },
+      {
+        "type": "PAN",
+        "value": "GIGJI1584P"
+      }
+    ],
+    "category": "mixed"
+  },
+  {
+    "id": "email_009",
+    "text": "Contact me at deepa.sharma14@gmail.com for details.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "deepa.sharma14@gmail.com"
+      }
+    ],
+    "category": "email"
+  },
+  {
+    "id": "aadhaar_047",
+    "text": "My Aadhaar number is 6603 7124 4125",
+    "expected_entities": [
+      {
+        "type": "AADHAAR",
+        "value": "660371244125",
+        "start": 23,
+        "end": 37
+      }
+    ],
+    "category": "aadhaar"
+  },
+  {
+    "id": "ip_007",
+    "text": "Login from IP 166.120.230.236",
+    "expected_entities": [
+      {
+        "type": "IP_ADDRESS",
+        "value": "166.120.230.236"
+      }
+    ],
+    "category": "ip_address"
+  },
+  {
+    "id": "aadhaar_046",
+    "text": "My Aadhaar number is 7500 4587 6565",
+    "expected_entities": [
+      {
+        "type": "AADHAAR",
+        "value": "750045876565",
+        "start": 23,
+        "end": 37
+      }
+    ],
+    "category": "aadhaar"
+  },
+  {
+    "id": "aadhaar_checksum_fail_014",
+    "text": "Transaction id 750850851233 posted",
+    "expected_entities": [],
+    "category": "aadhaar_negative"
+  },
+  {
+    "id": "card_005",
+    "text": "Card ending in 6011 9264 7707 8109",
     "expected_entities": [
       {
         "type": "CREDIT_CARD",
-        "value": "5938684808084071"
+        "value": "6011926477078109"
       }
     ],
     "category": "credit_card"
   },
   {
-    "id": "mixed_019",
-    "text": "Customer Aarav Patel (email: aarav.patel@gmail.com, phone: +91 7696875289) has PAN DHAHQ4004P.",
+    "id": "pan_004",
+    "text": "PAN Card: ILPAX8130T",
+    "expected_entities": [
+      {
+        "type": "PAN",
+        "value": "ILPAX8130T"
+      }
+    ],
+    "category": "pan"
+  },
+  {
+    "id": "aadhaar_invalid_004",
+    "text": "Invalid reference: 113043315270",
+    "expected_entities": [],
+    "category": "aadhaar_negative"
+  },
+  {
+    "id": "mixed_028",
+    "text": "Customer Rahul Singh (email: rahul.singh@gmail.com, phone: +91 7615758583) has PAN EAJAX7341H.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "rahul.singh@gmail.com"
+      },
+      {
+        "type": "PHONE_IN",
+        "value": "7615758583"
+      },
+      {
+        "type": "PAN",
+        "value": "EAJAX7341H"
+      }
+    ],
+    "category": "mixed"
+  },
+  {
+    "id": "mixed_013",
+    "text": "Customer Priya Gupta (email: priya.gupta@gmail.com, phone: +91 7344948877) has PAN EHPCG2442J.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "priya.gupta@gmail.com"
+      },
+      {
+        "type": "PHONE_IN",
+        "value": "7344948877"
+      },
+      {
+        "type": "PAN",
+        "value": "EHPCG2442J"
+      }
+    ],
+    "category": "mixed"
+  },
+  {
+    "id": "phone_in_032",
+    "text": "Call me at +91 77151 56982",
+    "expected_entities": [
+      {
+        "type": "PHONE_IN",
+        "value": "7715156982"
+      }
+    ],
+    "category": "phone_indian"
+  },
+  {
+    "id": "email_048",
+    "text": "Contact me at kiran.kumar69@company.org for details.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "kiran.kumar69@company.org"
+      }
+    ],
+    "category": "email"
+  },
+  {
+    "id": "card_024",
+    "text": "Card ending in 6011 2394 6310 7340",
+    "expected_entities": [
+      {
+        "type": "CREDIT_CARD",
+        "value": "6011239463107340"
+      }
+    ],
+    "category": "credit_card"
+  },
+  {
+    "id": "pan_018",
+    "text": "PAN Card: EOYBW7182F",
+    "expected_entities": [
+      {
+        "type": "PAN",
+        "value": "EOYBW7182F"
+      }
+    ],
+    "category": "pan"
+  },
+  {
+    "id": "ip_014",
+    "text": "Login from IP 64.160.188.219",
+    "expected_entities": [
+      {
+        "type": "IP_ADDRESS",
+        "value": "64.160.188.219"
+      }
+    ],
+    "category": "ip_address"
+  },
+  {
+    "id": "upi_011",
+    "text": "Pay via UPI: kiran48@ibl",
+    "expected_entities": [
+      {
+        "type": "UPI",
+        "value": "kiran48@ibl"
+      }
+    ],
+    "category": "upi"
+  },
+  {
+    "id": "aadhaar_017",
+    "text": "My Aadhaar number is 8217 6308 7508",
+    "expected_entities": [
+      {
+        "type": "AADHAAR",
+        "value": "821763087508",
+        "start": 23,
+        "end": 37
+      }
+    ],
+    "category": "aadhaar"
+  },
+  {
+    "id": "upi_008",
+    "text": "Pay via UPI: kiran65@sbi",
+    "expected_entities": [
+      {
+        "type": "UPI",
+        "value": "kiran65@sbi"
+      }
+    ],
+    "category": "upi"
+  },
+  {
+    "id": "card_020",
+    "text": "Card ending in 4075 7872 6596 4399",
+    "expected_entities": [
+      {
+        "type": "CREDIT_CARD",
+        "value": "4075787265964399"
+      }
+    ],
+    "category": "credit_card"
+  },
+  {
+    "id": "pan_048",
+    "text": "PAN Card: SIBFY7324J",
+    "expected_entities": [
+      {
+        "type": "PAN",
+        "value": "SIBFY7324J"
+      }
+    ],
+    "category": "pan"
+  },
+  {
+    "id": "aadhaar_020",
+    "text": "My Aadhaar number is 8965 2668 1497",
+    "expected_entities": [
+      {
+        "type": "AADHAAR",
+        "value": "896526681497",
+        "start": 23,
+        "end": 37
+      }
+    ],
+    "category": "aadhaar"
+  },
+  {
+    "id": "mixed_006",
+    "text": "Customer Priya Gupta (email: priya.gupta@gmail.com, phone: +91 8217953826) has PAN ASSTI1303U.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "priya.gupta@gmail.com"
+      },
+      {
+        "type": "PHONE_IN",
+        "value": "8217953826"
+      },
+      {
+        "type": "PAN",
+        "value": "ASSTI1303U"
+      }
+    ],
+    "category": "mixed"
+  },
+  {
+    "id": "card_021",
+    "text": "Card ending in 5549 9297 5748 1087",
+    "expected_entities": [
+      {
+        "type": "CREDIT_CARD",
+        "value": "5549929757481087"
+      }
+    ],
+    "category": "credit_card"
+  },
+  {
+    "id": "card_011",
+    "text": "Card ending in 6011 2738 0454 7427",
+    "expected_entities": [
+      {
+        "type": "CREDIT_CARD",
+        "value": "6011273804547427"
+      }
+    ],
+    "category": "credit_card"
+  },
+  {
+    "id": "email_006",
+    "text": "Contact me at sanjay.patel58@university.ac.in for details.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "sanjay.patel58@university.ac.in"
+      }
+    ],
+    "category": "email"
+  },
+  {
+    "id": "ifsc_020",
+    "text": "IFSC code: BARB0061775",
+    "expected_entities": [
+      {
+        "type": "IFSC",
+        "value": "BARB0061775"
+      }
+    ],
+    "category": "ifsc"
+  },
+  {
+    "id": "upi_013",
+    "text": "Pay via UPI: rahul24@sbi",
+    "expected_entities": [
+      {
+        "type": "UPI",
+        "value": "rahul24@sbi"
+      }
+    ],
+    "category": "upi"
+  },
+  {
+    "id": "pan_037",
+    "text": "PAN Card: FKIJM7659A",
+    "expected_entities": [
+      {
+        "type": "PAN",
+        "value": "FKIJM7659A"
+      }
+    ],
+    "category": "pan"
+  },
+  {
+    "id": "aadhaar_015",
+    "text": "My Aadhaar number is 6394 1745 8367",
+    "expected_entities": [
+      {
+        "type": "AADHAAR",
+        "value": "639417458367",
+        "start": 23,
+        "end": 37
+      }
+    ],
+    "category": "aadhaar"
+  },
+  {
+    "id": "card_027",
+    "text": "Card ending in 6011 7633 7515 1740",
+    "expected_entities": [
+      {
+        "type": "CREDIT_CARD",
+        "value": "6011763375151740"
+      }
+    ],
+    "category": "credit_card"
+  },
+  {
+    "id": "mixed_045",
+    "text": "Customer Aarav Patel (email: aarav.patel@gmail.com, phone: +91 7683848325) has PAN ILDJR1947I.",
     "expected_entities": [
       {
         "type": "EMAIL",
@@ -3817,33 +1360,3257 @@
       },
       {
         "type": "PHONE_IN",
-        "value": "7696875289"
+        "value": "7683848325"
       },
       {
         "type": "PAN",
-        "value": "DHAHQ4004P"
+        "value": "ILDJR1947I"
       }
     ],
     "category": "mixed"
   },
   {
-    "id": "ifsc_013",
-    "text": "IFSC code: HDFC038394",
+    "id": "aadhaar_019",
+    "text": "My Aadhaar number is 2444 3088 3465",
+    "expected_entities": [
+      {
+        "type": "AADHAAR",
+        "value": "244430883465",
+        "start": 23,
+        "end": 37
+      }
+    ],
+    "category": "aadhaar"
+  },
+  {
+    "id": "ifsc_017",
+    "text": "IFSC code: HDFC0653087",
     "expected_entities": [
       {
         "type": "IFSC",
-        "value": "HDFC038394"
+        "value": "HDFC0653087"
       }
     ],
     "category": "ifsc"
   },
   {
-    "id": "aadhaar_004",
-    "text": "My Aadhaar number is 5336 9981 2178",
+    "id": "mixed_016",
+    "text": "Customer Rahul Patel (email: rahul.patel@gmail.com, phone: +91 9791741054) has PAN EJGTC7118F.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "rahul.patel@gmail.com"
+      },
+      {
+        "type": "PHONE_IN",
+        "value": "9791741054"
+      },
+      {
+        "type": "PAN",
+        "value": "EJGTC7118F"
+      }
+    ],
+    "category": "mixed"
+  },
+  {
+    "id": "ifsc_004",
+    "text": "IFSC code: BARB0431832",
+    "expected_entities": [
+      {
+        "type": "IFSC",
+        "value": "BARB0431832"
+      }
+    ],
+    "category": "ifsc"
+  },
+  {
+    "id": "mixed_049",
+    "text": "Customer Aarav Kumar (email: aarav.kumar@gmail.com, phone: +91 7944822883) has PAN RNATK9295N.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "aarav.kumar@gmail.com"
+      },
+      {
+        "type": "PHONE_IN",
+        "value": "7944822883"
+      },
+      {
+        "type": "PAN",
+        "value": "RNATK9295N"
+      }
+    ],
+    "category": "mixed"
+  },
+  {
+    "id": "pan_022",
+    "text": "PAN Card: QAXTZ2940V",
+    "expected_entities": [
+      {
+        "type": "PAN",
+        "value": "QAXTZ2940V"
+      }
+    ],
+    "category": "pan"
+  },
+  {
+    "id": "email_021",
+    "text": "Contact me at sanjay.gupta74@yahoo.co.in for details.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "sanjay.gupta74@yahoo.co.in"
+      }
+    ],
+    "category": "email"
+  },
+  {
+    "id": "card_016",
+    "text": "Card ending in 5742 3504 6499 1596",
+    "expected_entities": [
+      {
+        "type": "CREDIT_CARD",
+        "value": "5742350464991596"
+      }
+    ],
+    "category": "credit_card"
+  },
+  {
+    "id": "pan_031",
+    "text": "PAN Card: YTMPM3049Q",
+    "expected_entities": [
+      {
+        "type": "PAN",
+        "value": "YTMPM3049Q"
+      }
+    ],
+    "category": "pan"
+  },
+  {
+    "id": "aadhaar_checksum_fail_005",
+    "text": "Order number 855797052653 confirmed",
+    "expected_entities": [],
+    "category": "aadhaar_negative"
+  },
+  {
+    "id": "email_045",
+    "text": "Contact me at kiran.patel50@university.ac.in for details.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "kiran.patel50@university.ac.in"
+      }
+    ],
+    "category": "email"
+  },
+  {
+    "id": "ip_009",
+    "text": "Login from IP 149.232.82.31",
+    "expected_entities": [
+      {
+        "type": "IP_ADDRESS",
+        "value": "149.232.82.31"
+      }
+    ],
+    "category": "ip_address"
+  },
+  {
+    "id": "aadhaar_050",
+    "text": "My Aadhaar number is 4248 2356 5691",
     "expected_entities": [
       {
         "type": "AADHAAR",
-        "value": "533699812178",
+        "value": "424823565691",
+        "start": 23,
+        "end": 37
+      }
+    ],
+    "category": "aadhaar"
+  },
+  {
+    "id": "ifsc_019",
+    "text": "IFSC code: ICIC0648702",
+    "expected_entities": [
+      {
+        "type": "IFSC",
+        "value": "ICIC0648702"
+      }
+    ],
+    "category": "ifsc"
+  },
+  {
+    "id": "card_012",
+    "text": "Card ending in 5524 5097 4550 6002",
+    "expected_entities": [
+      {
+        "type": "CREDIT_CARD",
+        "value": "5524509745506002"
+      }
+    ],
+    "category": "credit_card"
+  },
+  {
+    "id": "ifsc_010",
+    "text": "IFSC code: BARB0258474",
+    "expected_entities": [
+      {
+        "type": "IFSC",
+        "value": "BARB0258474"
+      }
+    ],
+    "category": "ifsc"
+  },
+  {
+    "id": "email_001",
+    "text": "Contact me at sanjay.patel98@university.ac.in for details.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "sanjay.patel98@university.ac.in"
+      }
+    ],
+    "category": "email"
+  },
+  {
+    "id": "email_032",
+    "text": "Contact me at anita.kumar58@yahoo.co.in for details.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "anita.kumar58@yahoo.co.in"
+      }
+    ],
+    "category": "email"
+  },
+  {
+    "id": "pan_033",
+    "text": "PAN Card: DDKJR7685T",
+    "expected_entities": [
+      {
+        "type": "PAN",
+        "value": "DDKJR7685T"
+      }
+    ],
+    "category": "pan"
+  },
+  {
+    "id": "email_042",
+    "text": "Contact me at meera.kumar88@gmail.com for details.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "meera.kumar88@gmail.com"
+      }
+    ],
+    "category": "email"
+  },
+  {
+    "id": "aadhaar_041",
+    "text": "My Aadhaar number is 2522 9113 6110",
+    "expected_entities": [
+      {
+        "type": "AADHAAR",
+        "value": "252291136110",
+        "start": 23,
+        "end": 37
+      }
+    ],
+    "category": "aadhaar"
+  },
+  {
+    "id": "email_038",
+    "text": "Contact me at aarav.patel89@outlook.com for details.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "aarav.patel89@outlook.com"
+      }
+    ],
+    "category": "email"
+  },
+  {
+    "id": "pan_036",
+    "text": "PAN Card: EYGCJ5376O",
+    "expected_entities": [
+      {
+        "type": "PAN",
+        "value": "EYGCJ5376O"
+      }
+    ],
+    "category": "pan"
+  },
+  {
+    "id": "upi_022",
+    "text": "Pay via UPI: priya42@upi",
+    "expected_entities": [
+      {
+        "type": "UPI",
+        "value": "priya42@upi"
+      }
+    ],
+    "category": "upi"
+  },
+  {
+    "id": "pan_006",
+    "text": "PAN Card: JFLFL7515S",
+    "expected_entities": [
+      {
+        "type": "PAN",
+        "value": "JFLFL7515S"
+      }
+    ],
+    "category": "pan"
+  },
+  {
+    "id": "mixed_026",
+    "text": "Customer Kiran Sharma (email: kiran.sharma@gmail.com, phone: +91 7486263500) has PAN KFZTZ3052Q.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "kiran.sharma@gmail.com"
+      },
+      {
+        "type": "PHONE_IN",
+        "value": "7486263500"
+      },
+      {
+        "type": "PAN",
+        "value": "KFZTZ3052Q"
+      }
+    ],
+    "category": "mixed"
+  },
+  {
+    "id": "pan_011",
+    "text": "PAN Card: TVVHD3512E",
+    "expected_entities": [
+      {
+        "type": "PAN",
+        "value": "TVVHD3512E"
+      }
+    ],
+    "category": "pan"
+  },
+  {
+    "id": "card_029",
+    "text": "Card ending in 3709 4331 1662 6491",
+    "expected_entities": [
+      {
+        "type": "CREDIT_CARD",
+        "value": "3709433116626491"
+      }
+    ],
+    "category": "credit_card"
+  },
+  {
+    "id": "email_031",
+    "text": "Contact me at vikram.kumar7@university.ac.in for details.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "vikram.kumar7@university.ac.in"
+      }
+    ],
+    "category": "email"
+  },
+  {
+    "id": "card_025",
+    "text": "Card ending in 5760 5877 0516 6820",
+    "expected_entities": [
+      {
+        "type": "CREDIT_CARD",
+        "value": "5760587705166820"
+      }
+    ],
+    "category": "credit_card"
+  },
+  {
+    "id": "pan_007",
+    "text": "PAN Card: YLLBT8669W",
+    "expected_entities": [
+      {
+        "type": "PAN",
+        "value": "YLLBT8669W"
+      }
+    ],
+    "category": "pan"
+  },
+  {
+    "id": "email_002",
+    "text": "Contact me at kiran.sharma34@company.org for details.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "kiran.sharma34@company.org"
+      }
+    ],
+    "category": "email"
+  },
+  {
+    "id": "phone_in_049",
+    "text": "Call me at +91 6490415281",
+    "expected_entities": [
+      {
+        "type": "PHONE_IN",
+        "value": "6490415281"
+      }
+    ],
+    "category": "phone_indian"
+  },
+  {
+    "id": "phone_in_041",
+    "text": "Call me at 8460410963",
+    "expected_entities": [
+      {
+        "type": "PHONE_IN",
+        "value": "8460410963"
+      }
+    ],
+    "category": "phone_indian"
+  },
+  {
+    "id": "ip_025",
+    "text": "Login from IP 157.36.15.219",
+    "expected_entities": [
+      {
+        "type": "IP_ADDRESS",
+        "value": "157.36.15.219"
+      }
+    ],
+    "category": "ip_address"
+  },
+  {
+    "id": "phone_in_040",
+    "text": "Call me at +916513857105",
+    "expected_entities": [
+      {
+        "type": "PHONE_IN",
+        "value": "6513857105"
+      }
+    ],
+    "category": "phone_indian"
+  },
+  {
+    "id": "mixed_033",
+    "text": "Customer Priya Patel (email: priya.patel@gmail.com, phone: +91 9315823611) has PAN KWNGN9102K.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "priya.patel@gmail.com"
+      },
+      {
+        "type": "PHONE_IN",
+        "value": "9315823611"
+      },
+      {
+        "type": "PAN",
+        "value": "KWNGN9102K"
+      }
+    ],
+    "category": "mixed"
+  },
+  {
+    "id": "email_049",
+    "text": "Contact me at sanjay.sharma39@company.org for details.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "sanjay.sharma39@company.org"
+      }
+    ],
+    "category": "email"
+  },
+  {
+    "id": "phone_in_035",
+    "text": "Call me at +91 98880 22605",
+    "expected_entities": [
+      {
+        "type": "PHONE_IN",
+        "value": "9888022605"
+      }
+    ],
+    "category": "phone_indian"
+  },
+  {
+    "id": "card_028",
+    "text": "Card ending in 3789 7070 0741 9832",
+    "expected_entities": [
+      {
+        "type": "CREDIT_CARD",
+        "value": "3789707007419832"
+      }
+    ],
+    "category": "credit_card"
+  },
+  {
+    "id": "phone_in_033",
+    "text": "Call me at +917047166311",
+    "expected_entities": [
+      {
+        "type": "PHONE_IN",
+        "value": "7047166311"
+      }
+    ],
+    "category": "phone_indian"
+  },
+  {
+    "id": "upi_007",
+    "text": "Pay via UPI: priya43@paytm",
+    "expected_entities": [
+      {
+        "type": "UPI",
+        "value": "priya43@paytm"
+      }
+    ],
+    "category": "upi"
+  },
+  {
+    "id": "aadhaar_003",
+    "text": "My Aadhaar number is 2781 7712 3296",
+    "expected_entities": [
+      {
+        "type": "AADHAAR",
+        "value": "278177123296",
+        "start": 23,
+        "end": 37
+      }
+    ],
+    "category": "aadhaar"
+  },
+  {
+    "id": "aadhaar_checksum_fail_008",
+    "text": "Order number 410705242996 confirmed",
+    "expected_entities": [],
+    "category": "aadhaar_negative"
+  },
+  {
+    "id": "email_011",
+    "text": "Contact me at sanjay.kumar27@gmail.com for details.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "sanjay.kumar27@gmail.com"
+      }
+    ],
+    "category": "email"
+  },
+  {
+    "id": "pan_050",
+    "text": "PAN Card: YXPPO4828I",
+    "expected_entities": [
+      {
+        "type": "PAN",
+        "value": "YXPPO4828I"
+      }
+    ],
+    "category": "pan"
+  },
+  {
+    "id": "ip_016",
+    "text": "Login from IP 20.105.73.208",
+    "expected_entities": [
+      {
+        "type": "IP_ADDRESS",
+        "value": "20.105.73.208"
+      }
+    ],
+    "category": "ip_address"
+  },
+  {
+    "id": "aadhaar_invalid_007",
+    "text": "Invalid reference: 071109522909",
+    "expected_entities": [],
+    "category": "aadhaar_negative"
+  },
+  {
+    "id": "ip_029",
+    "text": "Login from IP 216.104.232.54",
+    "expected_entities": [
+      {
+        "type": "IP_ADDRESS",
+        "value": "216.104.232.54"
+      }
+    ],
+    "category": "ip_address"
+  },
+  {
+    "id": "email_034",
+    "text": "Contact me at aarav.sharma96@company.org for details.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "aarav.sharma96@company.org"
+      }
+    ],
+    "category": "email"
+  },
+  {
+    "id": "mixed_031",
+    "text": "Customer Kiran Singh (email: kiran.singh@gmail.com, phone: +91 7972916435) has PAN JRWFW4461B.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "kiran.singh@gmail.com"
+      },
+      {
+        "type": "PHONE_IN",
+        "value": "7972916435"
+      },
+      {
+        "type": "PAN",
+        "value": "JRWFW4461B"
+      }
+    ],
+    "category": "mixed"
+  },
+  {
+    "id": "pan_015",
+    "text": "PAN Card: LEMBG9083R",
+    "expected_entities": [
+      {
+        "type": "PAN",
+        "value": "LEMBG9083R"
+      }
+    ],
+    "category": "pan"
+  },
+  {
+    "id": "aadhaar_checksum_fail_015",
+    "text": "Order number 809209727560 confirmed",
+    "expected_entities": [],
+    "category": "aadhaar_negative"
+  },
+  {
+    "id": "upi_025",
+    "text": "Pay via UPI: aarav46@ibl",
+    "expected_entities": [
+      {
+        "type": "UPI",
+        "value": "aarav46@ibl"
+      }
+    ],
+    "category": "upi"
+  },
+  {
+    "id": "phone_in_043",
+    "text": "Call me at +91 64260 00929",
+    "expected_entities": [
+      {
+        "type": "PHONE_IN",
+        "value": "6426000929"
+      }
+    ],
+    "category": "phone_indian"
+  },
+  {
+    "id": "aadhaar_checksum_fail_004",
+    "text": "Invoice reference 242454997317 dated today",
+    "expected_entities": [],
+    "category": "aadhaar_negative"
+  },
+  {
+    "id": "aadhaar_checksum_fail_001",
+    "text": "Order number 313509879331 confirmed",
+    "expected_entities": [],
+    "category": "aadhaar_negative"
+  },
+  {
+    "id": "email_023",
+    "text": "Contact me at arjun.kumar78@outlook.com for details.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "arjun.kumar78@outlook.com"
+      }
+    ],
+    "category": "email"
+  },
+  {
+    "id": "email_033",
+    "text": "Contact me at deepa.gupta83@gmail.com for details.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "deepa.gupta83@gmail.com"
+      }
+    ],
+    "category": "email"
+  },
+  {
+    "id": "email_036",
+    "text": "Contact me at priya.sharma82@yahoo.co.in for details.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "priya.sharma82@yahoo.co.in"
+      }
+    ],
+    "category": "email"
+  },
+  {
+    "id": "aadhaar_037",
+    "text": "My Aadhaar number is 4531 8631 5867",
+    "expected_entities": [
+      {
+        "type": "AADHAAR",
+        "value": "453186315867",
+        "start": 23,
+        "end": 37
+      }
+    ],
+    "category": "aadhaar"
+  },
+  {
+    "id": "pan_027",
+    "text": "PAN Card: WJAPZ2697U",
+    "expected_entities": [
+      {
+        "type": "PAN",
+        "value": "WJAPZ2697U"
+      }
+    ],
+    "category": "pan"
+  },
+  {
+    "id": "phone_in_012",
+    "text": "Call me at 9093177833",
+    "expected_entities": [
+      {
+        "type": "PHONE_IN",
+        "value": "9093177833"
+      }
+    ],
+    "category": "phone_indian"
+  },
+  {
+    "id": "aadhaar_043",
+    "text": "My Aadhaar number is 7140 3492 0986",
+    "expected_entities": [
+      {
+        "type": "AADHAAR",
+        "value": "714034920986",
+        "start": 23,
+        "end": 37
+      }
+    ],
+    "category": "aadhaar"
+  },
+  {
+    "id": "phone_in_016",
+    "text": "Call me at 916975270743",
+    "expected_entities": [
+      {
+        "type": "PHONE_IN",
+        "value": "6975270743"
+      }
+    ],
+    "category": "phone_indian"
+  },
+  {
+    "id": "email_050",
+    "text": "Contact me at aarav.sharma76@company.org for details.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "aarav.sharma76@company.org"
+      }
+    ],
+    "category": "email"
+  },
+  {
+    "id": "pan_008",
+    "text": "PAN Card: WAWPB2500L",
+    "expected_entities": [
+      {
+        "type": "PAN",
+        "value": "WAWPB2500L"
+      }
+    ],
+    "category": "pan"
+  },
+  {
+    "id": "upi_002",
+    "text": "Pay via UPI: deepa16@upi",
+    "expected_entities": [
+      {
+        "type": "UPI",
+        "value": "deepa16@upi"
+      }
+    ],
+    "category": "upi"
+  },
+  {
+    "id": "ifsc_009",
+    "text": "IFSC code: PUNB0514788",
+    "expected_entities": [
+      {
+        "type": "IFSC",
+        "value": "PUNB0514788"
+      }
+    ],
+    "category": "ifsc"
+  },
+  {
+    "id": "aadhaar_024",
+    "text": "My Aadhaar number is 9394 4776 3845",
+    "expected_entities": [
+      {
+        "type": "AADHAAR",
+        "value": "939447763845",
+        "start": 23,
+        "end": 37
+      }
+    ],
+    "category": "aadhaar"
+  },
+  {
+    "id": "pan_023",
+    "text": "PAN Card: XMEHH8492T",
+    "expected_entities": [
+      {
+        "type": "PAN",
+        "value": "XMEHH8492T"
+      }
+    ],
+    "category": "pan"
+  },
+  {
+    "id": "email_046",
+    "text": "Contact me at vikram.sharma21@outlook.com for details.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "vikram.sharma21@outlook.com"
+      }
+    ],
+    "category": "email"
+  },
+  {
+    "id": "aadhaar_checksum_fail_009",
+    "text": "Transaction id 271434658776 posted",
+    "expected_entities": [],
+    "category": "aadhaar_negative"
+  },
+  {
+    "id": "aadhaar_028",
+    "text": "My Aadhaar number is 6294 5356 9808",
+    "expected_entities": [
+      {
+        "type": "AADHAAR",
+        "value": "629453569808",
+        "start": 23,
+        "end": 37
+      }
+    ],
+    "category": "aadhaar"
+  },
+  {
+    "id": "aadhaar_002",
+    "text": "My Aadhaar number is 3778 9091 5877",
+    "expected_entities": [
+      {
+        "type": "AADHAAR",
+        "value": "377890915877",
+        "start": 23,
+        "end": 37
+      }
+    ],
+    "category": "aadhaar"
+  },
+  {
+    "id": "aadhaar_048",
+    "text": "My Aadhaar number is 3158 6109 3068",
+    "expected_entities": [
+      {
+        "type": "AADHAAR",
+        "value": "315861093068",
+        "start": 23,
+        "end": 37
+      }
+    ],
+    "category": "aadhaar"
+  },
+  {
+    "id": "mixed_022",
+    "text": "Customer Kiran Singh (email: kiran.singh@gmail.com, phone: +91 8835696099) has PAN MKUGL1493M.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "kiran.singh@gmail.com"
+      },
+      {
+        "type": "PHONE_IN",
+        "value": "8835696099"
+      },
+      {
+        "type": "PAN",
+        "value": "MKUGL1493M"
+      }
+    ],
+    "category": "mixed"
+  },
+  {
+    "id": "aadhaar_checksum_fail_018",
+    "text": "Invoice reference 924142500678 dated today",
+    "expected_entities": [],
+    "category": "aadhaar_negative"
+  },
+  {
+    "id": "mixed_042",
+    "text": "Customer Ananya Kumar (email: ananya.kumar@gmail.com, phone: +91 8707147277) has PAN WMRAS9671R.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "ananya.kumar@gmail.com"
+      },
+      {
+        "type": "PHONE_IN",
+        "value": "8707147277"
+      },
+      {
+        "type": "PAN",
+        "value": "WMRAS9671R"
+      }
+    ],
+    "category": "mixed"
+  },
+  {
+    "id": "pan_019",
+    "text": "PAN Card: VWLLI2264Y",
+    "expected_entities": [
+      {
+        "type": "PAN",
+        "value": "VWLLI2264Y"
+      }
+    ],
+    "category": "pan"
+  },
+  {
+    "id": "pan_045",
+    "text": "PAN Card: JLFGA4509I",
+    "expected_entities": [
+      {
+        "type": "PAN",
+        "value": "JLFGA4509I"
+      }
+    ],
+    "category": "pan"
+  },
+  {
+    "id": "email_007",
+    "text": "Contact me at aarav.kumar41@university.ac.in for details.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "aarav.kumar41@university.ac.in"
+      }
+    ],
+    "category": "email"
+  },
+  {
+    "id": "aadhaar_033",
+    "text": "My Aadhaar number is 3243 2182 4094",
+    "expected_entities": [
+      {
+        "type": "AADHAAR",
+        "value": "324321824094",
+        "start": 23,
+        "end": 37
+      }
+    ],
+    "category": "aadhaar"
+  },
+  {
+    "id": "ip_002",
+    "text": "Login from IP 133.103.76.142",
+    "expected_entities": [
+      {
+        "type": "IP_ADDRESS",
+        "value": "133.103.76.142"
+      }
+    ],
+    "category": "ip_address"
+  },
+  {
+    "id": "ip_006",
+    "text": "Login from IP 206.84.170.10",
+    "expected_entities": [
+      {
+        "type": "IP_ADDRESS",
+        "value": "206.84.170.10"
+      }
+    ],
+    "category": "ip_address"
+  },
+  {
+    "id": "upi_016",
+    "text": "Pay via UPI: rahul54@sbi",
+    "expected_entities": [
+      {
+        "type": "UPI",
+        "value": "rahul54@sbi"
+      }
+    ],
+    "category": "upi"
+  },
+  {
+    "id": "phone_in_045",
+    "text": "Call me at +91-8463352233",
+    "expected_entities": [
+      {
+        "type": "PHONE_IN",
+        "value": "8463352233"
+      }
+    ],
+    "category": "phone_indian"
+  },
+  {
+    "id": "email_025",
+    "text": "Contact me at meera.gupta81@university.ac.in for details.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "meera.gupta81@university.ac.in"
+      }
+    ],
+    "category": "email"
+  },
+  {
+    "id": "phone_in_007",
+    "text": "Call me at 9560133314",
+    "expected_entities": [
+      {
+        "type": "PHONE_IN",
+        "value": "9560133314"
+      }
+    ],
+    "category": "phone_indian"
+  },
+  {
+    "id": "aadhaar_045",
+    "text": "My Aadhaar number is 6987 6642 7393",
+    "expected_entities": [
+      {
+        "type": "AADHAAR",
+        "value": "698766427393",
+        "start": 23,
+        "end": 37
+      }
+    ],
+    "category": "aadhaar"
+  },
+  {
+    "id": "card_019",
+    "text": "Card ending in 5691 3835 7869 7347",
+    "expected_entities": [
+      {
+        "type": "CREDIT_CARD",
+        "value": "5691383578697347"
+      }
+    ],
+    "category": "credit_card"
+  },
+  {
+    "id": "email_013",
+    "text": "Contact me at rahul.kumar93@gmail.com for details.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "rahul.kumar93@gmail.com"
+      }
+    ],
+    "category": "email"
+  },
+  {
+    "id": "mixed_003",
+    "text": "Customer Priya Gupta (email: priya.gupta@gmail.com, phone: +91 8913928728) has PAN WAMCP4637F.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "priya.gupta@gmail.com"
+      },
+      {
+        "type": "PHONE_IN",
+        "value": "8913928728"
+      },
+      {
+        "type": "PAN",
+        "value": "WAMCP4637F"
+      }
+    ],
+    "category": "mixed"
+  },
+  {
+    "id": "mixed_010",
+    "text": "Customer Priya Patel (email: priya.patel@gmail.com, phone: +91 9613199555) has PAN GWYFM4450N.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "priya.patel@gmail.com"
+      },
+      {
+        "type": "PHONE_IN",
+        "value": "9613199555"
+      },
+      {
+        "type": "PAN",
+        "value": "GWYFM4450N"
+      }
+    ],
+    "category": "mixed"
+  },
+  {
+    "id": "phone_in_047",
+    "text": "Call me at +919163762187",
+    "expected_entities": [
+      {
+        "type": "PHONE_IN",
+        "value": "9163762187"
+      }
+    ],
+    "category": "phone_indian"
+  },
+  {
+    "id": "phone_in_022",
+    "text": "Call me at 916661352923",
+    "expected_entities": [
+      {
+        "type": "PHONE_IN",
+        "value": "6661352923"
+      }
+    ],
+    "category": "phone_indian"
+  },
+  {
+    "id": "ip_028",
+    "text": "Login from IP 204.208.228.153",
+    "expected_entities": [
+      {
+        "type": "IP_ADDRESS",
+        "value": "204.208.228.153"
+      }
+    ],
+    "category": "ip_address"
+  },
+  {
+    "id": "aadhaar_checksum_fail_019",
+    "text": "Invoice reference 611926537784 dated today",
+    "expected_entities": [],
+    "category": "aadhaar_negative"
+  },
+  {
+    "id": "phone_in_018",
+    "text": "Call me at +91-6537204591",
+    "expected_entities": [
+      {
+        "type": "PHONE_IN",
+        "value": "6537204591"
+      }
+    ],
+    "category": "phone_indian"
+  },
+  {
+    "id": "ifsc_008",
+    "text": "IFSC code: HDFC0555992",
+    "expected_entities": [
+      {
+        "type": "IFSC",
+        "value": "HDFC0555992"
+      }
+    ],
+    "category": "ifsc"
+  },
+  {
+    "id": "email_019",
+    "text": "Contact me at sanjay.patel86@yahoo.co.in for details.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "sanjay.patel86@yahoo.co.in"
+      }
+    ],
+    "category": "email"
+  },
+  {
+    "id": "upi_006",
+    "text": "Pay via UPI: kiran74@ybl",
+    "expected_entities": [
+      {
+        "type": "UPI",
+        "value": "kiran74@ybl"
+      }
+    ],
+    "category": "upi"
+  },
+  {
+    "id": "ifsc_012",
+    "text": "IFSC code: BARB0072002",
+    "expected_entities": [
+      {
+        "type": "IFSC",
+        "value": "BARB0072002"
+      }
+    ],
+    "category": "ifsc"
+  },
+  {
+    "id": "email_020",
+    "text": "Contact me at deepa.sharma93@company.org for details.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "deepa.sharma93@company.org"
+      }
+    ],
+    "category": "email"
+  },
+  {
+    "id": "phone_in_006",
+    "text": "Call me at +91-7993936755",
+    "expected_entities": [
+      {
+        "type": "PHONE_IN",
+        "value": "7993936755"
+      }
+    ],
+    "category": "phone_indian"
+  },
+  {
+    "id": "aadhaar_invalid_005",
+    "text": "Invalid reference: 131399117322",
+    "expected_entities": [],
+    "category": "aadhaar_negative"
+  },
+  {
+    "id": "phone_in_023",
+    "text": "Call me at 6132069104",
+    "expected_entities": [
+      {
+        "type": "PHONE_IN",
+        "value": "6132069104"
+      }
+    ],
+    "category": "phone_indian"
+  },
+  {
+    "id": "card_007",
+    "text": "Card ending in 6011 6476 6632 0355",
+    "expected_entities": [
+      {
+        "type": "CREDIT_CARD",
+        "value": "6011647666320355"
+      }
+    ],
+    "category": "credit_card"
+  },
+  {
+    "id": "ip_026",
+    "text": "Login from IP 189.91.146.147",
+    "expected_entities": [
+      {
+        "type": "IP_ADDRESS",
+        "value": "189.91.146.147"
+      }
+    ],
+    "category": "ip_address"
+  },
+  {
+    "id": "ifsc_003",
+    "text": "IFSC code: BARB0709391",
+    "expected_entities": [
+      {
+        "type": "IFSC",
+        "value": "BARB0709391"
+      }
+    ],
+    "category": "ifsc"
+  },
+  {
+    "id": "aadhaar_checksum_fail_011",
+    "text": "Order number 898434354685 confirmed",
+    "expected_entities": [],
+    "category": "aadhaar_negative"
+  },
+  {
+    "id": "mixed_040",
+    "text": "Customer Rahul Sharma (email: rahul.sharma@gmail.com, phone: +91 9456605926) has PAN KDDTV8126Y.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "rahul.sharma@gmail.com"
+      },
+      {
+        "type": "PHONE_IN",
+        "value": "9456605926"
+      },
+      {
+        "type": "PAN",
+        "value": "KDDTV8126Y"
+      }
+    ],
+    "category": "mixed"
+  },
+  {
+    "id": "phone_in_008",
+    "text": "Call me at +91 9924944792",
+    "expected_entities": [
+      {
+        "type": "PHONE_IN",
+        "value": "9924944792"
+      }
+    ],
+    "category": "phone_indian"
+  },
+  {
+    "id": "phone_in_004",
+    "text": "Call me at +91 8205669869",
+    "expected_entities": [
+      {
+        "type": "PHONE_IN",
+        "value": "8205669869"
+      }
+    ],
+    "category": "phone_indian"
+  },
+  {
+    "id": "email_008",
+    "text": "Contact me at anita.kumar3@company.org for details.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "anita.kumar3@company.org"
+      }
+    ],
+    "category": "email"
+  },
+  {
+    "id": "phone_in_031",
+    "text": "Call me at +91 62681 47361",
+    "expected_entities": [
+      {
+        "type": "PHONE_IN",
+        "value": "6268147361"
+      }
+    ],
+    "category": "phone_indian"
+  },
+  {
+    "id": "email_003",
+    "text": "Contact me at anita.sharma17@university.ac.in for details.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "anita.sharma17@university.ac.in"
+      }
+    ],
+    "category": "email"
+  },
+  {
+    "id": "pan_042",
+    "text": "PAN Card: YAACY5527R",
+    "expected_entities": [
+      {
+        "type": "PAN",
+        "value": "YAACY5527R"
+      }
+    ],
+    "category": "pan"
+  },
+  {
+    "id": "ifsc_002",
+    "text": "IFSC code: KKBK0623431",
+    "expected_entities": [
+      {
+        "type": "IFSC",
+        "value": "KKBK0623431"
+      }
+    ],
+    "category": "ifsc"
+  },
+  {
+    "id": "aadhaar_invalid_008",
+    "text": "Invalid reference: 099728935898",
+    "expected_entities": [],
+    "category": "aadhaar_negative"
+  },
+  {
+    "id": "phone_in_048",
+    "text": "Call me at +91 9193942320",
+    "expected_entities": [
+      {
+        "type": "PHONE_IN",
+        "value": "9193942320"
+      }
+    ],
+    "category": "phone_indian"
+  },
+  {
+    "id": "aadhaar_007",
+    "text": "My Aadhaar number is 5521 3680 1991",
+    "expected_entities": [
+      {
+        "type": "AADHAAR",
+        "value": "552136801991",
+        "start": 23,
+        "end": 37
+      }
+    ],
+    "category": "aadhaar"
+  },
+  {
+    "id": "mixed_005",
+    "text": "Customer Ananya Patel (email: ananya.patel@gmail.com, phone: +91 9368256782) has PAN PBQTF8557N.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "ananya.patel@gmail.com"
+      },
+      {
+        "type": "PHONE_IN",
+        "value": "9368256782"
+      },
+      {
+        "type": "PAN",
+        "value": "PBQTF8557N"
+      }
+    ],
+    "category": "mixed"
+  },
+  {
+    "id": "email_010",
+    "text": "Contact me at meera.patel87@university.ac.in for details.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "meera.patel87@university.ac.in"
+      }
+    ],
+    "category": "email"
+  },
+  {
+    "id": "ip_013",
+    "text": "Login from IP 207.32.103.96",
+    "expected_entities": [
+      {
+        "type": "IP_ADDRESS",
+        "value": "207.32.103.96"
+      }
+    ],
+    "category": "ip_address"
+  },
+  {
+    "id": "mixed_032",
+    "text": "Customer Kiran Gupta (email: kiran.gupta@gmail.com, phone: +91 7293822730) has PAN ABDHA6059H.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "kiran.gupta@gmail.com"
+      },
+      {
+        "type": "PHONE_IN",
+        "value": "7293822730"
+      },
+      {
+        "type": "PAN",
+        "value": "ABDHA6059H"
+      }
+    ],
+    "category": "mixed"
+  },
+  {
+    "id": "ip_008",
+    "text": "Login from IP 161.16.19.174",
+    "expected_entities": [
+      {
+        "type": "IP_ADDRESS",
+        "value": "161.16.19.174"
+      }
+    ],
+    "category": "ip_address"
+  },
+  {
+    "id": "aadhaar_012",
+    "text": "My Aadhaar number is 2971 3920 1908",
+    "expected_entities": [
+      {
+        "type": "AADHAAR",
+        "value": "297139201908",
+        "start": 23,
+        "end": 37
+      }
+    ],
+    "category": "aadhaar"
+  },
+  {
+    "id": "mixed_002",
+    "text": "Customer Rahul Sharma (email: rahul.sharma@gmail.com, phone: +91 8841375453) has PAN HVRBG6130S.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "rahul.sharma@gmail.com"
+      },
+      {
+        "type": "PHONE_IN",
+        "value": "8841375453"
+      },
+      {
+        "type": "PAN",
+        "value": "HVRBG6130S"
+      }
+    ],
+    "category": "mixed"
+  },
+  {
+    "id": "ip_021",
+    "text": "Login from IP 100.232.174.205",
+    "expected_entities": [
+      {
+        "type": "IP_ADDRESS",
+        "value": "100.232.174.205"
+      }
+    ],
+    "category": "ip_address"
+  },
+  {
+    "id": "mixed_018",
+    "text": "Customer Aarav Gupta (email: aarav.gupta@gmail.com, phone: +91 8128669471) has PAN GNMGM8648U.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "aarav.gupta@gmail.com"
+      },
+      {
+        "type": "PHONE_IN",
+        "value": "8128669471"
+      },
+      {
+        "type": "PAN",
+        "value": "GNMGM8648U"
+      }
+    ],
+    "category": "mixed"
+  },
+  {
+    "id": "mixed_048",
+    "text": "Customer Priya Patel (email: priya.patel@gmail.com, phone: +91 8388077760) has PAN LQVFQ1384G.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "priya.patel@gmail.com"
+      },
+      {
+        "type": "PHONE_IN",
+        "value": "8388077760"
+      },
+      {
+        "type": "PAN",
+        "value": "LQVFQ1384G"
+      }
+    ],
+    "category": "mixed"
+  },
+  {
+    "id": "aadhaar_invalid_002",
+    "text": "Invalid reference: 016933138508",
+    "expected_entities": [],
+    "category": "aadhaar_negative"
+  },
+  {
+    "id": "upi_005",
+    "text": "Pay via UPI: rahul22@okaxis",
+    "expected_entities": [
+      {
+        "type": "UPI",
+        "value": "rahul22@okaxis"
+      }
+    ],
+    "category": "upi"
+  },
+  {
+    "id": "card_030",
+    "text": "Card ending in 5183 5025 4715 5062",
+    "expected_entities": [
+      {
+        "type": "CREDIT_CARD",
+        "value": "5183502547155062"
+      }
+    ],
+    "category": "credit_card"
+  },
+  {
+    "id": "aadhaar_checksum_fail_007",
+    "text": "Invoice reference 222060558055 dated today",
+    "expected_entities": [],
+    "category": "aadhaar_negative"
+  },
+  {
+    "id": "pan_020",
+    "text": "PAN Card: KFYGL4909C",
+    "expected_entities": [
+      {
+        "type": "PAN",
+        "value": "KFYGL4909C"
+      }
+    ],
+    "category": "pan"
+  },
+  {
+    "id": "email_015",
+    "text": "Contact me at anita.gupta70@gmail.com for details.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "anita.gupta70@gmail.com"
+      }
+    ],
+    "category": "email"
+  },
+  {
+    "id": "mixed_046",
+    "text": "Customer Ananya Kumar (email: ananya.kumar@gmail.com, phone: +91 7682470444) has PAN DUMHW2480D.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "ananya.kumar@gmail.com"
+      },
+      {
+        "type": "PHONE_IN",
+        "value": "7682470444"
+      },
+      {
+        "type": "PAN",
+        "value": "DUMHW2480D"
+      }
+    ],
+    "category": "mixed"
+  },
+  {
+    "id": "aadhaar_invalid_009",
+    "text": "Invalid reference: 008925193256",
+    "expected_entities": [],
+    "category": "aadhaar_negative"
+  },
+  {
+    "id": "aadhaar_038",
+    "text": "My Aadhaar number is 4506 2016 5000",
+    "expected_entities": [
+      {
+        "type": "AADHAAR",
+        "value": "450620165000",
+        "start": 23,
+        "end": 37
+      }
+    ],
+    "category": "aadhaar"
+  },
+  {
+    "id": "ip_011",
+    "text": "Login from IP 119.61.26.152",
+    "expected_entities": [
+      {
+        "type": "IP_ADDRESS",
+        "value": "119.61.26.152"
+      }
+    ],
+    "category": "ip_address"
+  },
+  {
+    "id": "pan_046",
+    "text": "PAN Card: RVXAR6890I",
+    "expected_entities": [
+      {
+        "type": "PAN",
+        "value": "RVXAR6890I"
+      }
+    ],
+    "category": "pan"
+  },
+  {
+    "id": "pan_014",
+    "text": "PAN Card: LMVCD3754Q",
+    "expected_entities": [
+      {
+        "type": "PAN",
+        "value": "LMVCD3754Q"
+      }
+    ],
+    "category": "pan"
+  },
+  {
+    "id": "email_004",
+    "text": "Contact me at kiran.gupta61@university.ac.in for details.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "kiran.gupta61@university.ac.in"
+      }
+    ],
+    "category": "email"
+  },
+  {
+    "id": "ip_030",
+    "text": "Login from IP 59.83.226.203",
+    "expected_entities": [
+      {
+        "type": "IP_ADDRESS",
+        "value": "59.83.226.203"
+      }
+    ],
+    "category": "ip_address"
+  },
+  {
+    "id": "email_030",
+    "text": "Contact me at vikram.sharma72@company.org for details.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "vikram.sharma72@company.org"
+      }
+    ],
+    "category": "email"
+  },
+  {
+    "id": "phone_in_017",
+    "text": "Call me at +91 6927056207",
+    "expected_entities": [
+      {
+        "type": "PHONE_IN",
+        "value": "6927056207"
+      }
+    ],
+    "category": "phone_indian"
+  },
+  {
+    "id": "ip_012",
+    "text": "Login from IP 133.165.229.98",
+    "expected_entities": [
+      {
+        "type": "IP_ADDRESS",
+        "value": "133.165.229.98"
+      }
+    ],
+    "category": "ip_address"
+  },
+  {
+    "id": "mixed_037",
+    "text": "Customer Rahul Patel (email: rahul.patel@gmail.com, phone: +91 7289101419) has PAN LJXBV2099G.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "rahul.patel@gmail.com"
+      },
+      {
+        "type": "PHONE_IN",
+        "value": "7289101419"
+      },
+      {
+        "type": "PAN",
+        "value": "LJXBV2099G"
+      }
+    ],
+    "category": "mixed"
+  },
+  {
+    "id": "phone_in_026",
+    "text": "Call me at 917486975828",
+    "expected_entities": [
+      {
+        "type": "PHONE_IN",
+        "value": "7486975828"
+      }
+    ],
+    "category": "phone_indian"
+  },
+  {
+    "id": "aadhaar_029",
+    "text": "My Aadhaar number is 6970 3261 8218",
+    "expected_entities": [
+      {
+        "type": "AADHAAR",
+        "value": "697032618218",
+        "start": 23,
+        "end": 37
+      }
+    ],
+    "category": "aadhaar"
+  },
+  {
+    "id": "phone_in_030",
+    "text": "Call me at 918498531935",
+    "expected_entities": [
+      {
+        "type": "PHONE_IN",
+        "value": "8498531935"
+      }
+    ],
+    "category": "phone_indian"
+  },
+  {
+    "id": "pan_016",
+    "text": "PAN Card: RXKAR6932L",
+    "expected_entities": [
+      {
+        "type": "PAN",
+        "value": "RXKAR6932L"
+      }
+    ],
+    "category": "pan"
+  },
+  {
+    "id": "aadhaar_022",
+    "text": "My Aadhaar number is 6091 7561 8883",
+    "expected_entities": [
+      {
+        "type": "AADHAAR",
+        "value": "609175618883",
+        "start": 23,
+        "end": 37
+      }
+    ],
+    "category": "aadhaar"
+  },
+  {
+    "id": "pan_017",
+    "text": "PAN Card: VRQGP2773J",
+    "expected_entities": [
+      {
+        "type": "PAN",
+        "value": "VRQGP2773J"
+      }
+    ],
+    "category": "pan"
+  },
+  {
+    "id": "pan_034",
+    "text": "PAN Card: OHKAG3630D",
+    "expected_entities": [
+      {
+        "type": "PAN",
+        "value": "OHKAG3630D"
+      }
+    ],
+    "category": "pan"
+  },
+  {
+    "id": "card_023",
+    "text": "Card ending in 5175 5702 0134 7671",
+    "expected_entities": [
+      {
+        "type": "CREDIT_CARD",
+        "value": "5175570201347671"
+      }
+    ],
+    "category": "credit_card"
+  },
+  {
+    "id": "email_018",
+    "text": "Contact me at anita.patel31@gmail.com for details.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "anita.patel31@gmail.com"
+      }
+    ],
+    "category": "email"
+  },
+  {
+    "id": "mixed_014",
+    "text": "Customer Rahul Sharma (email: rahul.sharma@gmail.com, phone: +91 7356093736) has PAN JQMCF2532Y.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "rahul.sharma@gmail.com"
+      },
+      {
+        "type": "PHONE_IN",
+        "value": "7356093736"
+      },
+      {
+        "type": "PAN",
+        "value": "JQMCF2532Y"
+      }
+    ],
+    "category": "mixed"
+  },
+  {
+    "id": "phone_in_015",
+    "text": "Call me at +91-6080653439",
+    "expected_entities": [
+      {
+        "type": "PHONE_IN",
+        "value": "6080653439"
+      }
+    ],
+    "category": "phone_indian"
+  },
+  {
+    "id": "pan_021",
+    "text": "PAN Card: OOMLG9543T",
+    "expected_entities": [
+      {
+        "type": "PAN",
+        "value": "OOMLG9543T"
+      }
+    ],
+    "category": "pan"
+  },
+  {
+    "id": "aadhaar_006",
+    "text": "My Aadhaar number is 4229 1366 1131",
+    "expected_entities": [
+      {
+        "type": "AADHAAR",
+        "value": "422913661131",
+        "start": 23,
+        "end": 37
+      }
+    ],
+    "category": "aadhaar"
+  },
+  {
+    "id": "card_009",
+    "text": "Card ending in 5877 0593 1357 4340",
+    "expected_entities": [
+      {
+        "type": "CREDIT_CARD",
+        "value": "5877059313574340"
+      }
+    ],
+    "category": "credit_card"
+  },
+  {
+    "id": "upi_027",
+    "text": "Pay via UPI: deepa16@paytm",
+    "expected_entities": [
+      {
+        "type": "UPI",
+        "value": "deepa16@paytm"
+      }
+    ],
+    "category": "upi"
+  },
+  {
+    "id": "aadhaar_036",
+    "text": "My Aadhaar number is 4463 6294 3540",
+    "expected_entities": [
+      {
+        "type": "AADHAAR",
+        "value": "446362943540",
+        "start": 23,
+        "end": 37
+      }
+    ],
+    "category": "aadhaar"
+  },
+  {
+    "id": "pan_041",
+    "text": "PAN Card: FKCTV3352V",
+    "expected_entities": [
+      {
+        "type": "PAN",
+        "value": "FKCTV3352V"
+      }
+    ],
+    "category": "pan"
+  },
+  {
+    "id": "aadhaar_009",
+    "text": "My Aadhaar number is 5527 0479 6257",
+    "expected_entities": [
+      {
+        "type": "AADHAAR",
+        "value": "552704796257",
+        "start": 23,
+        "end": 37
+      }
+    ],
+    "category": "aadhaar"
+  },
+  {
+    "id": "aadhaar_checksum_fail_010",
+    "text": "Order number 391743089706 confirmed",
+    "expected_entities": [],
+    "category": "aadhaar_negative"
+  },
+  {
+    "id": "upi_026",
+    "text": "Pay via UPI: kiran10@ybl",
+    "expected_entities": [
+      {
+        "type": "UPI",
+        "value": "kiran10@ybl"
+      }
+    ],
+    "category": "upi"
+  },
+  {
+    "id": "phone_in_009",
+    "text": "Call me at +91 96720 26671",
+    "expected_entities": [
+      {
+        "type": "PHONE_IN",
+        "value": "9672026671"
+      }
+    ],
+    "category": "phone_indian"
+  },
+  {
+    "id": "phone_in_044",
+    "text": "Call me at +91 67856 75281",
+    "expected_entities": [
+      {
+        "type": "PHONE_IN",
+        "value": "6785675281"
+      }
+    ],
+    "category": "phone_indian"
+  },
+  {
+    "id": "mixed_050",
+    "text": "Customer Rahul Sharma (email: rahul.sharma@gmail.com, phone: +91 9232590444) has PAN HRCPZ4776D.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "rahul.sharma@gmail.com"
+      },
+      {
+        "type": "PHONE_IN",
+        "value": "9232590444"
+      },
+      {
+        "type": "PAN",
+        "value": "HRCPZ4776D"
+      }
+    ],
+    "category": "mixed"
+  },
+  {
+    "id": "upi_001",
+    "text": "Pay via UPI: deepa56@okaxis",
+    "expected_entities": [
+      {
+        "type": "UPI",
+        "value": "deepa56@okaxis"
+      }
+    ],
+    "category": "upi"
+  },
+  {
+    "id": "pan_026",
+    "text": "PAN Card: CRRHE9073K",
+    "expected_entities": [
+      {
+        "type": "PAN",
+        "value": "CRRHE9073K"
+      }
+    ],
+    "category": "pan"
+  },
+  {
+    "id": "phone_in_019",
+    "text": "Call me at +91 6862999594",
+    "expected_entities": [
+      {
+        "type": "PHONE_IN",
+        "value": "6862999594"
+      }
+    ],
+    "category": "phone_indian"
+  },
+  {
+    "id": "aadhaar_049",
+    "text": "My Aadhaar number is 9189 7799 8121",
+    "expected_entities": [
+      {
+        "type": "AADHAAR",
+        "value": "918977998121",
+        "start": 23,
+        "end": 37
+      }
+    ],
+    "category": "aadhaar"
+  },
+  {
+    "id": "email_017",
+    "text": "Contact me at vikram.patel82@university.ac.in for details.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "vikram.patel82@university.ac.in"
+      }
+    ],
+    "category": "email"
+  },
+  {
+    "id": "aadhaar_checksum_fail_003",
+    "text": "Transaction id 958051842016 posted",
+    "expected_entities": [],
+    "category": "aadhaar_negative"
+  },
+  {
+    "id": "mixed_034",
+    "text": "Customer Aarav Sharma (email: aarav.sharma@gmail.com, phone: +91 8292018791) has PAN SGMFP9961I.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "aarav.sharma@gmail.com"
+      },
+      {
+        "type": "PHONE_IN",
+        "value": "8292018791"
+      },
+      {
+        "type": "PAN",
+        "value": "SGMFP9961I"
+      }
+    ],
+    "category": "mixed"
+  },
+  {
+    "id": "mixed_017",
+    "text": "Customer Priya Patel (email: priya.patel@gmail.com, phone: +91 8574308914) has PAN YTSBC6634T.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "priya.patel@gmail.com"
+      },
+      {
+        "type": "PHONE_IN",
+        "value": "8574308914"
+      },
+      {
+        "type": "PAN",
+        "value": "YTSBC6634T"
+      }
+    ],
+    "category": "mixed"
+  },
+  {
+    "id": "aadhaar_044",
+    "text": "My Aadhaar number is 5056 0968 2856",
+    "expected_entities": [
+      {
+        "type": "AADHAAR",
+        "value": "505609682856",
+        "start": 23,
+        "end": 37
+      }
+    ],
+    "category": "aadhaar"
+  },
+  {
+    "id": "upi_014",
+    "text": "Pay via UPI: deepa83@sbi",
+    "expected_entities": [
+      {
+        "type": "UPI",
+        "value": "deepa83@sbi"
+      }
+    ],
+    "category": "upi"
+  },
+  {
+    "id": "upi_012",
+    "text": "Pay via UPI: aarav27@ybl",
+    "expected_entities": [
+      {
+        "type": "UPI",
+        "value": "aarav27@ybl"
+      }
+    ],
+    "category": "upi"
+  },
+  {
+    "id": "mixed_020",
+    "text": "Customer Priya Kumar (email: priya.kumar@gmail.com, phone: +91 8113318310) has PAN VFHLS6167C.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "priya.kumar@gmail.com"
+      },
+      {
+        "type": "PHONE_IN",
+        "value": "8113318310"
+      },
+      {
+        "type": "PAN",
+        "value": "VFHLS6167C"
+      }
+    ],
+    "category": "mixed"
+  },
+  {
+    "id": "card_026",
+    "text": "Card ending in 6011 5461 5333 6066",
+    "expected_entities": [
+      {
+        "type": "CREDIT_CARD",
+        "value": "6011546153336066"
+      }
+    ],
+    "category": "credit_card"
+  },
+  {
+    "id": "email_014",
+    "text": "Contact me at vikram.sharma70@yahoo.co.in for details.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "vikram.sharma70@yahoo.co.in"
+      }
+    ],
+    "category": "email"
+  },
+  {
+    "id": "card_006",
+    "text": "Card ending in 5159 9403 9793 7033",
+    "expected_entities": [
+      {
+        "type": "CREDIT_CARD",
+        "value": "5159940397937033"
+      }
+    ],
+    "category": "credit_card"
+  },
+  {
+    "id": "ifsc_016",
+    "text": "IFSC code: PUNB0061885",
+    "expected_entities": [
+      {
+        "type": "IFSC",
+        "value": "PUNB0061885"
+      }
+    ],
+    "category": "ifsc"
+  },
+  {
+    "id": "pan_044",
+    "text": "PAN Card: ZUYCW8669H",
+    "expected_entities": [
+      {
+        "type": "PAN",
+        "value": "ZUYCW8669H"
+      }
+    ],
+    "category": "pan"
+  },
+  {
+    "id": "ip_015",
+    "text": "Login from IP 56.24.112.198",
+    "expected_entities": [
+      {
+        "type": "IP_ADDRESS",
+        "value": "56.24.112.198"
+      }
+    ],
+    "category": "ip_address"
+  },
+  {
+    "id": "email_024",
+    "text": "Contact me at kiran.sharma77@company.org for details.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "kiran.sharma77@company.org"
+      }
+    ],
+    "category": "email"
+  },
+  {
+    "id": "aadhaar_004",
+    "text": "My Aadhaar number is 3335 2521 2385",
+    "expected_entities": [
+      {
+        "type": "AADHAAR",
+        "value": "333525212385",
+        "start": 23,
+        "end": 37
+      }
+    ],
+    "category": "aadhaar"
+  },
+  {
+    "id": "aadhaar_042",
+    "text": "My Aadhaar number is 7354 4523 2256",
+    "expected_entities": [
+      {
+        "type": "AADHAAR",
+        "value": "735445232256",
+        "start": 23,
+        "end": 37
+      }
+    ],
+    "category": "aadhaar"
+  },
+  {
+    "id": "mixed_007",
+    "text": "Customer Priya Patel (email: priya.patel@gmail.com, phone: +91 8261705021) has PAN OBJGZ6313S.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "priya.patel@gmail.com"
+      },
+      {
+        "type": "PHONE_IN",
+        "value": "8261705021"
+      },
+      {
+        "type": "PAN",
+        "value": "OBJGZ6313S"
+      }
+    ],
+    "category": "mixed"
+  },
+  {
+    "id": "mixed_001",
+    "text": "Customer Rahul Sharma (email: rahul.sharma@gmail.com, phone: +91 7657761729) has PAN FDTJJ3545E.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "rahul.sharma@gmail.com"
+      },
+      {
+        "type": "PHONE_IN",
+        "value": "7657761729"
+      },
+      {
+        "type": "PAN",
+        "value": "FDTJJ3545E"
+      }
+    ],
+    "category": "mixed"
+  },
+  {
+    "id": "upi_024",
+    "text": "Pay via UPI: deepa94@sbi",
+    "expected_entities": [
+      {
+        "type": "UPI",
+        "value": "deepa94@sbi"
+      }
+    ],
+    "category": "upi"
+  },
+  {
+    "id": "upi_003",
+    "text": "Pay via UPI: kiran60@sbi",
+    "expected_entities": [
+      {
+        "type": "UPI",
+        "value": "kiran60@sbi"
+      }
+    ],
+    "category": "upi"
+  },
+  {
+    "id": "phone_in_027",
+    "text": "Call me at 918004882208",
+    "expected_entities": [
+      {
+        "type": "PHONE_IN",
+        "value": "8004882208"
+      }
+    ],
+    "category": "phone_indian"
+  },
+  {
+    "id": "phone_in_013",
+    "text": "Call me at 919039165292",
+    "expected_entities": [
+      {
+        "type": "PHONE_IN",
+        "value": "9039165292"
+      }
+    ],
+    "category": "phone_indian"
+  },
+  {
+    "id": "email_043",
+    "text": "Contact me at arjun.patel3@company.org for details.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "arjun.patel3@company.org"
+      }
+    ],
+    "category": "email"
+  },
+  {
+    "id": "aadhaar_checksum_fail_006",
+    "text": "Order number 967821365979 confirmed",
+    "expected_entities": [],
+    "category": "aadhaar_negative"
+  },
+  {
+    "id": "card_002",
+    "text": "Card ending in 5061 2787 6113 8640",
+    "expected_entities": [
+      {
+        "type": "CREDIT_CARD",
+        "value": "5061278761138640"
+      }
+    ],
+    "category": "credit_card"
+  },
+  {
+    "id": "mixed_015",
+    "text": "Customer Priya Gupta (email: priya.gupta@gmail.com, phone: +91 9796544423) has PAN ZPGCY4130S.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "priya.gupta@gmail.com"
+      },
+      {
+        "type": "PHONE_IN",
+        "value": "9796544423"
+      },
+      {
+        "type": "PAN",
+        "value": "ZPGCY4130S"
+      }
+    ],
+    "category": "mixed"
+  },
+  {
+    "id": "email_022",
+    "text": "Contact me at sanjay.patel67@company.org for details.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "sanjay.patel67@company.org"
+      }
+    ],
+    "category": "email"
+  },
+  {
+    "id": "aadhaar_031",
+    "text": "My Aadhaar number is 7937 2579 4937",
+    "expected_entities": [
+      {
+        "type": "AADHAAR",
+        "value": "793725794937",
+        "start": 23,
+        "end": 37
+      }
+    ],
+    "category": "aadhaar"
+  },
+  {
+    "id": "email_041",
+    "text": "Contact me at vikram.kumar19@university.ac.in for details.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "vikram.kumar19@university.ac.in"
+      }
+    ],
+    "category": "email"
+  },
+  {
+    "id": "upi_004",
+    "text": "Pay via UPI: deepa37@upi",
+    "expected_entities": [
+      {
+        "type": "UPI",
+        "value": "deepa37@upi"
+      }
+    ],
+    "category": "upi"
+  },
+  {
+    "id": "pan_025",
+    "text": "PAN Card: NLLGZ7396X",
+    "expected_entities": [
+      {
+        "type": "PAN",
+        "value": "NLLGZ7396X"
+      }
+    ],
+    "category": "pan"
+  },
+  {
+    "id": "card_008",
+    "text": "Card ending in 4320 5377 6103 5811",
+    "expected_entities": [
+      {
+        "type": "CREDIT_CARD",
+        "value": "4320537761035811"
+      }
+    ],
+    "category": "credit_card"
+  },
+  {
+    "id": "mixed_009",
+    "text": "Customer Rahul Gupta (email: rahul.gupta@gmail.com, phone: +91 8778998786) has PAN SLOBB7519K.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "rahul.gupta@gmail.com"
+      },
+      {
+        "type": "PHONE_IN",
+        "value": "8778998786"
+      },
+      {
+        "type": "PAN",
+        "value": "SLOBB7519K"
+      }
+    ],
+    "category": "mixed"
+  },
+  {
+    "id": "email_037",
+    "text": "Contact me at kiran.sharma88@gmail.com for details.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "kiran.sharma88@gmail.com"
+      }
+    ],
+    "category": "email"
+  },
+  {
+    "id": "mixed_030",
+    "text": "Customer Aarav Sharma (email: aarav.sharma@gmail.com, phone: +91 8853196540) has PAN IOEBS5771L.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "aarav.sharma@gmail.com"
+      },
+      {
+        "type": "PHONE_IN",
+        "value": "8853196540"
+      },
+      {
+        "type": "PAN",
+        "value": "IOEBS5771L"
+      }
+    ],
+    "category": "mixed"
+  },
+  {
+    "id": "pan_024",
+    "text": "PAN Card: QLQFB7822B",
+    "expected_entities": [
+      {
+        "type": "PAN",
+        "value": "QLQFB7822B"
+      }
+    ],
+    "category": "pan"
+  },
+  {
+    "id": "aadhaar_039",
+    "text": "My Aadhaar number is 8543 7836 1649",
+    "expected_entities": [
+      {
+        "type": "AADHAAR",
+        "value": "854378361649",
+        "start": 23,
+        "end": 37
+      }
+    ],
+    "category": "aadhaar"
+  },
+  {
+    "id": "mixed_029",
+    "text": "Customer Ananya Sharma (email: ananya.sharma@gmail.com, phone: +91 9723521770) has PAN FDLHY2820B.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "ananya.sharma@gmail.com"
+      },
+      {
+        "type": "PHONE_IN",
+        "value": "9723521770"
+      },
+      {
+        "type": "PAN",
+        "value": "FDLHY2820B"
+      }
+    ],
+    "category": "mixed"
+  },
+  {
+    "id": "ifsc_007",
+    "text": "IFSC code: IDFB0280437",
+    "expected_entities": [
+      {
+        "type": "IFSC",
+        "value": "IDFB0280437"
+      }
+    ],
+    "category": "ifsc"
+  },
+  {
+    "id": "pan_047",
+    "text": "PAN Card: RCGPZ1593H",
+    "expected_entities": [
+      {
+        "type": "PAN",
+        "value": "RCGPZ1593H"
+      }
+    ],
+    "category": "pan"
+  },
+  {
+    "id": "email_040",
+    "text": "Contact me at priya.patel87@university.ac.in for details.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "priya.patel87@university.ac.in"
+      }
+    ],
+    "category": "email"
+  },
+  {
+    "id": "pan_003",
+    "text": "PAN Card: ZVACG6021L",
+    "expected_entities": [
+      {
+        "type": "PAN",
+        "value": "ZVACG6021L"
+      }
+    ],
+    "category": "pan"
+  },
+  {
+    "id": "aadhaar_invalid_003",
+    "text": "Invalid reference: 119779811457",
+    "expected_entities": [],
+    "category": "aadhaar_negative"
+  },
+  {
+    "id": "ip_010",
+    "text": "Login from IP 189.235.100.81",
+    "expected_entities": [
+      {
+        "type": "IP_ADDRESS",
+        "value": "189.235.100.81"
+      }
+    ],
+    "category": "ip_address"
+  },
+  {
+    "id": "mixed_043",
+    "text": "Customer Aarav Singh (email: aarav.singh@gmail.com, phone: +91 7767075376) has PAN AQYAW5210J.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "aarav.singh@gmail.com"
+      },
+      {
+        "type": "PHONE_IN",
+        "value": "7767075376"
+      },
+      {
+        "type": "PAN",
+        "value": "AQYAW5210J"
+      }
+    ],
+    "category": "mixed"
+  },
+  {
+    "id": "card_015",
+    "text": "Card ending in 3778 2116 6773 6299",
+    "expected_entities": [
+      {
+        "type": "CREDIT_CARD",
+        "value": "3778211667736299"
+      }
+    ],
+    "category": "credit_card"
+  },
+  {
+    "id": "pan_035",
+    "text": "PAN Card: DDUGC5494J",
+    "expected_entities": [
+      {
+        "type": "PAN",
+        "value": "DDUGC5494J"
+      }
+    ],
+    "category": "pan"
+  },
+  {
+    "id": "mixed_035",
+    "text": "Customer Rahul Kumar (email: rahul.kumar@gmail.com, phone: +91 9115573629) has PAN TRUGN4738D.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "rahul.kumar@gmail.com"
+      },
+      {
+        "type": "PHONE_IN",
+        "value": "9115573629"
+      },
+      {
+        "type": "PAN",
+        "value": "TRUGN4738D"
+      }
+    ],
+    "category": "mixed"
+  },
+  {
+    "id": "aadhaar_030",
+    "text": "My Aadhaar number is 3706 8625 1326",
+    "expected_entities": [
+      {
+        "type": "AADHAAR",
+        "value": "370686251326",
+        "start": 23,
+        "end": 37
+      }
+    ],
+    "category": "aadhaar"
+  },
+  {
+    "id": "ip_004",
+    "text": "Login from IP 5.85.149.22",
+    "expected_entities": [
+      {
+        "type": "IP_ADDRESS",
+        "value": "5.85.149.22"
+      }
+    ],
+    "category": "ip_address"
+  },
+  {
+    "id": "mixed_008",
+    "text": "Customer Aarav Sharma (email: aarav.sharma@gmail.com, phone: +91 8352052283) has PAN TOQPW8805Z.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "aarav.sharma@gmail.com"
+      },
+      {
+        "type": "PHONE_IN",
+        "value": "8352052283"
+      },
+      {
+        "type": "PAN",
+        "value": "TOQPW8805Z"
+      }
+    ],
+    "category": "mixed"
+  },
+  {
+    "id": "mixed_012",
+    "text": "Customer Priya Kumar (email: priya.kumar@gmail.com, phone: +91 9407446555) has PAN XIQLV4241V.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "priya.kumar@gmail.com"
+      },
+      {
+        "type": "PHONE_IN",
+        "value": "9407446555"
+      },
+      {
+        "type": "PAN",
+        "value": "XIQLV4241V"
+      }
+    ],
+    "category": "mixed"
+  },
+  {
+    "id": "ifsc_001",
+    "text": "IFSC code: IDFB0446528",
+    "expected_entities": [
+      {
+        "type": "IFSC",
+        "value": "IDFB0446528"
+      }
+    ],
+    "category": "ifsc"
+  },
+  {
+    "id": "aadhaar_035",
+    "text": "My Aadhaar number is 7685 3225 5026",
+    "expected_entities": [
+      {
+        "type": "AADHAAR",
+        "value": "768532255026",
+        "start": 23,
+        "end": 37
+      }
+    ],
+    "category": "aadhaar"
+  },
+  {
+    "id": "phone_in_042",
+    "text": "Call me at 919832164572",
+    "expected_entities": [
+      {
+        "type": "PHONE_IN",
+        "value": "9832164572"
+      }
+    ],
+    "category": "phone_indian"
+  },
+  {
+    "id": "pan_009",
+    "text": "PAN Card: NJZPC3395R",
+    "expected_entities": [
+      {
+        "type": "PAN",
+        "value": "NJZPC3395R"
+      }
+    ],
+    "category": "pan"
+  },
+  {
+    "id": "email_005",
+    "text": "Contact me at kiran.patel77@yahoo.co.in for details.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "kiran.patel77@yahoo.co.in"
+      }
+    ],
+    "category": "email"
+  },
+  {
+    "id": "aadhaar_checksum_fail_012",
+    "text": "Transaction id 770948908051 posted",
+    "expected_entities": [],
+    "category": "aadhaar_negative"
+  },
+  {
+    "id": "aadhaar_001",
+    "text": "My Aadhaar number is 2631 0999 7137",
+    "expected_entities": [
+      {
+        "type": "AADHAAR",
+        "value": "263109997137",
+        "start": 23,
+        "end": 37
+      }
+    ],
+    "category": "aadhaar"
+  },
+  {
+    "id": "mixed_038",
+    "text": "Customer Rahul Gupta (email: rahul.gupta@gmail.com, phone: +91 7401673041) has PAN HEVHL4502F.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "rahul.gupta@gmail.com"
+      },
+      {
+        "type": "PHONE_IN",
+        "value": "7401673041"
+      },
+      {
+        "type": "PAN",
+        "value": "HEVHL4502F"
+      }
+    ],
+    "category": "mixed"
+  },
+  {
+    "id": "ifsc_015",
+    "text": "IFSC code: SBIN0105663",
+    "expected_entities": [
+      {
+        "type": "IFSC",
+        "value": "SBIN0105663"
+      }
+    ],
+    "category": "ifsc"
+  },
+  {
+    "id": "upi_010",
+    "text": "Pay via UPI: deepa7@upi",
+    "expected_entities": [
+      {
+        "type": "UPI",
+        "value": "deepa7@upi"
+      }
+    ],
+    "category": "upi"
+  },
+  {
+    "id": "pan_030",
+    "text": "PAN Card: YVRBF2475E",
+    "expected_entities": [
+      {
+        "type": "PAN",
+        "value": "YVRBF2475E"
+      }
+    ],
+    "category": "pan"
+  },
+  {
+    "id": "email_044",
+    "text": "Contact me at priya.kumar98@university.ac.in for details.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "priya.kumar98@university.ac.in"
+      }
+    ],
+    "category": "email"
+  },
+  {
+    "id": "phone_in_029",
+    "text": "Call me at 9711386821",
+    "expected_entities": [
+      {
+        "type": "PHONE_IN",
+        "value": "9711386821"
+      }
+    ],
+    "category": "phone_indian"
+  },
+  {
+    "id": "phone_in_046",
+    "text": "Call me at 6262865938",
+    "expected_entities": [
+      {
+        "type": "PHONE_IN",
+        "value": "6262865938"
+      }
+    ],
+    "category": "phone_indian"
+  },
+  {
+    "id": "aadhaar_014",
+    "text": "My Aadhaar number is 5342 6942 4636",
+    "expected_entities": [
+      {
+        "type": "AADHAAR",
+        "value": "534269424636",
+        "start": 23,
+        "end": 37
+      }
+    ],
+    "category": "aadhaar"
+  },
+  {
+    "id": "phone_in_014",
+    "text": "Call me at 6736832650",
+    "expected_entities": [
+      {
+        "type": "PHONE_IN",
+        "value": "6736832650"
+      }
+    ],
+    "category": "phone_indian"
+  },
+  {
+    "id": "aadhaar_checksum_fail_002",
+    "text": "Invoice reference 201216049775 dated today",
+    "expected_entities": [],
+    "category": "aadhaar_negative"
+  },
+  {
+    "id": "card_022",
+    "text": "Card ending in 4441 0106 1329 5615",
+    "expected_entities": [
+      {
+        "type": "CREDIT_CARD",
+        "value": "4441010613295615"
+      }
+    ],
+    "category": "credit_card"
+  },
+  {
+    "id": "email_026",
+    "text": "Contact me at aarav.gupta71@yahoo.co.in for details.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "aarav.gupta71@yahoo.co.in"
+      }
+    ],
+    "category": "email"
+  },
+  {
+    "id": "aadhaar_checksum_fail_017",
+    "text": "Transaction id 608788516489 posted",
+    "expected_entities": [],
+    "category": "aadhaar_negative"
+  },
+  {
+    "id": "phone_in_010",
+    "text": "Call me at 08972618777",
+    "expected_entities": [
+      {
+        "type": "PHONE_IN",
+        "value": "8972618777"
+      }
+    ],
+    "category": "phone_indian"
+  },
+  {
+    "id": "phone_in_025",
+    "text": "Call me at 6198968836",
+    "expected_entities": [
+      {
+        "type": "PHONE_IN",
+        "value": "6198968836"
+      }
+    ],
+    "category": "phone_indian"
+  },
+  {
+    "id": "mixed_004",
+    "text": "Customer Rahul Kumar (email: rahul.kumar@gmail.com, phone: +91 7492670245) has PAN UIBAK4410G.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "rahul.kumar@gmail.com"
+      },
+      {
+        "type": "PHONE_IN",
+        "value": "7492670245"
+      },
+      {
+        "type": "PAN",
+        "value": "UIBAK4410G"
+      }
+    ],
+    "category": "mixed"
+  },
+  {
+    "id": "pan_039",
+    "text": "PAN Card: LDTGV5742X",
+    "expected_entities": [
+      {
+        "type": "PAN",
+        "value": "LDTGV5742X"
+      }
+    ],
+    "category": "pan"
+  },
+  {
+    "id": "aadhaar_034",
+    "text": "My Aadhaar number is 9818 6836 7826",
+    "expected_entities": [
+      {
+        "type": "AADHAAR",
+        "value": "981868367826",
+        "start": 23,
+        "end": 37
+      }
+    ],
+    "category": "aadhaar"
+  },
+  {
+    "id": "mixed_039",
+    "text": "Customer Ananya Singh (email: ananya.singh@gmail.com, phone: +91 9153037740) has PAN WDDCL4529G.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "ananya.singh@gmail.com"
+      },
+      {
+        "type": "PHONE_IN",
+        "value": "9153037740"
+      },
+      {
+        "type": "PAN",
+        "value": "WDDCL4529G"
+      }
+    ],
+    "category": "mixed"
+  },
+  {
+    "id": "pan_010",
+    "text": "PAN Card: JNBTO3187M",
+    "expected_entities": [
+      {
+        "type": "PAN",
+        "value": "JNBTO3187M"
+      }
+    ],
+    "category": "pan"
+  },
+  {
+    "id": "upi_015",
+    "text": "Pay via UPI: rahul97@ibl",
+    "expected_entities": [
+      {
+        "type": "UPI",
+        "value": "rahul97@ibl"
+      }
+    ],
+    "category": "upi"
+  },
+  {
+    "id": "card_010",
+    "text": "Card ending in 5145 6917 9856 5835",
+    "expected_entities": [
+      {
+        "type": "CREDIT_CARD",
+        "value": "5145691798565835"
+      }
+    ],
+    "category": "credit_card"
+  },
+  {
+    "id": "aadhaar_checksum_fail_016",
+    "text": "Transaction id 806088804735 posted",
+    "expected_entities": [],
+    "category": "aadhaar_negative"
+  },
+  {
+    "id": "ip_001",
+    "text": "Login from IP 54.181.216.207",
+    "expected_entities": [
+      {
+        "type": "IP_ADDRESS",
+        "value": "54.181.216.207"
+      }
+    ],
+    "category": "ip_address"
+  },
+  {
+    "id": "upi_017",
+    "text": "Pay via UPI: deepa8@okaxis",
+    "expected_entities": [
+      {
+        "type": "UPI",
+        "value": "deepa8@okaxis"
+      }
+    ],
+    "category": "upi"
+  },
+  {
+    "id": "ifsc_005",
+    "text": "IFSC code: PUNB0143478",
+    "expected_entities": [
+      {
+        "type": "IFSC",
+        "value": "PUNB0143478"
+      }
+    ],
+    "category": "ifsc"
+  },
+  {
+    "id": "email_027",
+    "text": "Contact me at vikram.sharma49@gmail.com for details.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "vikram.sharma49@gmail.com"
+      }
+    ],
+    "category": "email"
+  },
+  {
+    "id": "pan_001",
+    "text": "PAN Card: GZLPI6839H",
+    "expected_entities": [
+      {
+        "type": "PAN",
+        "value": "GZLPI6839H"
+      }
+    ],
+    "category": "pan"
+  },
+  {
+    "id": "aadhaar_023",
+    "text": "My Aadhaar number is 5601 0540 4241",
+    "expected_entities": [
+      {
+        "type": "AADHAAR",
+        "value": "560105404241",
+        "start": 23,
+        "end": 37
+      }
+    ],
+    "category": "aadhaar"
+  },
+  {
+    "id": "email_029",
+    "text": "Contact me at priya.patel76@company.org for details.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "priya.patel76@company.org"
+      }
+    ],
+    "category": "email"
+  },
+  {
+    "id": "phone_in_034",
+    "text": "Call me at 917021089425",
+    "expected_entities": [
+      {
+        "type": "PHONE_IN",
+        "value": "7021089425"
+      }
+    ],
+    "category": "phone_indian"
+  },
+  {
+    "id": "card_014",
+    "text": "Card ending in 5297 7459 1055 3024",
+    "expected_entities": [
+      {
+        "type": "CREDIT_CARD",
+        "value": "5297745910553024"
+      }
+    ],
+    "category": "credit_card"
+  },
+  {
+    "id": "aadhaar_checksum_fail_020",
+    "text": "Invoice reference 959507781276 dated today",
+    "expected_entities": [],
+    "category": "aadhaar_negative"
+  },
+  {
+    "id": "card_003",
+    "text": "Card ending in 6011 9195 7137 2445",
+    "expected_entities": [
+      {
+        "type": "CREDIT_CARD",
+        "value": "6011919571372445"
+      }
+    ],
+    "category": "credit_card"
+  },
+  {
+    "id": "mixed_019",
+    "text": "Customer Aarav Kumar (email: aarav.kumar@gmail.com, phone: +91 8632807148) has PAN VQMCG4743G.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "aarav.kumar@gmail.com"
+      },
+      {
+        "type": "PHONE_IN",
+        "value": "8632807148"
+      },
+      {
+        "type": "PAN",
+        "value": "VQMCG4743G"
+      }
+    ],
+    "category": "mixed"
+  },
+  {
+    "id": "email_039",
+    "text": "Contact me at vikram.kumar40@yahoo.co.in for details.",
+    "expected_entities": [
+      {
+        "type": "EMAIL",
+        "value": "vikram.kumar40@yahoo.co.in"
+      }
+    ],
+    "category": "email"
+  },
+  {
+    "id": "aadhaar_010",
+    "text": "My Aadhaar number is 3630 7971 9668",
+    "expected_entities": [
+      {
+        "type": "AADHAAR",
+        "value": "363079719668",
         "start": 23,
         "end": 37
       }
@@ -3852,731 +4619,24 @@
   },
   {
     "id": "ifsc_014",
-    "text": "IFSC code: SBIN073796",
+    "text": "IFSC code: ICIC0164118",
     "expected_entities": [
       {
         "type": "IFSC",
-        "value": "SBIN073796"
+        "value": "ICIC0164118"
       }
     ],
     "category": "ifsc"
   },
   {
-    "id": "email_018",
-    "text": "Contact me at priya.patel99@gmail.com for details.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "priya.patel99@gmail.com"
-      }
-    ],
-    "category": "email"
-  },
-  {
-    "id": "upi_019",
-    "text": "Pay via UPI: rahul4@ibl",
-    "expected_entities": [
-      {
-        "type": "UPI",
-        "value": "rahul4@ibl"
-      }
-    ],
-    "category": "upi"
-  },
-  {
-    "id": "phone_in_024",
-    "text": "Call me at 08250486854",
-    "expected_entities": [
-      {
-        "type": "PHONE_IN",
-        "value": "8250486854"
-      }
-    ],
-    "category": "phone_indian"
-  },
-  {
-    "id": "upi_025",
-    "text": "Pay via UPI: aarav87@paytm",
-    "expected_entities": [
-      {
-        "type": "UPI",
-        "value": "aarav87@paytm"
-      }
-    ],
-    "category": "upi"
-  },
-  {
-    "id": "pan_036",
-    "text": "PAN Card: VMSLL1824X",
+    "id": "pan_005",
+    "text": "PAN Card: OKAGJ7351R",
     "expected_entities": [
       {
         "type": "PAN",
-        "value": "VMSLL1824X"
+        "value": "OKAGJ7351R"
       }
     ],
     "category": "pan"
-  },
-  {
-    "id": "pan_009",
-    "text": "PAN Card: QGPJP6474J",
-    "expected_entities": [
-      {
-        "type": "PAN",
-        "value": "QGPJP6474J"
-      }
-    ],
-    "category": "pan"
-  },
-  {
-    "id": "mixed_036",
-    "text": "Customer Rahul Sharma (email: rahul.sharma@gmail.com, phone: +91 9609248807) has PAN JOJFY5390C.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "rahul.sharma@gmail.com"
-      },
-      {
-        "type": "PHONE_IN",
-        "value": "9609248807"
-      },
-      {
-        "type": "PAN",
-        "value": "JOJFY5390C"
-      }
-    ],
-    "category": "mixed"
-  },
-  {
-    "id": "aadhaar_026",
-    "text": "My Aadhaar number is 4306 6832 5652",
-    "expected_entities": [
-      {
-        "type": "AADHAAR",
-        "value": "430668325652",
-        "start": 23,
-        "end": 37
-      }
-    ],
-    "category": "aadhaar"
-  },
-  {
-    "id": "email_031",
-    "text": "Contact me at aarav.patel4@gmail.com for details.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "aarav.patel4@gmail.com"
-      }
-    ],
-    "category": "email"
-  },
-  {
-    "id": "email_022",
-    "text": "Contact me at vikram.sharma48@university.ac.in for details.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "vikram.sharma48@university.ac.in"
-      }
-    ],
-    "category": "email"
-  },
-  {
-    "id": "pan_048",
-    "text": "PAN Card: ITBPT1258L",
-    "expected_entities": [
-      {
-        "type": "PAN",
-        "value": "ITBPT1258L"
-      }
-    ],
-    "category": "pan"
-  },
-  {
-    "id": "upi_006",
-    "text": "Pay via UPI: priya63@paytm",
-    "expected_entities": [
-      {
-        "type": "UPI",
-        "value": "priya63@paytm"
-      }
-    ],
-    "category": "upi"
-  },
-  {
-    "id": "pan_049",
-    "text": "PAN Card: WMTLT5982E",
-    "expected_entities": [
-      {
-        "type": "PAN",
-        "value": "WMTLT5982E"
-      }
-    ],
-    "category": "pan"
-  },
-  {
-    "id": "card_003",
-    "text": "Card ending in 4534 1791 4369 7228",
-    "expected_entities": [
-      {
-        "type": "CREDIT_CARD",
-        "value": "4534179143697228"
-      }
-    ],
-    "category": "credit_card"
-  },
-  {
-    "id": "upi_030",
-    "text": "Pay via UPI: priya91@upi",
-    "expected_entities": [
-      {
-        "type": "UPI",
-        "value": "priya91@upi"
-      }
-    ],
-    "category": "upi"
-  },
-  {
-    "id": "ifsc_020",
-    "text": "IFSC code: PUNB026403",
-    "expected_entities": [
-      {
-        "type": "IFSC",
-        "value": "PUNB026403"
-      }
-    ],
-    "category": "ifsc"
-  },
-  {
-    "id": "pan_013",
-    "text": "PAN Card: HBBHX5120I",
-    "expected_entities": [
-      {
-        "type": "PAN",
-        "value": "HBBHX5120I"
-      }
-    ],
-    "category": "pan"
-  },
-  {
-    "id": "card_005",
-    "text": "Card ending in 4519 3155 2537 9301",
-    "expected_entities": [
-      {
-        "type": "CREDIT_CARD",
-        "value": "4519315525379301"
-      }
-    ],
-    "category": "credit_card"
-  },
-  {
-    "id": "phone_in_049",
-    "text": "Call me at 9650863337",
-    "expected_entities": [
-      {
-        "type": "PHONE_IN",
-        "value": "9650863337"
-      }
-    ],
-    "category": "phone_indian"
-  },
-  {
-    "id": "aadhaar_023",
-    "text": "My Aadhaar number is 7943 2205 9323",
-    "expected_entities": [
-      {
-        "type": "AADHAAR",
-        "value": "794322059323",
-        "start": 23,
-        "end": 37
-      }
-    ],
-    "category": "aadhaar"
-  },
-  {
-    "id": "pan_024",
-    "text": "PAN Card: RSCFF1487L",
-    "expected_entities": [
-      {
-        "type": "PAN",
-        "value": "RSCFF1487L"
-      }
-    ],
-    "category": "pan"
-  },
-  {
-    "id": "phone_in_036",
-    "text": "Call me at 08200004460",
-    "expected_entities": [
-      {
-        "type": "PHONE_IN",
-        "value": "8200004460"
-      }
-    ],
-    "category": "phone_indian"
-  },
-  {
-    "id": "mixed_016",
-    "text": "Customer Kiran Singh (email: kiran.singh@gmail.com, phone: +91 8734477873) has PAN MKYLS9296T.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "kiran.singh@gmail.com"
-      },
-      {
-        "type": "PHONE_IN",
-        "value": "8734477873"
-      },
-      {
-        "type": "PAN",
-        "value": "MKYLS9296T"
-      }
-    ],
-    "category": "mixed"
-  },
-  {
-    "id": "mixed_038",
-    "text": "Customer Kiran Sharma (email: kiran.sharma@gmail.com, phone: +91 8837367478) has PAN MUHPW2196X.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "kiran.sharma@gmail.com"
-      },
-      {
-        "type": "PHONE_IN",
-        "value": "8837367478"
-      },
-      {
-        "type": "PAN",
-        "value": "MUHPW2196X"
-      }
-    ],
-    "category": "mixed"
-  },
-  {
-    "id": "mixed_008",
-    "text": "Customer Kiran Sharma (email: kiran.sharma@gmail.com, phone: +91 7480522432) has PAN RHEAD7998H.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "kiran.sharma@gmail.com"
-      },
-      {
-        "type": "PHONE_IN",
-        "value": "7480522432"
-      },
-      {
-        "type": "PAN",
-        "value": "RHEAD7998H"
-      }
-    ],
-    "category": "mixed"
-  },
-  {
-    "id": "aadhaar_041",
-    "text": "My Aadhaar number is 8865 8178 0277",
-    "expected_entities": [
-      {
-        "type": "AADHAAR",
-        "value": "886581780277",
-        "start": 23,
-        "end": 37
-      }
-    ],
-    "category": "aadhaar"
-  },
-  {
-    "id": "ifsc_004",
-    "text": "IFSC code: BARB023485",
-    "expected_entities": [
-      {
-        "type": "IFSC",
-        "value": "BARB023485"
-      }
-    ],
-    "category": "ifsc"
-  },
-  {
-    "id": "pan_033",
-    "text": "PAN Card: MVATG1621E",
-    "expected_entities": [
-      {
-        "type": "PAN",
-        "value": "MVATG1621E"
-      }
-    ],
-    "category": "pan"
-  },
-  {
-    "id": "email_034",
-    "text": "Contact me at vikram.patel9@outlook.com for details.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "vikram.patel9@outlook.com"
-      }
-    ],
-    "category": "email"
-  },
-  {
-    "id": "pan_006",
-    "text": "PAN Card: SRKPZ9159V",
-    "expected_entities": [
-      {
-        "type": "PAN",
-        "value": "SRKPZ9159V"
-      }
-    ],
-    "category": "pan"
-  },
-  {
-    "id": "aadhaar_009",
-    "text": "My Aadhaar number is 9189 6345 5166",
-    "expected_entities": [
-      {
-        "type": "AADHAAR",
-        "value": "918963455166",
-        "start": 23,
-        "end": 37
-      }
-    ],
-    "category": "aadhaar"
-  },
-  {
-    "id": "phone_in_012",
-    "text": "Call me at +918749754663",
-    "expected_entities": [
-      {
-        "type": "PHONE_IN",
-        "value": "8749754663"
-      }
-    ],
-    "category": "phone_indian"
-  },
-  {
-    "id": "aadhaar_invalid_010",
-    "text": "Invalid reference: 131877607795",
-    "expected_entities": [],
-    "category": "aadhaar_negative"
-  },
-  {
-    "id": "mixed_029",
-    "text": "Customer Rahul Gupta (email: rahul.gupta@gmail.com, phone: +91 7782461009) has PAN JLUFU6380H.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "rahul.gupta@gmail.com"
-      },
-      {
-        "type": "PHONE_IN",
-        "value": "7782461009"
-      },
-      {
-        "type": "PAN",
-        "value": "JLUFU6380H"
-      }
-    ],
-    "category": "mixed"
-  },
-  {
-    "id": "aadhaar_044",
-    "text": "My Aadhaar number is 8979 3492 9796",
-    "expected_entities": [
-      {
-        "type": "AADHAAR",
-        "value": "897934929796",
-        "start": 23,
-        "end": 37
-      }
-    ],
-    "category": "aadhaar"
-  },
-  {
-    "id": "aadhaar_038",
-    "text": "My Aadhaar number is 5001 0899 1959",
-    "expected_entities": [
-      {
-        "type": "AADHAAR",
-        "value": "500108991959",
-        "start": 23,
-        "end": 37
-      }
-    ],
-    "category": "aadhaar"
-  },
-  {
-    "id": "card_026",
-    "text": "Card ending in 3706 1203 2995 3102",
-    "expected_entities": [
-      {
-        "type": "CREDIT_CARD",
-        "value": "3706120329953102"
-      }
-    ],
-    "category": "credit_card"
-  },
-  {
-    "id": "email_023",
-    "text": "Contact me at vikram.gupta23@company.org for details.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "vikram.gupta23@company.org"
-      }
-    ],
-    "category": "email"
-  },
-  {
-    "id": "ifsc_008",
-    "text": "IFSC code: UTIB043299",
-    "expected_entities": [
-      {
-        "type": "IFSC",
-        "value": "UTIB043299"
-      }
-    ],
-    "category": "ifsc"
-  },
-  {
-    "id": "upi_002",
-    "text": "Pay via UPI: priya75@okaxis",
-    "expected_entities": [
-      {
-        "type": "UPI",
-        "value": "priya75@okaxis"
-      }
-    ],
-    "category": "upi"
-  },
-  {
-    "id": "mixed_009",
-    "text": "Customer Ananya Gupta (email: ananya.gupta@gmail.com, phone: +91 9507693151) has PAN VVXAT1998N.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "ananya.gupta@gmail.com"
-      },
-      {
-        "type": "PHONE_IN",
-        "value": "9507693151"
-      },
-      {
-        "type": "PAN",
-        "value": "VVXAT1998N"
-      }
-    ],
-    "category": "mixed"
-  },
-  {
-    "id": "mixed_028",
-    "text": "Customer Ananya Patel (email: ananya.patel@gmail.com, phone: +91 7411050871) has PAN VYABT7962V.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "ananya.patel@gmail.com"
-      },
-      {
-        "type": "PHONE_IN",
-        "value": "7411050871"
-      },
-      {
-        "type": "PAN",
-        "value": "VYABT7962V"
-      }
-    ],
-    "category": "mixed"
-  },
-  {
-    "id": "aadhaar_invalid_006",
-    "text": "Invalid reference: 192224365075",
-    "expected_entities": [],
-    "category": "aadhaar_negative"
-  },
-  {
-    "id": "email_009",
-    "text": "Contact me at aarav.patel91@university.ac.in for details.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "aarav.patel91@university.ac.in"
-      }
-    ],
-    "category": "email"
-  },
-  {
-    "id": "email_025",
-    "text": "Contact me at vikram.sharma44@outlook.com for details.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "vikram.sharma44@outlook.com"
-      }
-    ],
-    "category": "email"
-  },
-  {
-    "id": "phone_in_032",
-    "text": "Call me at +91 63244 57196",
-    "expected_entities": [
-      {
-        "type": "PHONE_IN",
-        "value": "6324457196"
-      }
-    ],
-    "category": "phone_indian"
-  },
-  {
-    "id": "mixed_006",
-    "text": "Customer Rahul Singh (email: rahul.singh@gmail.com, phone: +91 9113762787) has PAN WQXCD7194X.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "rahul.singh@gmail.com"
-      },
-      {
-        "type": "PHONE_IN",
-        "value": "9113762787"
-      },
-      {
-        "type": "PAN",
-        "value": "WQXCD7194X"
-      }
-    ],
-    "category": "mixed"
-  },
-  {
-    "id": "email_002",
-    "text": "Contact me at priya.kumar38@outlook.com for details.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "priya.kumar38@outlook.com"
-      }
-    ],
-    "category": "email"
-  },
-  {
-    "id": "card_024",
-    "text": "Card ending in 5841 3404 5682 6669",
-    "expected_entities": [
-      {
-        "type": "CREDIT_CARD",
-        "value": "5841340456826669"
-      }
-    ],
-    "category": "credit_card"
-  },
-  {
-    "id": "email_010",
-    "text": "Contact me at arjun.kumar1@university.ac.in for details.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "arjun.kumar1@university.ac.in"
-      }
-    ],
-    "category": "email"
-  },
-  {
-    "id": "aadhaar_invalid_019",
-    "text": "Invalid reference: 054809219469",
-    "expected_entities": [],
-    "category": "aadhaar_negative"
-  },
-  {
-    "id": "card_016",
-    "text": "Card ending in 5482 6049 4156 1370",
-    "expected_entities": [
-      {
-        "type": "CREDIT_CARD",
-        "value": "5482604941561370"
-      }
-    ],
-    "category": "credit_card"
-  },
-  {
-    "id": "pan_045",
-    "text": "PAN Card: TAEHF8700G",
-    "expected_entities": [
-      {
-        "type": "PAN",
-        "value": "TAEHF8700G"
-      }
-    ],
-    "category": "pan"
-  },
-  {
-    "id": "ip_029",
-    "text": "Login from IP 123.157.105.225",
-    "expected_entities": [
-      {
-        "type": "IP_ADDRESS",
-        "value": "123.157.105.225"
-      }
-    ],
-    "category": "ip_address"
-  },
-  {
-    "id": "phone_in_005",
-    "text": "Call me at +917717796166",
-    "expected_entities": [
-      {
-        "type": "PHONE_IN",
-        "value": "7717796166"
-      }
-    ],
-    "category": "phone_indian"
-  },
-  {
-    "id": "mixed_034",
-    "text": "Customer Priya Singh (email: priya.singh@gmail.com, phone: +91 7393064066) has PAN ODPHL5936H.",
-    "expected_entities": [
-      {
-        "type": "EMAIL",
-        "value": "priya.singh@gmail.com"
-      },
-      {
-        "type": "PHONE_IN",
-        "value": "7393064066"
-      },
-      {
-        "type": "PAN",
-        "value": "ODPHL5936H"
-      }
-    ],
-    "category": "mixed"
-  },
-  {
-    "id": "pan_032",
-    "text": "PAN Card: LCOCE9717W",
-    "expected_entities": [
-      {
-        "type": "PAN",
-        "value": "LCOCE9717W"
-      }
-    ],
-    "category": "pan"
-  },
-  {
-    "id": "phone_in_014",
-    "text": "Call me at +918233629571",
-    "expected_entities": [
-      {
-        "type": "PHONE_IN",
-        "value": "8233629571"
-      }
-    ],
-    "category": "phone_indian"
-  },
-  {
-    "id": "phone_in_026",
-    "text": "Call me at +91-9693331146",
-    "expected_entities": [
-      {
-        "type": "PHONE_IN",
-        "value": "9693331146"
-      }
-    ],
-    "category": "phone_indian"
   }
 ]

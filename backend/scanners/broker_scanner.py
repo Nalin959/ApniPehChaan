@@ -59,8 +59,15 @@ class BrokerScanner:
             exposure_likelihood = 0.0
             exposure_reason = []
 
-            # People search sites are almost certain to have data if name+city provided
-            if category.lower() in ("people search", "people search engine", "people directory"):
+            # Category matching is substring-based against the categories the
+            # Optery export actually uses. The previous exact-equality list
+            # matched none of "People Search Site" (386 brokers), "B2B Lead
+            # Generation" (127), "Business Search" (72) or "Profile Data
+            # Broker" (46), so 631 of 956 brokers silently fell through to the
+            # generic branch and every user got the identical result.
+            cat = category.lower()
+
+            if "people search" in cat or "people directory" in cat or "profile data" in cat:
                 if user_name:
                     exposure_likelihood = 0.85
                     exposure_reason.append("People search sites aggregate public records by name")
@@ -68,21 +75,29 @@ class BrokerScanner:
                     exposure_likelihood = min(exposure_likelihood + 0.10, 0.95)
                     exposure_reason.append("City narrows profile match accuracy")
 
-            elif category.lower() in ("phone directory", "reverse phone", "phone lookup"):
+            elif "phone" in cat:
                 if user_phone:
                     exposure_likelihood = 0.80
                     exposure_reason.append("Phone directories index mobile and landline numbers")
 
-            elif category.lower() in ("background check", "criminal records"):
+            elif "background" in cat or "criminal" in cat:
                 if user_name:
                     exposure_likelihood = 0.60
                     exposure_reason.append("Background check services compile identity profiles")
 
-            elif category.lower() in ("data broker", "marketing", "data aggregator"):
+            elif "b2b" in cat or "lead generation" in cat or "business search" in cat:
+                if user_email:
+                    exposure_likelihood = 0.65
+                    exposure_reason.append("B2B lead vendors resell work contact details")
+                elif user_name:
+                    exposure_likelihood = 0.40
+                    exposure_reason.append("B2B vendors index professional profiles by name")
+
+            elif "marketing" in cat or "data broker" in cat or "aggregator" in cat:
                 exposure_likelihood = 0.50
                 exposure_reason.append("Marketing data brokers purchase and resell consumer data")
 
-            elif category.lower() in ("email lookup", "email search"):
+            elif "email" in cat:
                 if user_email:
                     exposure_likelihood = 0.70
                     exposure_reason.append("Email lookup services index email-to-identity mappings")

@@ -1,0 +1,277 @@
+"""
+verifiers.py — Checks that actually query something and return proof.
+
+THE RULE THIS FILE ENFORCES
+---------------------------
+Never assert that a source holds a person's data unless we actually checked and
+something came back. Every claim carries the endpoint that was queried, when,
+what the HTTP status was, and the raw evidence — so the user can re-run the
+same check by hand and get the same answer.
+
+An earlier build synthesised breach membership: it picked real breaches at
+random and told the user they were in them. Labelling that "simulated" in a
+JSON payload did not make it honest, because on screen it read as a finding.
+It is gone.
+
+WHAT CAN GENUINELY BE CHECKED, AND FOR FREE
+-------------------------------------------
+  Pwned Passwords  api.pwnedpasswords.com/range/{prefix}
+                   Free, unauthenticated, k-anonymous. Real evidence that a
+                   specific password appears in breach corpora.
+
+  Gravatar         gravatar.com/avatar/{md5}?d=404
+                   Free, unauthenticated. A 200 proves a public profile is
+                   attached to that email address.
+
+  HIBP breaches    haveibeenpwned.com/api/v3/breaches
+                   Free catalog of breach metadata. Real facts ABOUT breaches
+                   — not about whether a given person is in one.
+
+  HIBP account     haveibeenpwned.com/api/v3/breachedaccount/{email}
+                   Returns 401 without a subscription key. THE authoritative
+                   answer to "is this address in a breach". Set HIBP_API_KEY
+                   and it runs for real; without it we report "not checked"
+                   rather than guessing.
+
+WHAT CANNOT BE CHECKED, AND IS NOT GUESSED
+------------------------------------------
+  Whether Truecaller, JustDial, Naukri or any Indian people-search site holds a
+  given person. None publish an API for this. Querying them by scraping, or
+  probing signup/reset endpoints to enumerate accounts, would violate their
+  terms and is not something this tool does. So the product asks the user
+  instead — a person knows which services they signed up for, and that
+  knowledge is itself valid grounds for a DPDP s.12 request.
+"""
+
+import hashlib
+import json
+import os
+import urllib.error
+import urllib.request
+from dataclasses import dataclass, asdict
+from datetime import datetime, timezone
+
+USER_AGENT = "SovereignPrivacy-AI/2.0 (privacy self-service tool)"
+TIMEOUT = 15
+
+
+@dataclass
+class Evidence:
+    """One check, one verifiable answer."""
+    check: str                # machine name of the check
+    target: str               # what was checked (never the raw secret)
+    endpoint: str             # the exact URL queried
+    queried_at: str
+    http_status: int | None
+    result: str               # hit | clear | unavailable | not_checked
+    proof: str                # the raw evidence, quotable
+    interpretation: str       # what it does and does NOT prove
+    reproduce: str = ""       # a command the user can run themselves
+
+    def to_dict(self):
+        return asdict(self)
+
+
+def _now():
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _get(url: str, headers: dict | None = None):
+    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, **(headers or {})})
+    return urllib.request.urlopen(req, timeout=TIMEOUT)
+
+
+# ── 1. Pwned Passwords (free, k-anonymous, genuinely real) ───────────────────
+
+def check_password_pwned(password: str) -> Evidence:
+    """
+    Real breach check for a password, using k-anonymity.
+
+    Only the first 5 characters of the SHA-1 are transmitted. The API returns
+    every suffix sharing that prefix (~800 hashes) and the match is done here,
+    locally. The server therefore cannot learn which password was checked.
+    """
+    if not password:
+        return Evidence("hibp_pwned_passwords", "(none supplied)", "", _now(), None,
+                        "not_checked", "", "No password supplied.", "")
+
+    sha1 = hashlib.sha1(password.encode()).hexdigest().upper()
+    prefix, suffix = sha1[:5], sha1[5:]
+    url = f"https://api.pwnedpasswords.com/range/{prefix}"
+
+    try:
+        resp = _get(url, {"Add-Padding": "true"})
+        body = resp.read().decode()
+        status = resp.status
+    except urllib.error.HTTPError as e:
+        return Evidence("hibp_pwned_passwords", f"SHA-1 prefix {prefix}", url, _now(),
+                        e.code, "unavailable", str(e),
+                        "The service returned an error; nothing is claimed.", "")
+    except Exception as e:
+        return Evidence("hibp_pwned_passwords", f"SHA-1 prefix {prefix}", url, _now(),
+                        None, "unavailable", str(e),
+                        "Could not reach the service; nothing is claimed.", "")
+
+    count = 0
+    for line in body.splitlines():
+        parts = line.strip().split(":")
+        if len(parts) == 2 and parts[0] == suffix:
+            count = int(parts[1])
+            break
+
+    reproduce = f"curl -s https://api.pwnedpasswords.com/range/{prefix} | grep -i {suffix[:12]}"
+
+    if count:
+        return Evidence(
+            "hibp_pwned_passwords", f"SHA-1 prefix {prefix} (k-anonymous)", url, _now(),
+            status, "hit",
+            f"Hash suffix {suffix} returned with a breach count of {count:,}.",
+            f"CONFIRMED: this exact password appears {count:,} times in known breach corpora. "
+            f"It does not tell you which of your accounts used it — it tells you the password "
+            f"itself is burned and must not be reused anywhere.",
+            reproduce)
+
+    return Evidence(
+        "hibp_pwned_passwords", f"SHA-1 prefix {prefix} (k-anonymous)", url, _now(),
+        status, "clear",
+        f"Hash suffix {suffix} was not present among {len(body.splitlines())} returned hashes.",
+        "This password does not appear in the Pwned Passwords corpus. That is not proof it is "
+        "strong, only that it has not turned up in a catalogued breach.",
+        reproduce)
+
+
+# ── 2. Gravatar (free, real proof of a public profile) ───────────────────────
+
+def check_gravatar(email: str) -> Evidence:
+    """A 200 proves a public Gravatar profile is attached to this address."""
+    if not email:
+        return Evidence("gravatar", "(none supplied)", "", _now(), None,
+                        "not_checked", "", "No email supplied.", "")
+
+    md5 = hashlib.md5(email.strip().lower().encode()).hexdigest()
+    url = f"https://www.gravatar.com/avatar/{md5}?d=404"
+    profile_url = f"https://www.gravatar.com/{md5}"
+    reproduce = f"curl -sI '{url}'"
+
+    try:
+        resp = _get(url)
+        status = resp.status
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return Evidence("gravatar", email, url, _now(), 404, "clear",
+                            "HTTP 404 — no avatar registered for this address hash.",
+                            "No public Gravatar profile is attached to this email.", reproduce)
+        return Evidence("gravatar", email, url, _now(), e.code, "unavailable", str(e),
+                        "The service returned an error; nothing is claimed.", reproduce)
+    except Exception as e:
+        return Evidence("gravatar", email, url, _now(), None, "unavailable", str(e),
+                        "Could not reach the service; nothing is claimed.", reproduce)
+
+    return Evidence(
+        "gravatar", email, url, _now(), status, "hit",
+        f"HTTP {status} — an avatar is served for MD5 {md5}.",
+        f"CONFIRMED: a public Gravatar profile exists for this address and is visible to anyone "
+        f"who knows it. The profile may also expose a display name, location and linked accounts: "
+        f"{profile_url}",
+        reproduce)
+
+
+# ── 3. HIBP breached account (real, requires a paid key) ─────────────────────
+
+def check_hibp_account(email: str, api_key: str | None = None) -> Evidence:
+    """
+    The authoritative answer to "is this address in a known breach".
+
+    Requires an HIBP subscription key. Without one this returns `not_checked` —
+    it does NOT guess, and it does not substitute a domain heuristic for a real
+    answer.
+    """
+    api_key = api_key or os.environ.get("HIBP_API_KEY", "")
+    if not email:
+        return Evidence("hibp_breached_account", "(none supplied)", "", _now(), None,
+                        "not_checked", "", "No email supplied.", "")
+
+    url = f"https://haveibeenpwned.com/api/v3/breachedaccount/{urllib.request.quote(email)}?truncateResponse=false"
+    reproduce = f"curl -s -H 'hibp-api-key: $HIBP_API_KEY' '{url}'"
+
+    if not api_key:
+        return Evidence(
+            "hibp_breached_account", email, url, _now(), None, "not_checked", "",
+            "NOT CHECKED. Breach membership for a specific address requires a Have I Been Pwned "
+            "subscription key (about $3.95/month). Set HIBP_API_KEY to run this for real. "
+            "No claim is made about this address in the meantime.",
+            reproduce)
+
+    try:
+        resp = _get(url, {"hibp-api-key": api_key})
+        breaches = json.loads(resp.read().decode())
+        status = resp.status
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return Evidence("hibp_breached_account", email, url, _now(), 404, "clear",
+                            "HTTP 404 — HIBP has no breach containing this address.",
+                            "CONFIRMED CLEAR: this address does not appear in any breach "
+                            "catalogued by HIBP.", reproduce)
+        if e.code == 401:
+            return Evidence("hibp_breached_account", email, url, _now(), 401, "unavailable",
+                            "HTTP 401 — the API key was rejected.",
+                            "The configured HIBP_API_KEY is invalid. Nothing is claimed.", reproduce)
+        return Evidence("hibp_breached_account", email, url, _now(), e.code, "unavailable",
+                        str(e), "The service returned an error; nothing is claimed.", reproduce)
+    except Exception as e:
+        return Evidence("hibp_breached_account", email, url, _now(), None, "unavailable",
+                        str(e), "Could not reach the service; nothing is claimed.", reproduce)
+
+    names = [b.get("Name") or b.get("Title") for b in breaches]
+    return Evidence(
+        "hibp_breached_account", email, url, _now(), status, "hit",
+        f"HIBP returned {len(breaches)} breach record(s): {', '.join(names)}",
+        f"CONFIRMED: this address appears in {len(breaches)} breach(es) catalogued by HIBP. "
+        f"Each named company held this address at the time of its breach.",
+        reproduce)
+
+
+# ── 4. Email domain fact (real, but says nothing about the individual) ───────
+
+def check_email_domain_breached(email: str, catalog: list[dict]) -> Evidence:
+    """
+    Was the domain of this address itself a breached organisation?
+
+    This is a real fact about the DOMAIN. It is NOT evidence about the person —
+    'someone@adobe.com' tells you Adobe was breached, not that this mailbox was
+    in the dump. Phrased accordingly so it is never mistaken for a finding.
+    """
+    if not email or "@" not in email:
+        return Evidence("email_domain_breached", "(none supplied)", "(local catalog)", _now(),
+                        None, "not_checked", "", "No email supplied.", "")
+
+    domain = email.split("@")[-1].lower()
+    hits = [b for b in catalog if (b.get("domain") or "").lower() == domain]
+    endpoint = "local copy of https://haveibeenpwned.com/api/v3/breaches"
+    reproduce = (f"curl -s https://haveibeenpwned.com/api/v3/breaches "
+                 f"| jq '.[] | select(.Domain==\"{domain}\")'")
+
+    if not hits:
+        return Evidence("email_domain_breached", domain, endpoint, _now(), 200, "clear",
+                        f"No breach in the {len(catalog)}-record catalog has domain '{domain}'.",
+                        f"The domain '{domain}' does not itself appear as a breached "
+                        f"organisation. This says nothing about the individual mailbox.",
+                        reproduce)
+
+    names = [h.get("name") or h.get("title") for h in hits]
+    return Evidence(
+        "email_domain_breached", domain, endpoint, _now(), 200, "hit",
+        f"Catalog entries with domain '{domain}': {', '.join(names)}",
+        f"The organisation behind '{domain}' was breached ({', '.join(names)}). "
+        f"IMPORTANT: this does not prove this particular mailbox was in the dump — it means "
+        f"the operator of this domain suffered a breach. Treat it as a reason to check, "
+        f"not as a finding.",
+        reproduce)
+
+
+def network_available() -> bool:
+    try:
+        _get("https://api.pwnedpasswords.com/range/00000")
+        return True
+    except Exception:
+        return False

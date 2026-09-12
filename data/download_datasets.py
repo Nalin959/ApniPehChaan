@@ -334,6 +334,72 @@ Last Login: {(datetime.now() - timedelta(days=random.randint(1,365))).strftime("
     return len(pastes)
 
 
+
+# ── Check-digit helpers ───────────────────────────────────────────────────────
+# The benchmark must exercise the checksum algorithms, not agree with them by
+# construction. Positives therefore carry correct check digits, and the negative
+# set contains number-shaped strings that pass the regex but FAIL the checksum —
+# which is the only thing that actually tests false-positive suppression.
+
+_VERHOEFF_D = [
+    [0,1,2,3,4,5,6,7,8,9],[1,2,3,4,0,6,7,8,9,5],[2,3,4,0,1,7,8,9,5,6],
+    [3,4,0,1,2,8,9,5,6,7],[4,0,1,2,3,9,5,6,7,8],[5,9,8,7,6,0,4,3,2,1],
+    [6,5,9,8,7,1,0,4,3,2],[7,6,5,9,8,2,1,0,4,3],[8,7,6,5,9,3,2,1,0,4],
+    [9,8,7,6,5,4,3,2,1,0],
+]
+_VERHOEFF_P = [
+    [0,1,2,3,4,5,6,7,8,9],[1,5,7,6,2,8,3,0,9,4],[5,8,0,3,7,9,6,1,4,2],
+    [8,9,1,6,0,4,3,5,2,7],[9,4,5,3,1,2,6,8,7,0],[4,2,8,6,5,7,3,9,0,1],
+    [2,7,9,3,8,0,6,4,1,5],[7,0,4,6,9,1,3,2,5,8],
+]
+_VERHOEFF_INV = [0,4,3,2,1,5,6,7,8,9]
+
+
+def verhoeff_check_digit(number: str) -> str:
+    """Return the Verhoeff check digit for a digit string."""
+    c = 0
+    for i, ch in enumerate(reversed(number + "0")):
+        c = _VERHOEFF_D[c][_VERHOEFF_P[i % 8][int(ch)]]
+    return str(_VERHOEFF_INV[c])
+
+
+def gen_valid_aadhaar() -> str:
+    """A 12-digit Aadhaar-shaped number that satisfies Verhoeff (like a real one)."""
+    body = str(random.randint(2, 9)) + "".join(str(random.randint(0, 9)) for _ in range(10))
+    return body + verhoeff_check_digit(body)
+
+
+def gen_checksum_failing_aadhaar() -> str:
+    """Looks exactly like an Aadhaar but the check digit is wrong."""
+    valid = gen_valid_aadhaar()
+    wrong = str((int(valid[-1]) + random.randint(1, 9)) % 10)
+    return valid[:-1] + wrong
+
+
+def luhn_check_digit(partial: str) -> str:
+    """Return the Luhn check digit for a partial card number.
+
+    Counting from the right of the completed number, the check digit is
+    position 1 and every even position is doubled — so the rightmost digit of
+    `partial` (position 2) is the first one doubled.
+    """
+    total = 0
+    for j, ch in enumerate(reversed(partial)):
+        d = int(ch)
+        if j % 2 == 0:
+            d *= 2
+            if d > 9:
+                d -= 9
+        total += d
+    return str((10 - total % 10) % 10)
+
+
+def gen_valid_card(prefix: str) -> str:
+    """A 16-digit card number that satisfies Luhn."""
+    body = prefix + "".join(str(random.randint(0, 9)) for _ in range(15 - len(prefix)))
+    return body + luhn_check_digit(body)
+
+
 def generate_pii_benchmark():
     """Generate ground-truth PII benchmark for accuracy evaluation."""
     dest = os.path.join(BASE_DIR, "benchmarks", "pii_ground_truth.json")
@@ -341,9 +407,9 @@ def generate_pii_benchmark():
 
     samples = []
 
-    # Valid Aadhaar-like numbers (12 digits starting with 2-9)
+    # Valid Aadhaar numbers: correct Verhoeff check digit, as real ones have.
     for i in range(50):
-        num = f"{random.randint(2,9)}" + "".join([str(random.randint(0,9)) for _ in range(11)])
+        num = gen_valid_aadhaar()
         formatted = f"{num[:4]} {num[4:8]} {num[8:]}"
         samples.append({
             "id": f"aadhaar_{i+1:03d}",
@@ -352,12 +418,28 @@ def generate_pii_benchmark():
             "category": "aadhaar",
         })
 
-    # Invalid Aadhaar (starts with 0 or 1, or wrong length)
-    for i in range(20):
+    # Negatives. Half are rejected by the regex (leading 0/1); the other half are
+    # the interesting ones — correctly shaped 12-digit strings with a bad check
+    # digit, which only the Verhoeff algorithm can reject. Invoice numbers,
+    # transaction ids and timestamps look exactly like this in the wild.
+    for i in range(10):
         invalid = f"{random.choice([0,1])}" + "".join([str(random.randint(0,9)) for _ in range(11)])
         samples.append({
             "id": f"aadhaar_invalid_{i+1:03d}",
             "text": f"Invalid reference: {invalid}",
+            "expected_entities": [],
+            "category": "aadhaar_negative",
+        })
+    for i in range(20):
+        failing = gen_checksum_failing_aadhaar()
+        context = random.choice([
+            f"Invoice reference {failing} dated today",
+            f"Transaction id {failing} posted",
+            f"Order number {failing} confirmed",
+        ])
+        samples.append({
+            "id": f"aadhaar_checksum_fail_{i+1:03d}",
+            "text": context,
             "expected_entities": [],
             "category": "aadhaar_negative",
         })
@@ -405,11 +487,9 @@ def generate_pii_benchmark():
             "category": "phone_indian",
         })
 
-    # Credit cards (Luhn-adjacent, fake)
+    # Credit cards: synthetic but Luhn-valid, so the validator is genuinely tested.
     for i in range(30):
-        prefix = random.choice(["4","5","37","6011"])
-        remaining = 16 - len(prefix)
-        card = prefix + "".join([str(random.randint(0,9)) for _ in range(remaining)])
+        card = gen_valid_card(random.choice(["4", "5", "37", "6011"]))
         formatted = " ".join([card[j:j+4] for j in range(0, len(card), 4)])
         samples.append({
             "id": f"card_{i+1:03d}",
@@ -443,7 +523,7 @@ def generate_pii_benchmark():
     # IFSC Codes
     bank_codes = ["IDFB", "SBIN", "HDFC", "ICIC", "UTIB", "KKBK", "PUNB", "BARB"]
     for i in range(20):
-        ifsc = random.choice(bank_codes) + "0" + "".join([str(random.randint(0,9)) for _ in range(5)])
+        ifsc = random.choice(bank_codes) + "0" + "".join([str(random.randint(0,9)) for _ in range(6)])
         samples.append({
             "id": f"ifsc_{i+1:03d}",
             "text": f"IFSC code: {ifsc}",
