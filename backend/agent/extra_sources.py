@@ -88,8 +88,20 @@ IMPLEMENTED — each verified to distinguish a real hit from an invented value
 7. GitHub, email to account
    api.github.com/search/users?q=<email>+in:email
    Proves: a public GitHub account carries this email address in its profile.
-   Discrimination verified: an invented address -> "total_count": 0; a
-   plausible one -> total_count 1 with the account.
+   Discrimination verified, and the match is EXACT rather than tokenised —
+   which was checked specifically, because a fuzzy match here would have been
+   the same trap as ProxyNova:
+     torvalds@linux-foundation.org  -> total_count 1, account "libJNI", whose
+                                       profile really does publish that exact
+                                       address (confirmed via /users/libJNI)
+     someone@linux-foundation.org   -> total_count 0   (same domain, no match)
+     torvalds@example.org           -> total_count 0   (same local part)
+     invented address               -> total_count 0
+   Changing either half of the address kills the match, so it is not matching
+   on fragments.
+   Limit: the account found need not belong to the user — libJNI above is not
+   Linus Torvalds. The finding is "this address is published on GitHub", not
+   "you have a GitHub account".
    Rate limit: 10 searches/minute unauthenticated. A 403 here is "could not
    check" and is never downgraded to "clear".
 
@@ -660,15 +672,17 @@ def check_github_email_exposure(email: str) -> Finding:
             "profile. It could still be visible in commit metadata, which this does not cover.",
             reproduce, metadata={"total_count": 0})
 
-    logins = [i.get("login") for i in (data.get("items") or [])][:5]
+    logins = [i.get("login") for i in (data.get("items") or []) if i.get("login")][:5]
+    where = f' Profile: https://github.com/{logins[0]}' if logins else ""
     return Finding(
         "github_email_exposure", email, url, _now(), status, "hit",
-        f'"total_count": {total} — public account(s): {", ".join(l for l in logins if l)}. '
-        f"Profile: https://github.com/{logins[0]}" if logins else f'"total_count": {total}',
-        "CONFIRMED: this email address is published on a public GitHub profile, where anyone "
-        "can search it — including people building spam and phishing lists. If that was not "
-        "deliberate, remove it under Settings > Emails and enable 'Keep my email addresses "
-        "private'.",
+        f'"total_count": {total} — public account(s): {", ".join(logins) or "not listed"}.{where}',
+        "CONFIRMED: this email address is published in the public profile of the GitHub "
+        "account(s) named above, where anyone can search it — including people building spam "
+        "and phishing lists. If that account is yours, remove the address under Settings > "
+        "Emails and enable 'Keep my email addresses private'. IF IT IS NOT YOURS, that is the "
+        "more serious finding: someone else has put your address on their profile, which is "
+        "worth reporting to GitHub.",
         reproduce, metadata={"total_count": total, "accounts": logins})
 
 
@@ -947,6 +961,7 @@ if __name__ == "__main__":
         check_proxynova_credentials("test@example.com"),
         check_infostealer_by_username("john"),
         check_leakcheck("919876543210", "phone"),
+        check_github_email_exposure("torvalds@linux-foundation.org"),
         check_infostealer_by_ip("1.1.1.1"),
         check_employer_infostealer_exposure("infosys.com"),
         check_service_breach_history("adobe.com"),
@@ -965,6 +980,7 @@ if __name__ == "__main__":
         check_proxynova_credentials(FAKE_EMAIL),
         check_infostealer_by_username(FAKE_USER),
         check_leakcheck("918888777766", "phone"),
+        check_github_email_exposure(FAKE_EMAIL),
         check_infostealer_by_ip("203.0.113.77"),
         check_employer_infostealer_exposure("qqzzvvwwkkjjhhggffddss99-notreal.com"),
         check_service_breach_history("qqzzvvwwkkjjhhggffddss99-notreal.com"),

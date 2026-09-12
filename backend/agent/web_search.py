@@ -30,9 +30,14 @@ collision this tool exists to avoid.
 import concurrent.futures as cf
 import hashlib
 import html
+import ipaddress
 import json
 import os
+import queue
 import re
+import shlex
+import socket
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -43,27 +48,38 @@ from datetime import datetime, timezone
 UA = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/120.0 Safari/537.36")
 TIMEOUT = 20              # fetching a result page, which may legitimately be slow
-# Asking the search engine is a different budget. A throttling engine stalls the
-# connection rather than refusing it, so the full page timeout was spent twice
-# per attempt — one refused query cost 40s of waiting for an answer that was
-# never coming. An engine that has not replied in this long is not going to.
-SEARCH_TIMEOUT = 8
-# The secondary index runs only when the primary has already refused, so it is
-# not on the fast path and can be given room. It cold-starts slowly — the first
-# query costs several seconds, later ones answer in about one — and an 8s budget
-# cut it off mid-cold-start, turning a working fallback into a timeout.
-FALLBACK_TIMEOUT = 25
+# Asking the search engine is a different budget, and a MEASURED one. A
+# throttled DuckDuckGo does not refuse the connection: it holds it open for
+# exactly as long as the client is willing to wait and then serves a 202
+# "anomaly" page. Measured on this machine: a request given 15s answered in
+# 15.4s, and the same request given 30s answered in 30.3s — four times over,
+# on both endpoints. The wait is therefore pure loss: whatever budget is set
+# here is what a refusal costs, and nothing is learned by setting it higher.
+SEARCH_TIMEOUT = 6
+# The secondary index cold-starts slowly and its tail is long: measured 0.73s
+# when it answered and 30.5s when it did not. Since it is consulted on the
+# failure path — once per refused query — that tail was most of the stall. It
+# keeps room for a cold start and no more; a slower answer is reported as
+# "could not check", never as "nothing found".
+FALLBACK_TIMEOUT = 8
 MAX_RESULTS_PER_QUERY = 15
 MAX_PAGES_VERIFIED = 60
-THROTTLE_S = 2.5          # be a polite client of the search engine
-# A throttled engine cannot answer, and an unanswered query is reported as
-# "could not check" rather than "clear" — so a refusal is worth one short wait.
-# It is NOT worth a long one: the honest partial answer is available
-# immediately, and a scan that stalls for minutes per query to avoid saying
-# "incomplete" has chosen slowness over the thing the delay was meant to buy.
-# Each refused query costs at most the sum of these, and the unquoted variant
-# below usually succeeds on the first pass anyway.
-BLOCK_BACKOFF_S = (5,)
+# Queries are no longer run one after another (see search_exposures): waiting
+# out one engine's silence before asking the next question is where a refused
+# scan spent its minutes. THROTTLE_S is now a floor on the OUTBOUND RATE rather
+# than a sleep in the loop — at most one query leaves this process every
+# THROTTLE_S, however many are in flight — so politeness is preserved while the
+# waiting overlaps instead of accumulating.
+THROTTLE_S = 0.5
+SEARCH_WORKERS = 6        # queries in flight at once, rate-limited by THROTTLE_S
+# Retrying a refusal was measured to buy nothing. DuckDuckGo's throttle here is
+# applied to the client and it is persistent — every probe over a ten-minute
+# window was refused, each one stalling the full budget — so a backoff-and-retry
+# pass costs the sleep plus another full round of timeouts to rediscover the
+# same block. The honest partial answer ("could not check") is available
+# immediately, and the on-disk cache means a re-run resumes rather than repeats.
+# Kept as a knob: set it to (5,) to restore one retry pass.
+BLOCK_BACKOFF_S = ()
 
 # Pages that will match any identifier for uninteresting reasons, or that cannot
 # be verified because they render client-side.
@@ -135,15 +151,99 @@ class WebHit:
         return asdict(self)
 
 
-# ── search ──────────────────────────────────────────────────────────────────
+# ── search ────────────────────────────────────────────────────────────
+
+_ENDPOINTS = ("https://html.duckduckgo.com/html/",
+              "https://lite.duckduckgo.com/lite/")
+
+
+class _Refused(Exception):
+    """
+    The engine declined to search.
+
+    Deliberately distinct from searching and finding nothing. Everything in
+    this module hangs off that distinction, so it is given a name rather than
+    inferred from an empty list.
+    """
+
+
+class _Pacer:
+    """
+    A floor on the outbound query rate, shared across threads.
+
+    Queries now overlap, so politeness can no longer be a sleep in the caller's
+    loop. This hands out send slots THROTTLE_S apart: the waiting still
+    happens, but alongside other queries' network time instead of on top of it.
+    """
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._next = 0.0
+
+    def wait(self) -> None:
+        interval = THROTTLE_S
+        if interval <= 0:
+            return
+        with self._lock:
+            due = max(time.monotonic(), self._next)
+            self._next = due + interval
+        delay = due - time.monotonic()
+        if delay > 0:
+            time.sleep(delay)
+
+
+_PACER = _Pacer()
+_local = threading.local()
+
+
+def _race(tasks, budget: float):
+    """
+    Run tasks in parallel, yielding (result, error) as each finishes, and give
+    the whole group at most `budget` seconds.
+
+    The threads are daemons on purpose. The caller returns the moment it has an
+    answer it can use, and a thread still waiting out a throttled engine must
+    not then hold the process open behind it.
+    """
+    out: queue.Queue = queue.Queue()
+    for task in tasks:
+        def run(task=task):
+            try:
+                out.put((task(), None))
+            except BaseException as exc:            # reported, never raised here
+                out.put((None, exc))
+        threading.Thread(target=run, daemon=True).start()
+
+    deadline = time.monotonic() + budget
+    for _ in tasks:
+        try:
+            yield out.get(timeout=max(0.0, deadline - time.monotonic()))
+        except queue.Empty:
+            return
+
 
 def _ddg(query: str, endpoint: str) -> list[tuple[str, str]]:
-    """Return (url, title) pairs from a DuckDuckGo HTML endpoint."""
+    """
+    Return (url, title) pairs from a DuckDuckGo HTML endpoint.
+
+    Raises _Refused when the engine declined rather than searched. Telling
+    those apart is this function's real job. A throttled DuckDuckGo answers
+    202 with an ordinary-looking body, and urlopen does not raise on a 2xx — so
+    the refusal has to be read off the response. Missing that read it as a page
+    with no results on it, which is the one mistake this module cannot make.
+    """
     data = urllib.parse.urlencode({"q": query}).encode()
     req = urllib.request.Request(
         endpoint, data=data,
         headers={"User-Agent": UA, "Content-Type": "application/x-www-form-urlencoded"})
-    body = urllib.request.urlopen(req, timeout=SEARCH_TIMEOUT).read(500_000).decode("utf-8", "ignore")
+    try:
+        resp = urllib.request.urlopen(req, timeout=SEARCH_TIMEOUT)
+        status = resp.status
+        body = resp.read(500_000).decode("utf-8", "ignore")
+    except urllib.error.HTTPError as e:
+        raise _Refused(f"{endpoint} answered HTTP {e.code}") from e
+    if status in (202, 403, 429):
+        raise _Refused(f"{endpoint} answered HTTP {status}")
 
     out: list[tuple[str, str]] = []
     # html endpoint: <a class="result__a" href="URL">TITLE</a>
@@ -153,12 +253,17 @@ def _ddg(query: str, endpoint: str) -> list[tuple[str, str]]:
         # lite endpoint: plain anchors
         for m in re.finditer(r'<a[^>]+href="(https?://[^"]+)"[^>]*>(.*?)</a>', body, re.S):
             out.append((html.unescape(m.group(1)), _strip_tags(m.group(2))))
+
+    # Every link pointing back at the engine is its anomaly page ("please let
+    # us know: click here"), not a search with no results on it.
+    if out and all("duckduckgo.com" in u for u, _ in out):
+        raise _Refused(f"{endpoint} served its anomaly page")
     return out
 
 
 def _marginalia(query: str) -> list[tuple[str, str]]:
     """
-    Secondary index, used only when DuckDuckGo has refused.
+    Secondary index, used when DuckDuckGo has refused.
 
     Marginalia is a small independent crawler with a free, unauthenticated JSON
     API. Its coverage is a fraction of a major engine's and it is sometimes slow
@@ -173,17 +278,39 @@ def _marginalia(query: str) -> list[tuple[str, str]]:
             for r in data.get("results", []) if r.get("url")]
 
 
+def _secondary(query: str) -> list[tuple[str, str]]:
+    """
+    Ask the secondary index. Never raises; returns [] when it cannot answer.
+
+    Quotes are a DuckDuckGo phrase operator, and this index takes them as
+    literal characters and matches nothing, so they are dropped. The identifier
+    still has to appear on the fetched page, so that loosens the question
+    asked, never the answer accepted.
+
+    Asked at most once per query per search_web() call. Both query variants
+    strip to the same secondary query, so without this memo one refused query
+    paid this index's timeout twice over for an answer that cannot differ.
+    """
+    q = query.strip('"')
+    memo = getattr(_local, "secondary", None)
+    if memo is not None and q in memo:
+        return memo[q]
+    try:
+        out = _marginalia(q)
+    except Exception:
+        out = []
+    if memo is not None:
+        memo[q] = out
+    return out
+
+
 def _strip_tags(s: str) -> str:
     return html.unescape(re.sub(r"<[^>]+>", "", s)).strip()
 
 
 def _fallback_only(query: str) -> tuple[list[tuple[str, str]], str]:
     """Consult the secondary index alone, the primary having already refused."""
-    try:
-        alt = _marginalia(query.strip('"'))
-    except Exception:
-        alt = []
-    clean = _dedupe(alt)
+    clean = _dedupe(_secondary(query))
     if clean:
         _cache_put(query, clean, "ok")
         return clean, "ok"
@@ -225,107 +352,111 @@ def search_web(query: str, engine_state: dict | None = None) -> tuple[list[tuple
     if cached is not None:
         return cached
 
-    # An exact-phrase query is throttled far more readily than a bare one, and a
-    # throttled query cannot answer at all. Dropping the quotes costs nothing
-    # here: the engine is only ever used to nominate pages, and every page is
-    # then fetched and required to contain the identifier verbatim. A looser
-    # query therefore widens what is considered without loosening what is
-    # claimed — the extra results simply fail verification and are discarded.
-    # Throttling is applied to the client, not to the question, so once the
-    # primary has refused it will refuse every later query too — re-attempting
-    # it costs a timeout apiece and buys nothing. What must NOT be skipped is
-    # the secondary index: it is not throttled, and a primary refusal says
-    # nothing about whether the secondary can answer THIS query. Skipping it
-    # let one query the secondary happened not to cover suppress the rest of
-    # the run, including queries it would have answered.
-    if engine_state is not None and engine_state.get("blocked"):
-        return _fallback_only(query)
+    # Scopes the secondary index's memo to this one query (see _secondary).
+    _local.secondary = {}
+    try:
+        # Throttling is applied to the client, not to the question, so once the
+        # primary has refused it will refuse every later query too —
+        # re-attempting it costs a timeout apiece and buys nothing. What must
+        # NOT be skipped is the secondary index: it is not throttled, and a
+        # primary refusal says nothing about whether the secondary can answer
+        # THIS query. Skipping it let one query the secondary happened not to
+        # cover suppress the rest of the run, including queries it would have
+        # answered.
+        if engine_state is not None and engine_state.get("blocked"):
+            return _fallback_only(query)
 
-    unquoted = query.strip('"')
-    variants = [query] + ([unquoted] if unquoted != query else [])
+        # An exact-phrase query is throttled far more readily than a bare one,
+        # and a throttled query cannot answer at all. Dropping the quotes costs
+        # nothing here: the engine is only ever used to nominate pages, and
+        # every page is then fetched and required to contain the identifier
+        # verbatim. A looser query therefore widens what is considered without
+        # loosening what is claimed — the extra results simply fail
+        # verification and are discarded.
+        unquoted = query.strip('"')
+        variants = [query] + ([unquoted] if unquoted != query else [])
 
-    for backoff in (0,) + BLOCK_BACKOFF_S:
-        if backoff:
-            time.sleep(backoff)
-        for variant in variants:
-            results, status = _search_once(variant)
-            if status != "blocked":
-                _cache_put(query, results, status)
-                return results, status
+        for backoff in (0,) + tuple(BLOCK_BACKOFF_S):
+            if backoff:
+                time.sleep(backoff)
+            for variant in variants:
+                results, status = _search_once(variant)
+                if status != "blocked":
+                    _cache_put(query, results, status)
+                    return results, status
 
-    if engine_state is not None:
-        engine_state["blocked"] = True
-    return [], "blocked"
+        if engine_state is not None:
+            engine_state["blocked"] = True
+        return [], "blocked"
+    finally:
+        _local.secondary = None
 
 
 def _search_once(query: str) -> tuple[list[tuple[str, str]], str]:
     """One pass over the endpoints. Returns (results, status); never raises."""
-    blocked = False
-    for endpoint in ("https://html.duckduckgo.com/html/",
-                     "https://lite.duckduckgo.com/lite/"):
-        try:
-            hits = _ddg(query, endpoint)
-        except urllib.error.HTTPError as e:
-            # 202/429/403 is how DuckDuckGo throttles an automated client.
-            if e.code in (202, 403, 429):
-                blocked = True
-            continue
-        except Exception:
-            continue
+    _PACER.wait()
 
-        clean: list[tuple[str, str]] = []
-        seen: set[str] = set()
-        for url, title in hits:
-            host = urllib.parse.urlparse(url).netloc.lower().removeprefix("www.")
-            if not host or any(host == s or host.endswith("." + s) for s in _SKIP_HOSTS):
-                continue
-            key = url.split("#")[0]
-            if key in seen:
-                continue
-            seen.add(key)
-            clean.append((key, title))
-            if len(clean) >= MAX_RESULTS_PER_QUERY:
-                break
+    # The endpoints are asked CONCURRENTLY. Asked in turn, a throttled engine
+    # charged the full budget for each one over again, and measurement never
+    # found the second endpoint disagreeing with the first about whether this
+    # client is throttled: identical 202 anomaly pages, identical stall, on
+    # every probe. Concurrency spends that budget once instead of twice while
+    # still giving the second endpoint its say.
+    answers = 0
+    for hits, err in _race([lambda ep=ep: _ddg(query, ep) for ep in _ENDPOINTS],
+                           SEARCH_TIMEOUT + 2):
+        if err is not None:
+            continue
+        answers += 1
+        clean = _dedupe(hits)
         if clean:
             return clean, "ok"
 
-        # Every link pointed back at the engine: that is its anomaly page
-        # ("please let us know: click here"), not a search with no results.
-        if hits and all("duckduckgo.com" in u for u, _ in hits):
-            blocked = True
+    # Every endpoint that did not come back with a page it could parse counts
+    # as a refusal — a timeout, an HTTP error, an anomaly page and the group
+    # deadline alike. None of them is evidence of absence, and the single thing
+    # this module may never do is let one read as a clean result. Only a page
+    # that was actually served and actually parsed can say "nothing found".
+    refused = answers < len(_ENDPOINTS)
 
-    if blocked:
+    if refused:
         # The primary refused. Ask the secondary index before giving up — it is
         # unthrottled, and anything it returns is verified on the page exactly
         # as a primary result would be, so coverage widens without the standard
         # of proof moving.
-        try:
-            # Quotes are a DuckDuckGo phrase operator; this index treats them as
-            # literal characters and matches nothing. The identifier still has
-            # to appear on the fetched page, so dropping them loosens the
-            # question asked, never the answer accepted.
-            alt = _marginalia(query.strip('"'))
-        except Exception:
-            alt = []
-        clean = []
-        seen = set()
-        for url, title in alt:
-            host = urllib.parse.urlparse(url).netloc.lower().removeprefix("www.")
-            if not host or any(host == sk or host.endswith("." + sk) for sk in _SKIP_HOSTS):
-                continue
-            key = url.split("#")[0]
-            if key not in seen:
-                seen.add(key)
-                clean.append((key, title))
-            if len(clean) >= MAX_RESULTS_PER_QUERY:
-                break
+        clean = _dedupe(_secondary(query))
         if clean:
             return clean, "ok"
 
-    return [], ("blocked" if blocked else "empty")
+    return [], ("blocked" if refused else "empty")
 
 
 # ── query construction ──────────────────────────────────────────────────────
+
+def indian_mobile(raw) -> str | None:
+    """
+    The ten digits of an Indian mobile number, or None when this is not one.
+
+    Accepts the number bare, behind a trunk 0, or behind a +91 / 91 / 091 /
+    0091 country code — which is exactly the set of prefixes the page matcher
+    in verify_page understands, so every number this returns is a number that
+    can actually be recognised again on a page.
+
+    Everything else returns None and is never searched: landline and toll-free
+    ranges (which start 1-5, are shared and published, and whose STD prefixes
+    make "the last ten digits" a DIFFERENT number from the one written down),
+    other countries' numbers, and anything of an unexpected length. The tool
+    would rather not search a number than search a stranger's.
+    """
+    digits = re.sub(r"\D", "", str(raw or ""))
+    for prefix in ("0091", "091", "91", "0", ""):
+        if prefix and not digits.startswith(prefix):
+            continue
+        rest = digits[len(prefix):]
+        if len(rest) == 10 and rest[0] in "6789":
+            return rest
+    return None
+
 
 def build_queries(profile: dict) -> list[tuple[str, str, str]]:
     """
@@ -348,11 +479,19 @@ def build_queries(profile: dict) -> list[tuple[str, str, str]]:
         if "@" in addr:
             add(f'"{addr.lower()}"', addr.lower(), "email")
 
+    # A phone number is searched only when it can actually be identified as
+    # this user's. Taking the last ten digits of whatever was typed MANUFACTURES
+    # an identifier: "011-2345 6789" became 1123456789, "1800 123 4567" became
+    # 8001234567 and "+1 202 555 0173" became 2025550173 — three numbers
+    # belonging to somebody else, searched as if they were the user's, and a
+    # confirmed hit on one of them was then recorded as this user's exposure at
+    # the highest confidence tier. A false identifier is worse than a missing
+    # one, so a number that cannot be identified is not searched at all.
     for raw in split(profile.get("phone")) + split(profile.get("alt_phones")):
-        digits = "".join(c for c in raw if c.isdigit())[-10:]
-        if len(digits) == 10:
-            add(f'"{digits}"', digits, "phone")
-            add(f'"+91{digits}"', digits, "phone")
+        mobile = indian_mobile(raw)
+        if mobile:
+            add(f'"{mobile}"', mobile, "phone")
+            add(f'"+91{mobile}"', mobile, "phone")
 
     for upi in split(profile.get("upi_id")):
         if "@" in upi:
@@ -378,16 +517,54 @@ def _normalise(s: str) -> str:
     return re.sub(r"[^a-z0-9@.]+", "", s.lower())
 
 
+def is_safe_web_url(url: str) -> bool:
+    """
+    Validates that a URL is a legitimate public web destination and not an
+    internal/loopback address (SSRF mitigation).
+    """
+    try:
+        parsed = urllib.parse.urlparse(url)
+        if parsed.scheme not in ("http", "https"):
+            return False
+        hostname = (parsed.hostname or "").lower()
+        if not hostname:
+            return False
+        # Block localhost / loopback / local network names
+        if hostname in ("localhost", "127.0.0.1", "::1", "0.0.0.0") or hostname.endswith(".local"):
+            return False
+        # If it is an IP literal, verify it is not private, loopback, or reserved
+        try:
+            ip = ipaddress.ip_address(hostname)
+            if ip.is_loopback or ip.is_private or ip.is_link_local or ip.is_multicast or ip.is_reserved:
+                return False
+        except ValueError:
+            pass
+        # If DNS resolves to a private IP, reject
+        try:
+            for *_, sockaddr in socket.getaddrinfo(hostname, None):
+                ip = ipaddress.ip_address(sockaddr[0])
+                if ip.is_loopback or ip.is_private or ip.is_link_local or ip.is_multicast or ip.is_reserved:
+                    return False
+        except Exception:
+            # Offline test domain or unresolvable DNS
+            pass
+        return True
+    except Exception:
+        return False
+
+
 def verify_page(url: str, identifier: str, kind: str) -> tuple[bool, str, int | None, str]:
     """
     Fetch the page and look for the identifier in it.
 
     Returns (confirmed, matched_context, http_status, title).
     """
+    if not is_safe_web_url(url):
+        return False, "", None, ""
     try:
         req = urllib.request.Request(url, headers={"User-Agent": UA})
         resp = urllib.request.urlopen(req, timeout=TIMEOUT)
-        status = resp.status
+        status = getattr(resp, "status", getattr(resp, "code", 200))
         raw = resp.read(400_000).decode("utf-8", "ignore")
     except urllib.error.HTTPError as e:
         return False, "", e.code, ""
@@ -450,20 +627,40 @@ def search_exposures(profile: dict, max_workers: int = 16,
                          "shared by thousands and is never searched.")}
 
     # 1. Ask the web, remembering which queries the engine actually answered.
+    engine_state: dict = {"blocked": False}
+
+    def ask(query: str) -> tuple[list[tuple[str, str]], str]:
+        try:
+            return search_web(query, engine_state)
+        except Exception:
+            # A crash is not a clean sheet either. Anything that stops this
+            # query from being answered is reported as unanswered.
+            return [], "blocked"
+
+    # The first query runs ALONE, as a probe. It is the one that discovers
+    # whether the engine is answering at all, and firing the whole batch before
+    # that is known would pay a full network timeout PER QUERY to rediscover a
+    # single refusal — which is precisely where a throttled scan spent its
+    # minutes. Once the answer is known the rest overlap: if the primary is
+    # throttled they go straight to the secondary index, which is not
+    # throttled, and if it is answering they are paced by THROTTLE_S at the
+    # network layer, so the rate stays polite while the waiting stops
+    # accumulating.
+    answers: list[tuple[list[tuple[str, str]], str]] = [ask(queries[0][0])]
+    if len(queries) > 1:
+        with cf.ThreadPoolExecutor(min(len(queries) - 1, SEARCH_WORKERS)) as ex:
+            answers.extend(ex.map(ask, [q for q, _, _ in queries[1:]]))
+
     found: list[tuple[str, str, str, str, str]] = []   # query, ident, kind, url, title
     blocked_queries: list[str] = []
     answered = 0
-    engine_state: dict = {"blocked": False}
-    for query, ident, kind in queries:
-        results, status = search_web(query, engine_state)
+    for (query, ident, kind), (results, status) in zip(queries, answers):
         if status == "blocked":
             blocked_queries.append(query)
         else:
             answered += 1
         for url, title in results:
             found.append((query, ident, kind, url, title))
-        if not engine_state["blocked"]:
-            time.sleep(THROTTLE_S)
 
     # One page can answer for only one identifier; keep the first pairing.
     seen: set[tuple[str, str]] = set()
@@ -484,15 +681,16 @@ def search_exposures(profile: dict, max_workers: int = 16,
             query=query, identifier=ident, identifier_type=kind, url=url, domain=domain,
             title=page_title or title, http_status=status, confirmed=ok,
             matched_text=ctx, checked_at=_now(),
-            reproduce=f"curl -s -A '{UA[:24]}...' '{url}' | grep -i '{ident}'",
+            reproduce=f"curl -s -A {shlex.quote(UA[:24] + '...')} {shlex.quote(url)} | grep -i {shlex.quote(ident)}",
             note=("" if ok else
                   "The search engine returned this page, but the identifier was not present "
                   "in the HTML that was served. It may be rendered by JavaScript, behind a "
                   "login, or already removed — so nothing is claimed."))
 
     hits: list[WebHit] = []
-    with cf.ThreadPoolExecutor(max_workers) as ex:
-        hits.extend(ex.map(_one, todo))
+    if todo:
+        with cf.ThreadPoolExecutor(min(len(todo), max_workers)) as ex:
+            hits.extend(ex.map(_one, todo))
 
     # A username is not a unique identifier. Finding the string "nalinchamp" on
     # a page proves the string is there, not that it refers to this person —

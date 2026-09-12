@@ -36,7 +36,7 @@ async function restoreLatestAgentState() {
         const data = await resp.json();
         if (data && data.user_id && (data.exposures?.length || data.summary?.exposures_total)) {
             syncAgentToExposuresAndDashboard({ state: data });
-        } else if (window.__indianSources?.length && !state.agentState && !state.scanResults) {
+        } else {
             renderAgentExposures({ exposures: [] });
         }
     } catch(e) {}
@@ -395,61 +395,6 @@ function renderExposures(results) {
         });
     }
 
-    // Indian sources first — this is a DPDP Act product, so the domestic
-    // surface leads. Each carries its legal classification, because erasure
-    // is available against a people-search site and is NOT available against
-    // a court record or an MCA filing.
-    if (window.__indianSources?.length) {
-        const rank = { critical: 0, high: 1, medium: 2, low: 3 };
-        const erasable = { dpdp_erasure: 'DPDP s.12 — erasure available',
-                           dpdp_limited: 'Retention duty applies — dispute/correct only',
-                           statutory_publication: 'Statutory publication — erasure does not lie',
-                           judicial_record: 'Court record — needs a court application' };
-        [...window.__indianSources]
-            .sort((a, b) => (rank[a.severity] ?? 9) - (rank[b.severity] ?? 9))
-            .forEach(src => {
-                const servable = src.legal_class === 'dpdp_erasure';
-                cards.push(createExposureCard({
-                    title: src.name,
-                    source: 'broker',
-                    severity: src.severity || 'medium',
-                    domain: src.website,
-                    category: `${src.category} · India`,
-                    removalDifficulty: erasable[src.legal_class] || src.legal_class,
-                    optOutUrl: src.removal_url,
-                    type: servable ? 'Indian Source · Servable' : 'Indian Source · Not servable',
-                    companyName: src.name,
-                    companyEmail: '',
-                    noNotice: !servable,
-                }));
-            });
-    }
-
-    // Global directory context. These are CATEGORY HEURISTICS, not confirmed
-    // matches — "people-search sites of this kind typically hold records like
-    // yours". Previously this sliced the first 20 alphabetically, which handed
-    // an Indian user a screenful of Alabama court-record sites. Sort by
-    // likelihood, cap it, and label it honestly.
-    if (results.brokers?.high_risk) {
-        [...results.brokers.high_risk]
-            .sort((a, b) => (b.exposure_likelihood || 0) - (a.exposure_likelihood || 0))
-            .slice(0, 9)
-            .forEach(broker => {
-                cards.push(createExposureCard({
-                    title: broker.broker_name,
-                    source: 'broker',
-                    severity: broker.exposure_likelihood >= 0.80 ? 'medium' : 'low',
-                    domain: broker.website,
-                    category: broker.category,
-                    removalDifficulty: broker.removal_difficulty,
-                    optOutUrl: broker.opt_out_url,
-                    type: `Global directory · likely (${Math.round((broker.exposure_likelihood || 0) * 100)}%)`,
-                    companyName: broker.broker_name,
-                    companyEmail: broker.privacy_email || '',
-                }));
-            });
-    }
-
     if (cards.length === 0) {
         container.innerHTML = `<div class="glass-card empty-state"><div class="empty-icon">✅</div><h3>No Significant Exposures</h3><p>No critical data exposures were found for the provided identity.</p></div>`;
     } else {
@@ -572,7 +517,7 @@ function createInfostealerCard(exp) {
     card.innerHTML = `
         <div class="exposure-header">
             <span class="exposure-title">🚨 ${escapeHtml(exp.source_name || 'Info-stealer malware infection')}</span>
-            <span class="severity-badge ${severity}">${escapeHtml(severity)}</span>
+            <span class="severity-badge ${escapeHtml(severity)}">${escapeHtml(severity)}</span>
         </div>
         <div class="exposure-meta">Info-Stealer Infection${metaHtml}</div>
         <div class="stealer-lede">Every credential saved in this computer's browser was taken at once — not one site's password, all of them. These credentials are current, not historic, so a stolen session cookie can be replayed without any password at all.</div>
@@ -615,36 +560,47 @@ function createExposureCard(data) {
     let metaHtml = '';
     if (data.domain) metaHtml += `<span>${escapeHtml(data.domain)}</span>`;
     if (data.date) metaHtml += ` · <span>${escapeHtml(data.date)}</span>`;
-    if (data.pwnCount) metaHtml += ` · <span>${formatNumber(data.pwnCount)} records</span>`;
+    if (data.pwnCount) metaHtml += ` · <span>${escapeHtml(formatNumber(data.pwnCount))} records</span>`;
     if (data.category) metaHtml += ` · <span>${escapeHtml(data.category)}</span>`;
     if (data.removalDifficulty) metaHtml += ` · Removal: ${escapeHtml(data.removalDifficulty)}`;
 
     // A source that cannot lawfully be served must not offer a notice button.
+    //
+    // Every value below is third-party: companyName is a breach name from
+    // XposedOrNot or a LeakCheck source name, and the URLs come from a search
+    // engine or a Gravatar profile. So no button here carries an inline
+    // handler. The value goes into a data-* attribute and wireExposureCard()
+    // attaches the behaviour, because dataset values are read back by the DOM
+    // as plain strings and can never be parsed as code. It also fixes the
+    // benign case: a breach named Domino's Pizza used to render a dead button,
+    // since the apostrophe closed the JS string literal.
+    const optOutUrl = safeUrl(data.optOutUrl);
+    const profileUrl = safeUrl(data.profileUrl);
     let actionsHtml = '';
     if (data.isCandidate) {
         actionsHtml = `
             <div class="cand-actions" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-                <button class="cand-btn yes" onclick="confirmCandidateCard('${escapeHtml(data.exposureId)}', true, this)">✓ Yes, mine</button>
-                <button class="cand-btn no" onclick="confirmCandidateCard('${escapeHtml(data.exposureId)}', false, this)">✗ Not me</button>
-                ${data.profileUrl ? `<a href="${escapeHtml(data.profileUrl)}" target="_blank" class="cand-link" style="margin-left:6px;">View Profile ↗</a>` : ''}
+                <button class="cand-btn yes" data-act="confirm" data-exposure-id="${escapeHtml(data.exposureId)}" data-mine="1">✓ Yes, mine</button>
+                <button class="cand-btn no" data-act="confirm" data-exposure-id="${escapeHtml(data.exposureId)}" data-mine="0">✗ Not me</button>
+                ${profileUrl ? `<a href="${escapeHtml(profileUrl)}" target="_blank" rel="noopener noreferrer" class="cand-link" style="margin-left:6px;">View Profile ↗</a>` : ''}
             </div>
         `;
     } else if (data.noNotice) {
         actionsHtml = `<span class="exposure-nonservable">Erasure not available — see basis</span>`;
-        if (data.optOutUrl) {
-            actionsHtml += `<a href="${escapeHtml(data.optOutUrl)}" target="_blank" class="exposure-action-btn danger" style="margin-left:8px;">Opt-Out Link ↗</a>`;
+        if (optOutUrl) {
+            actionsHtml += `<a href="${escapeHtml(optOutUrl)}" target="_blank" rel="noopener noreferrer" class="exposure-action-btn danger" style="margin-left:8px;">Opt-Out Link ↗</a>`;
         }
     } else {
-        actionsHtml = `<button class="exposure-action-btn" onclick="generateNoticeForExposure('${escapeHtml(data.companyName || '')}', '${escapeHtml(data.companyEmail || '')}')">Generate Legal Notice</button>`;
-        if (data.optOutUrl) {
-            actionsHtml += `<a href="${escapeHtml(data.optOutUrl)}" target="_blank" class="exposure-action-btn danger">Opt-Out Link ↗</a>`;
+        actionsHtml = `<button class="exposure-action-btn" data-act="notice" data-company-name="${escapeHtml(data.companyName || '')}" data-company-email="${escapeHtml(data.companyEmail || '')}">Generate Legal Notice</button>`;
+        if (optOutUrl) {
+            actionsHtml += `<a href="${escapeHtml(optOutUrl)}" target="_blank" rel="noopener noreferrer" class="exposure-action-btn danger">Opt-Out Link ↗</a>`;
         }
     }
 
     card.innerHTML = `
         <div class="exposure-header">
             <span class="exposure-title">${escapeHtml(data.title)}</span>
-            <span class="severity-badge ${data.severity}">${data.severity}</span>
+            <span class="severity-badge ${escapeHtml(data.severity)}">${escapeHtml(data.severity)}</span>
         </div>
         <div class="exposure-meta">${escapeHtml(data.type)}${metaHtml ? ' · ' + metaHtml : ''}</div>
         ${data.description ? `<div class="exposure-desc">${escapeHtml(data.description)}</div>` : ''}
@@ -652,7 +608,23 @@ function createExposureCard(data) {
         <div class="exposure-actions">${actionsHtml}</div>
     `;
 
+    wireExposureCard(card);
     return card;
+}
+
+/* The Agent tab's pattern, applied to the exposure cards: read the value back
+   out of dataset and call the handler directly. Nothing untrusted is ever
+   compiled as JavaScript, so quotes, backslashes and </script> in a breach name
+   are all just characters. */
+function wireExposureCard(card) {
+    card.querySelectorAll('button[data-act="confirm"]').forEach(btn => {
+        btn.addEventListener('click', () =>
+            confirmCandidateCard(btn.dataset.exposureId, btn.dataset.mine === '1', btn));
+    });
+    card.querySelectorAll('button[data-act="notice"]').forEach(btn => {
+        btn.addEventListener('click', () =>
+            generateNoticeForExposure(btn.dataset.companyName || '', btn.dataset.companyEmail || ''));
+    });
 }
 
 window.confirmCandidateCard = async function(exposureId, isMine, btn) {
@@ -871,7 +843,9 @@ function renderComplianceRequests(requests) {
     const container = document.getElementById('compliance-content');
 
     if (!requests.length) {
-        container.innerHTML = `<div class="glass-card empty-state"><div class="empty-icon">⏱️</div><h3>No Active Requests</h3><p>Generate and dispatch a legal notice to begin tracking statutory compliance deadlines.</p><button class="action-btn primary-action" onclick="navigateTo('legal')">Go to Legal Studio</button></div>`;
+        container.innerHTML = `<div class="glass-card empty-state"><div class="empty-icon">⏱️</div><h3>No Active Requests</h3><p>Generate and dispatch a legal notice to begin tracking statutory compliance deadlines.</p><button class="action-btn primary-action" data-act="goto-legal">Go to Legal Studio</button></div>`;
+        const goLegal = container.querySelector('button[data-act="goto-legal"]');
+        if (goLegal) goLegal.addEventListener('click', () => navigateTo('legal'));
         return;
     }
 
@@ -885,7 +859,7 @@ function renderComplianceRequests(requests) {
             return `
                 <div class="timeline-item ${isCompleted ? 'completed' : ''} ${isNext ? 'active' : ''}">
                     <span class="timeline-label">${escapeHtml(ms.label)}</span>
-                    <span class="timeline-date">${new Date(ms.date).toLocaleDateString()} (Day ${ms.day})</span>
+                    <span class="timeline-date">${escapeHtml(new Date(ms.date).toLocaleDateString())} (Day ${escapeHtml(ms.day)})</span>
                 </div>
             `;
         }).join('');
@@ -894,38 +868,43 @@ function renderComplianceRequests(requests) {
             <div class="compliance-request-card">
                 <div class="compliance-header">
                     <span class="compliance-title">${escapeHtml(req.company_name)}</span>
-                    <span class="compliance-status ${req.status}">${req.status}</span>
+                    <span class="compliance-status ${escapeHtml(req.status)}">${escapeHtml(req.status)}</span>
                 </div>
                 <div class="compliance-meta">
                     <div class="compliance-meta-item">
                         <div class="compliance-meta-label">Jurisdiction</div>
-                        <div class="compliance-meta-value">${req.jurisdiction.toUpperCase()}</div>
+                        <div class="compliance-meta-value">${escapeHtml(String(req.jurisdiction || '').toUpperCase())}</div>
                     </div>
                     <div class="compliance-meta-item">
                         <div class="compliance-meta-label">Days Remaining</div>
-                        <div class="compliance-meta-value" style="color: ${req.is_overdue ? 'var(--accent-danger)' : 'var(--text-primary)'}">${req.is_overdue ? 'OVERDUE' : req.days_remaining + ' days'}</div>
+                        <div class="compliance-meta-value" style="color: ${req.is_overdue ? 'var(--accent-danger)' : 'var(--text-primary)'}">${req.is_overdue ? 'OVERDUE' : escapeHtml(req.days_remaining) + ' days'}</div>
                     </div>
                     <div class="compliance-meta-item">
                         <div class="compliance-meta-label">Reference</div>
-                        <div class="compliance-meta-value" style="font-family: var(--font-mono); font-size: 0.75rem;">${req.notice_reference}</div>
+                        <div class="compliance-meta-value" style="font-family: var(--font-mono); font-size: 0.75rem;">${escapeHtml(req.notice_reference)}</div>
                     </div>
                     <div class="compliance-meta-item">
                         <div class="compliance-meta-label">Request ID</div>
-                        <div class="compliance-meta-value" style="font-family: var(--font-mono); font-size: 0.75rem;">${req.request_id}</div>
+                        <div class="compliance-meta-value" style="font-family: var(--font-mono); font-size: 0.75rem;">${escapeHtml(req.request_id)}</div>
                     </div>
                 </div>
                 <div class="compliance-progress-bar">
-                    <div class="compliance-progress-fill" style="width: ${req.progress_pct}%; background: ${progressColor};"></div>
+                    <div class="compliance-progress-fill" style="width: ${Number(req.progress_pct) || 0}%; background: ${progressColor};"></div>
                 </div>
                 <div class="compliance-timeline">${milestonesHtml}</div>
                 <div class="compliance-actions">
-                    <button class="exposure-action-btn" onclick="updateRequestStatus('${req.request_id}', 'acknowledged', 'Company acknowledged receipt')">Mark Acknowledged</button>
-                    <button class="exposure-action-btn" onclick="updateRequestStatus('${req.request_id}', 'completed', 'Data deletion confirmed')">Mark Completed</button>
-                    <button class="exposure-action-btn danger" onclick="updateRequestStatus('${req.request_id}', 'escalated', 'Escalated to ${req.jurisdiction === 'dpdp' ? 'DPBI' : 'Supervisory Authority'}')">Escalate</button>
+                    <button class="exposure-action-btn" data-act="req-status" data-req-id="${escapeHtml(req.request_id)}" data-status="acknowledged" data-note="Company acknowledged receipt">Mark Acknowledged</button>
+                    <button class="exposure-action-btn" data-act="req-status" data-req-id="${escapeHtml(req.request_id)}" data-status="completed" data-note="Data deletion confirmed">Mark Completed</button>
+                    <button class="exposure-action-btn danger" data-act="req-status" data-req-id="${escapeHtml(req.request_id)}" data-status="escalated" data-note="Escalated to ${req.jurisdiction === 'dpdp' ? 'DPBI' : 'Supervisory Authority'}">Escalate</button>
                 </div>
             </div>
         `;
     }).join('');
+
+    container.querySelectorAll('button[data-act="req-status"]').forEach(btn => {
+        btn.addEventListener('click', () =>
+            updateRequestStatus(btn.dataset.reqId, btn.dataset.status, btn.dataset.note));
+    });
 }
 
 async function updateRequestStatus(requestId, status, note) {
@@ -1002,10 +981,44 @@ async function runBenchmark() {
 }
 
 // ═══ Utilities ══════════════════════════════════════════════════════════════
+/* Escapes the five characters that can change the meaning of HTML text OR of a
+   double-quoted attribute value. The previous textContent -> innerHTML form
+   escaped only & < >, leaving " and ' intact, so any third-party string could
+   close the attribute it sat in and open new ones.
+
+   This is sufficient for TEXT and for QUOTED ATTRIBUTE positions and nowhere
+   else. It is deliberately NOT sufficient for two positions, which is why no
+   third-party value in this file is rendered into either:
+     - inside inline handler JavaScript (onclick="..."): the HTML parser decodes
+       &#39; back to ' before the JS parser runs, so escaping cannot secure a JS
+       string literal. Use data-* attributes + addEventListener instead.
+     - inside an href/src URL: the scheme is not a quoting problem. Use
+       safeUrl() below. */
 function escapeHtml(str) {
-    const div = document.createElement('div');
-    div.textContent = str || '';
-    return div.innerHTML;
+    return String(str == null ? '' : str).replace(/[&<>"']/g,
+        c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+/* A URL from a search engine, a Gravatar profile or a broker record is
+   third-party data, and escaping does nothing to `javascript:alert(1)` — the
+   parser decodes entities before the navigation happens. Only http and https
+   may reach an href; every other scheme, and anything not recognisable as an
+   absolute web URL, becomes '' and the caller then renders no link at all. */
+function safeUrl(value) {
+    const raw = String(value == null ? '' : value).trim();
+    if (!raw) return '';
+    // Browsers strip control characters and whitespace while parsing a scheme,
+    // so "java\tscript:x" still navigates. Test a stripped copy, and accept the
+    // value only if that stripped copy is plainly http(s).
+    const probe = raw.replace(/[\u0000-\u0020\u007f-\u00a0\u2028\u2029]/g, '').toLowerCase();
+    if (!/^https?:\/\//.test(probe)) return '';
+    // Percent-encode the characters that have structural meaning in HTML. They
+    // are not legal in a URL unencoded anyway, and encoding them here means the
+    // returned value cannot break out of an attribute even if a future caller
+    // forgets to escape it. The link still works.
+    const ENC = { '"': '%22', "'": '%27', '<': '%3C', '>': '%3E', '`': '%60' };
+    return raw.replace(/["'<>`\s]/g, c => ENC[c] ||
+        '%' + c.charCodeAt(0).toString(16).toUpperCase().padStart(2, '0'));
 }
 
 function formatNumber(n) {
@@ -1214,7 +1227,7 @@ function agentRender(msg) {
         ['High risk', s.high_risk],
         ['Notices sent', s.requests_submitted],
         ['Verified removed', s.removals_verified],
-    ].map(([l, v]) => `<div class="risk-stat"><div class="risk-stat-v">${v}</div><div class="risk-stat-l">${l}</div></div>`).join('');
+    ].map(([l, v]) => `<div class="risk-stat"><div class="risk-stat-v">${agEsc(v)}</div><div class="risk-stat-l">${agEsc(l)}</div></div>`).join('');
 
     agEl('agent-summary').textContent = msg.summary || '';
 
@@ -1225,13 +1238,13 @@ function agentRender(msg) {
         panel.hidden = false;
         agEl('approval-list').innerHTML = Agent.drafted.map((r, i) => `
             <div class="approval-item">
-                <input type="checkbox" id="apv-${i}" value="${r.id}" checked>
+                <input type="checkbox" id="apv-${i}" value="${agEsc(r.id)}" checked>
                 <div class="approval-body">
                     <div class="approval-head">
                         <span class="approval-broker">${agEsc(r.source_name)}</span>
                         <span class="approval-statute">${agEsc(r.statute)}</span>
                     </div>
-                    <div class="approval-meta">Ref ${agEsc(r.reference_id)} · respond within ${r.deadline_days} days</div>
+                    <div class="approval-meta">Ref ${agEsc(r.reference_id)} · respond within ${agEsc(r.deadline_days)} days</div>
                     <button class="approval-toggle" data-t="${i}">Read the notice</button>
                     <pre class="approval-text" id="apt-${i}" hidden>${agEsc(r.request_text)}</pre>
                 </div>
@@ -1268,9 +1281,9 @@ function agentRender(msg) {
                     <div class="plan-item">
                         <div class="plan-item-head">
                             <span class="plan-src">${agEsc(it.source)}</span>
-                            ${it.effort_minutes ? `<span class="plan-min">~${it.effort_minutes} min</span>` : ''}
+                            ${it.effort_minutes ? `<span class="plan-min">~${agEsc(it.effort_minutes)} min</span>` : ''}
                             <span class="ev-badge ev-${agEsc(it.evidence_class || '')}">${agEsc((it.evidence_class || '').replace('_', ' '))}</span>
-                            ${it.url ? `<a class="plan-link" href="${agEsc(it.url)}" target="_blank" rel="noopener noreferrer">Open removal page ↗</a>` : ''}
+                            ${safeUrl(it.url) ? `<a class="plan-link" href="${agEsc(safeUrl(it.url))}" target="_blank" rel="noopener noreferrer">Open removal page ↗</a>` : ''}
                         </div>
                         ${it.steps && it.steps.length
                             ? `<ol class="plan-steps">${it.steps.map(x => `<li>${agEsc(x)}</li>`).join('')}</ol>`
@@ -1505,42 +1518,14 @@ function renderAgentExposures(st) {
             profileUrl: d.url || '',
             noNotice: isNotServable,
             isCandidate: isCand,
+            isIndian: !!(
+                d.is_indian ||
+                (domain && (domain.endsWith('.in') || domain.includes('.in/'))) ||
+                (window.__indianSources?.some(s => (s.name || '').toLowerCase() === (exp.source_name || '').toLowerCase()))
+            ),
         });
         cards.push(card);
     });
-
-    // 2. Render all 51 monitored Indian fiduciaries & threat surface
-    if (window.__indianSources?.length) {
-        const rank = { critical: 0, high: 1, medium: 2, low: 3 };
-        const erasable = {
-            dpdp_erasure: 'DPDP s.12 — erasure available',
-            dpdp_limited: 'Retention duty applies — dispute/correct only',
-            statutory_publication: 'Statutory publication — erasure does not lie',
-            judicial_record: 'Court record — needs a court application'
-        };
-        const activeNames = new Set(exposures.map(e => (e.source_name || '').toLowerCase()));
-
-        [...window.__indianSources]
-            .filter(src => !activeNames.has((src.name || '').toLowerCase()))
-            .sort((a, b) => (rank[a.severity] ?? 9) - (rank[b.severity] ?? 9))
-            .forEach(src => {
-                const servable = src.legal_class === 'dpdp_erasure';
-                cards.push(createExposureCard({
-                    title: src.name,
-                    source: 'broker',
-                    severity: src.severity || 'medium',
-                    domain: src.website,
-                    category: `${src.category} · India`,
-                    removalDifficulty: erasable[src.legal_class] || src.legal_class,
-                    optOutUrl: src.removal_url,
-                    type: servable ? 'Indian Registry · Servable' : 'Indian Registry · Statutory Protection',
-                    companyName: src.name,
-                    companyEmail: '',
-                    noNotice: !servable,
-                    isIndian: true,
-                }));
-            });
-    }
 
     const ordered = urgent.concat(cards);
     if (ordered.length === 0) {
@@ -1548,6 +1533,40 @@ function renderAgentExposures(st) {
     } else {
         ordered.forEach(c => container.appendChild(c));
     }
+}
+
+function renderIndianSourcesDirectory() {
+    const container = document.getElementById('indian-registry-grid');
+    if (!container || !window.__indianSources?.length) return;
+    container.innerHTML = '';
+    const rank = { critical: 0, high: 1, medium: 2, low: 3 };
+    const erasable = {
+        dpdp_erasure: 'DPDP s.12 — erasure available',
+        dpdp_limited: 'Retention duty applies — dispute/correct only',
+        statutory_publication: 'Statutory publication — erasure does not lie',
+        judicial_record: 'Court record — needs a court application'
+    };
+
+    [...window.__indianSources]
+        .sort((a, b) => (rank[a.severity] ?? 9) - (rank[b.severity] ?? 9))
+        .forEach(src => {
+            const servable = src.legal_class === 'dpdp_erasure';
+            const card = createExposureCard({
+                title: src.name,
+                source: 'broker',
+                severity: src.severity || 'medium',
+                domain: src.website,
+                category: `${src.category} · India`,
+                removalDifficulty: erasable[src.legal_class] || src.legal_class,
+                optOutUrl: src.removal_url,
+                type: servable ? 'Reference Directory · Servable' : 'Reference Directory · Statutory Exemption',
+                companyName: src.name,
+                companyEmail: '',
+                noNotice: !servable,
+                isIndian: true,
+            });
+            container.appendChild(card);
+        });
 }
 
 /* ── Profile Sync Across Tabs ────────────────────────────────────────────── */
@@ -1620,10 +1639,8 @@ function prefillLegalForm() {
     if (uaddr && !uaddr.value && city) uaddr.value = city;
 }
 
-function agEsc(v) {
-    return String(v == null ? '' : v).replace(/[&<>"']/g,
-        c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-}
+// Kept as the name the Agent tab already uses; one escaper, one behaviour.
+function agEsc(v) { return escapeHtml(v); }
 
 async function agentRun() {
     const profile = agProfile();
@@ -1687,6 +1704,7 @@ async function loadIndianSources() {
     try {
         const d = await (await fetch('/api/sources/indian')).json();
         window.__indianSources = d.sources || [];
+        renderIndianSourcesDirectory();
     } catch (e) { window.__indianSources = []; }
 }
 
@@ -1726,7 +1744,7 @@ function renderCandidates(st) {
                 <span class="cand-handle">@${agEsc(e.record_id)}</span>
                 <span class="cand-risk risk-${agEsc(riskClass)}">${agEsc(riskLabel)}</span>
                 ${d.handle_source ? `<span class="cand-source">from ${agEsc(d.handle_source.replace('_', ' '))}</span>` : ''}
-                ${d.url ? `<a class="cand-link" href="${agEsc(d.url)}" target="_blank" rel="noopener noreferrer">view ↗</a>` : ''}
+                ${safeUrl(d.url) ? `<a class="cand-link" href="${agEsc(safeUrl(d.url))}" target="_blank" rel="noopener noreferrer">view ↗</a>` : ''}
                 <span class="cand-actions">
                     <button class="cand-btn yes" data-id="${agEsc(e.id)}" data-mine="1">Yes, mine</button>
                     <button class="cand-btn no"  data-id="${agEsc(e.id)}" data-mine="0">Not me</button>

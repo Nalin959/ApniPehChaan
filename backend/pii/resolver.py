@@ -289,7 +289,25 @@ class IdentityResolver:
             # matched nothing, while 9198765432 and 8765432 — two different
             # numbers — both collapsed to 8765432 and matched each other.
             digits = re.sub(r'\D', '', value)
-            return digits[-10:] if len(digits) >= 10 else digits
+            # Fewer than ten digits is not a phone number, and must not be
+            # treated as one: "456" == "456" was scoring a definite identity
+            # match, and phone is a STRONG identifier, so a three-digit
+            # fragment was enough to attribute a record to someone.
+            if len(digits) < 10:
+                return ""
+            # Keep a NON-Indian country code, so two numbers sharing their last
+            # ten digits but belonging to different countries do not collide:
+            # +91 98765 43210 and +1 987 654 3210 are different people and were
+            # matching as "definite".
+            #
+            # India's own 91 is dropped, because this is an Indian product and
+            # the same person writes their number both ways — 9876543210 and
+            # +91 98765 43210 must still match each other.
+            if len(digits) > 10:
+                trunk = digits[:-10].lstrip("0")
+                if trunk and trunk != "91":
+                    return f"{trunk}-{digits[-10:]}"
+            return digits[-10:]
         elif field == "date_of_birth":
             # One date, many renderings: 1994-03-11, 11/03/1994, 11-03-1994.
             # Compared as an ISO date so the format cannot decide the answer.

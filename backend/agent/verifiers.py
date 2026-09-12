@@ -349,20 +349,52 @@ def check_xposedornot(email: str) -> Evidence:
         return Evidence("xposedornot_breached_account", email, url, _now(), None, "unavailable",
                         str(e), "Could not reach the service; nothing is claimed.", reproduce)
 
-    # A clean address comes back as an Error/Not found body with HTTP 200.
-    if isinstance(data, dict) and data.get("Error"):
-        return Evidence("xposedornot_breached_account", email, url, _now(), status, "clear",
-                        f"The service reports: {data.get('Error')}.",
-                        "CONFIRMED CLEAR by this dataset: the address does not appear in any "
-                        "breach XposedOrNot indexes. Other datasets may still hold it.",
+    # A clean address comes back with an Error body saying "not found". ONLY
+    # that phrasing means clear. Any other error — a rate limit, an outage — is
+    # the service declining to answer, and reading it as "no breaches found"
+    # would tell somebody they are clean at the exact moment the check stopped
+    # working. The record would even quote the rate-limit text under the words
+    # CONFIRMED CLEAR.
+    err = str((data or {}).get("Error") or "") if isinstance(data, dict) else ""
+    if err:
+        if "not found" in err.lower():
+            return Evidence("xposedornot_breached_account", email, url, _now(), status, "clear",
+                            f"The service reports: {err}.",
+                            "CONFIRMED CLEAR by this dataset: the address does not appear in any "
+                            "breach XposedOrNot indexes. Other datasets may still hold it.",
+                            reproduce)
+        return Evidence("xposedornot_breached_account", email, url, _now(), status, "unavailable",
+                        f"The service declined to answer: {err}.",
+                        "NOT CHECKED. The service returned an error rather than a result, so "
+                        "nothing is claimed either way — this is not a clean bill of health.",
                         reproduce)
 
-    exposed = ((data or {}).get("ExposedBreaches") or {}).get("breaches_details") or []
-    if not exposed:
+    # A well-formed answer always carries the breach container. Its absence is
+    # schema drift or a partial outage, not an empty result set.
+    if not isinstance(data, dict) or "ExposedBreaches" not in data:
+        return Evidence("xposedornot_breached_account", email, url, _now(), status, "unavailable",
+                        "The response did not contain the expected breach container.",
+                        "NOT CHECKED. The service answered in a shape this check does not "
+                        "recognise, so nothing is claimed either way.",
+                        reproduce)
+
+    exposed = (data.get("ExposedBreaches") or {}).get("breaches_details") or []
+    pastes = (data.get("ExposedPastes") or {}).get("pastes_details") or []
+    if not exposed and not pastes:
         return Evidence("xposedornot_breached_account", email, url, _now(), status, "clear",
-                        "The service returned no breach records for this address.",
+                        "The service returned no breach or paste records for this address.",
                         "CONFIRMED CLEAR by this dataset. Other datasets may still hold it.",
                         reproduce)
+    if not exposed and pastes:
+        # Indexed in the paste corpus but no named breach. Previously read as
+        # clear, because only ExposedBreaches was ever inspected.
+        return Evidence(
+            "xposedornot_breached_account", email, url, _now(), status, "hit",
+            f"XposedOrNot lists this address in {len(pastes)} paste dump(s).",
+            "CONFIRMED: this address appears in pasted credential dumps indexed by this "
+            "dataset, though not in a named corporate breach. Rotate any password reused "
+            "across those accounts and turn on two-factor authentication.",
+            reproduce, metadata={"pastes": pastes})
 
     names = [b.get("breach", "") for b in exposed if b.get("breach")]
     return Evidence(
@@ -410,7 +442,20 @@ def check_infostealer(email: str) -> Evidence:
         return Evidence("infostealer_infection", email, url, _now(), None, "unavailable",
                         str(e), "Could not reach the service; nothing is claimed.", reproduce)
 
-    stealers = (data or {}).get("stealers") or []
+    # Same discipline: an error body is not an absence of infections.
+    if not isinstance(data, dict) or ("stealers" not in data and "message" not in data):
+        return Evidence("infostealer_infection", email, url, _now(), status, "unavailable",
+                        f"Unexpected response shape: {str(data)[:200]}",
+                        "NOT CHECKED. The service answered in a shape this check does not "
+                        "recognise, so nothing is claimed either way.", reproduce)
+    if isinstance(data, dict) and data.get("error"):
+        return Evidence("infostealer_infection", email, url, _now(), status, "unavailable",
+                        f"The service declined to answer: {data.get('error')}",
+                        "NOT CHECKED. The service returned an error rather than a result, so "
+                        "nothing is claimed either way — this is not a clean bill of health.",
+                        reproduce)
+
+    stealers = data.get("stealers") or []
     if not stealers:
         return Evidence("infostealer_infection", email, url, _now(), status, "clear",
                         (data or {}).get("message", "No infection associated with this address."),

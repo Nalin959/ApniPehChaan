@@ -51,6 +51,33 @@ def section(name):
     print(f"\n{BOLD}{CYAN}━━━ {name} ━━━{RESET}")
 
 
+class _FakeResponse:
+    """
+    Stands in for what urlopen returns, so a test can serve a page or an API
+    body without touching the network.
+
+    Stubbing stops HERE and goes no deeper. Everything above this line — the
+    parsing, the digit-run matching, the promotion rules, the clear/unavailable
+    decision — is the product's own code running for real. Several tests in
+    this file used to re-implement that logic in the test body instead, which
+    meant they passed no matter what the product did: a copy of the matcher was
+    being checked against a copy of the rules.
+    """
+
+    def __init__(self, body, status=200):
+        self._body = body.encode() if isinstance(body, str) else body
+        self.status = status
+
+    def read(self, amount=None):
+        return self._body
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # Test Suite
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -85,57 +112,83 @@ def test_open_web_search():
     test("A name alone produces no query", empty == [], f"got {empty}")
 
     # ── the phone matcher, which is where a false positive would come from ──
-    import re as _re
+    # These drive ws.verify_page itself. They used to paste the product's regex
+    # and comparison into the test body and check THAT — so replacing
+    # verify_page with a stub that matched every page still passed all nine,
+    # including the four that assert a page does NOT match. Only the fetch is
+    # stubbed now; the matching under test is the product's.
+    import urllib.request as _urlreq
+    _real_urlopen = _urlreq.urlopen
+    _real_search_web = ws.search_web
 
-    def match(text, ident="9876543210"):
-        for m in _re.finditer(r"(?<![\d])\+?\d[\d\s\-().]{6,20}\d(?![\d])", text):
-            d = _re.sub(r"\D", "", m.group(0))
-            if len(d) > 13:
-                continue
-            if d == ident or (d.endswith(ident) and d[:-len(ident)] in ("0", "91", "091", "0091")):
-                return True
-        return False
+    def _serve(text):
+        page = f"<html><head><title>Result page</title></head><body>{text}</body></html>"
+        return lambda req, timeout=None: _FakeResponse(page)
 
-    test("Bare 10-digit mobile matches", match("call 9876543210 now"))
-    test("Spaced mobile matches (98765 43210)", match("Mobile: 98765 43210"))
-    test("+91 mobile matches", match("call +919876543210"))
-    test("Hyphenated +91 mobile matches", match("call +91-98765-43210"))
-    test("Trunk-prefixed mobile matches", match("dial 09876543210"))
+    def matches(text, ident="9876543210"):
+        _urlreq.urlopen = _serve(text)
+        confirmed, _ctx, _status, _title = ws.verify_page("https://page.test/x", ident, "phone")
+        return confirmed
 
-    # Digits from unrelated numbers must never be joined into a match.
-    test("Digits split across unrelated numbers do NOT match",
-         not match("Order 1234567 placed. Invoice 8909876 total 543210 rupees."))
-    test("A row of unrelated figures does NOT match",
-         not match("figures 1234567 8909876 543210 listed"))
-    test("A longer number containing the digits does NOT match",
-         not match("Ref 129876543210456"))
-    test("A non-country prefix does NOT match", not match("txn 559876543210"))
+    try:
+        test("Bare 10-digit mobile matches", matches("call 9876543210 now"))
+        test("Spaced mobile matches (98765 43210)", matches("Mobile: 98765 43210"))
+        test("+91 mobile matches", matches("call +919876543210"))
+        test("Hyphenated +91 mobile matches", matches("call +91-98765-43210"))
+        test("Trunk-prefixed mobile matches", matches("dial 09876543210"))
 
-    # ── a username is not unique, so a web hit on one is never a finding ──
-    hits = [
-        ws.WebHit(query='"jsmith"', identifier="jsmith", identifier_type="username",
-                  url="https://example.com/a", domain="example.com", title="", http_status=200,
-                  confirmed=True, matched_text="jsmith", checked_at="now", reproduce=""),
-        ws.WebHit(query='"me@x.com"', identifier="me@x.com", identifier_type="email",
-                  url="https://example.com/b", domain="example.com", title="", http_status=200,
-                  confirmed=True, matched_text="me@x.com", checked_at="now", reproduce=""),
-        ws.WebHit(query='"jsmith"', identifier="jsmith", identifier_type="username",
-                  url="https://example.com/b", domain="example.com", title="", http_status=200,
-                  confirmed=True, matched_text="jsmith", checked_at="now", reproduce=""),
-    ]
-    UNIQUE = {"email", "phone", "upi", "pan"}
-    unique_pages = {h.url for h in hits if h.confirmed and h.identifier_type in UNIQUE}
-    for h in hits:
-        if h.confirmed and h.identifier_type == "username" and h.url not in unique_pages:
-            h.confirmed = False
+        # Digits from unrelated numbers must never be joined into a match.
+        test("Digits split across unrelated numbers do NOT match",
+             not matches("Order 1234567 placed. Invoice 8909876 total 543210 rupees."))
+        test("A row of unrelated figures does NOT match",
+             not matches("figures 1234567 8909876 543210 listed"))
+        test("A longer number containing the digits does NOT match",
+             not matches("Ref 129876543210456"))
+        test("A non-country prefix does NOT match", not matches("txn 559876543210"))
 
-    by_url = {(h.url, h.identifier_type): h.confirmed for h in hits}
-    test("Username alone on a page is NOT confirmed",
-         by_url[("https://example.com/a", "username")] is False)
-    test("A unique identifier on a page IS confirmed",
-         by_url[("https://example.com/b", "email")] is True)
-    test("Username IS confirmed when the same page carries a unique identifier",
-         by_url[("https://example.com/b", "username")] is True)
+        # A match must carry its own proof: the surrounding page text is what
+        # the user is shown, and an empty context is an unevidenced claim.
+        _urlreq.urlopen = _serve("reach me on 98765 43210 in the evening")
+        ok, ctx, status, title = ws.verify_page("https://page.test/x", "9876543210", "phone")
+        test("A confirmed phone hit quotes the surrounding page text",
+             ok and "98765 43210" in ctx, f"context was {ctx!r}")
+        test("A verified page records the HTTP status it was served with", status == 200,
+             f"got {status}")
+        test("A verified page records the page title", title == "Result page", f"got {title!r}")
+
+        # ── a username is not unique, so a web hit on one is never a finding ──
+        # Driven through search_exposures, so the UNIQUE/unique_pages promotion
+        # rule under test is the product's own. The previous form of these three
+        # pasted that loop into the test body and never called the product at
+        # all: the gate they are named after was entirely untested.
+        pages = {
+            "https://example.com/a": "<title>A</title>Profile of jsmith. Nothing else here.",
+            "https://example.com/b": "<title>B</title>jsmith — reach me at me@x.com any time.",
+        }
+        serp = {'"me@x.com"': [("https://example.com/b", "B")],
+                '"jsmith"': [("https://example.com/a", "A"), ("https://example.com/b", "B")]}
+
+        _urlreq.urlopen = lambda req, timeout=None: _FakeResponse(pages[req.full_url])
+        ws.search_web = lambda q, engine_state=None: (serp.get(q, []), "ok")
+        res = ws.search_exposures({"email": "me@x.com", "known_usernames": "jsmith"})
+        by_url = {(h["url"], h["identifier_type"]): h
+                  for h in res["confirmed"] + res["unconfirmed"]}
+
+        test("Username alone on a page is NOT confirmed",
+             by_url[("https://example.com/a", "username")]["confirmed"] is False)
+        test("A unique identifier on a page IS confirmed",
+             by_url[("https://example.com/b", "email")]["confirmed"] is True)
+        test("Username IS confirmed when the same page carries a unique identifier",
+             by_url[("https://example.com/b", "username")]["confirmed"] is True)
+        # A demoted hit is not silently dropped — it is shown as a lead, and it
+        # has to say why it is not being counted as the user's data.
+        test("A demoted username hit explains why it is not counted",
+             "not counted as your data"
+             in by_url[("https://example.com/a", "username")]["note"],
+             f'note was {by_url[("https://example.com/a", "username")]["note"]!r}')
+    finally:
+        _urlreq.urlopen = _real_urlopen
+        ws.search_web = _real_search_web
 
     # ── a refused search must never read as a clean one ──
     # A rate-limited engine serves a page with no results on it, which is the
@@ -306,6 +359,40 @@ def test_free_intel():
          all(k in XPOSED_LABEL_TO_FIELD for k in
              ("email addresses", "passwords", "phone numbers", "government ids")))
 
+    # ── severity is a rule, not a spelling ──
+    # The test above picks four keys out of a dict that lives in this repo, so
+    # it passes for as long as nobody deletes a line — while real severe labels
+    # fall straight through to "low". The live XposedOrNot catalogue (783
+    # breaches, 69 distinct data-class labels, read 2026-09-12) emits BOTH
+    # 'Credit card details' and 'Historical passwords'. Neither was in the map,
+    # so a card breach and a password dump were each scored as minor.
+    #
+    # These are the real strings, hardcoded so the suite stays offline. The
+    # assertion is about the rule rather than the spelling: what it costs a
+    # person to have this leaked cannot depend on which of two vocabularies the
+    # upstream happened to use for it.
+    LIVE_SEVERE_LABELS = [
+        "Credit card details", "Credit cards", "Credit card CVV",
+        "Partial credit card data", "Passwords", "Historical passwords",
+        "Passwords history", "Password hints", "Password strengths",
+        "Auth tokens", "Security questions and answers", "Government issued IDs",
+        "Government IDs", "Partial government issued IDs", "National IDs",
+        "Passport numbers", "Social security numbers", "Bank account numbers",
+    ]
+    for label in LIVE_SEVERE_LABELS:
+        fields = xposed_fields(label)
+        sev = _severity_of(fields)
+        test(f"'{label}' is scored critical", sev == "critical",
+             f"scored {sev} via {fields}")
+
+    # The rule stated directly, so a label added upstream tomorrow cannot slip
+    # past by being spelled differently from the ones enumerated above.
+    demoted = [(lbl, _severity_of(xposed_fields(lbl))) for lbl in LIVE_SEVERE_LABELS
+               if ("credit card" in lbl.lower() or "password" in lbl.lower())
+               and _severity_of(xposed_fields(lbl)) == "low"]
+    test("No credit-card or password label can ever score 'low'", not demoted,
+         f"scored low: {demoted}")
+
     # ── the checks refuse to guess when given nothing ──
     test("XposedOrNot with no email is not_checked",
          v.check_xposedornot("").result == "not_checked")
@@ -315,8 +402,97 @@ def test_free_intel():
     # ── evidence discipline ──
     for fn in (v.check_xposedornot, v.check_infostealer):
         ev = fn("")
-        test(f"{ev.check} records an endpoint field", hasattr(ev, "endpoint"))
         test(f"{ev.check} states what it does not prove", len(ev.interpretation) > 10)
+
+    # ── an upstream refusal is NOT a clean bill of health ──
+    # These two checks are the only free answer the product has to "has my
+    # address been breached", so a false CLEAR here is the worst output the tool
+    # can produce: it tells somebody they are safe at the exact moment the
+    # check stopped working. Both used to do it — an upstream body of
+    # {"Error": "Rate limit exceeded"} was read as "no breaches found" and
+    # reported under the words CONFIRMED CLEAR, quoting the rate-limit text as
+    # its proof.
+    #
+    # Stubbed at _get, the one function in verifiers.py that touches the
+    # network, so the decision being tested is the product's own.
+    import urllib.error as _uerr
+    _real_get = v._get
+    seen_url = {}
+
+    def _stub_get(body, status=200):
+        def _get(url, headers=None):
+            seen_url["url"] = url
+            return _FakeResponse(json.dumps(body), status)
+        return _get
+
+    def _stub_http_error(code):
+        def _get(url, headers=None):
+            seen_url["url"] = url
+            raise _uerr.HTTPError(url, code, "rate limited", None, None)
+        return _get
+
+    try:
+        RATE_LIMIT = {"Error": "Rate limit exceeded"}
+
+        v._get = _stub_get(RATE_LIMIT)
+        ev = v.check_xposedornot("someone@example.com")
+        test("A rate-limited XposedOrNot body is 'unavailable', not 'clear'",
+             ev.result == "unavailable", f"result={ev.result}: {ev.interpretation[:70]}")
+        test("A rate-limited XposedOrNot answer never says CONFIRMED CLEAR",
+             "CONFIRMED CLEAR" not in ev.interpretation, ev.interpretation[:70])
+
+        # The evidence must name the URL that was actually queried — an endpoint
+        # field that merely EXISTS proves nothing, and a dataclass has one on
+        # every instance ever constructed whether it was filled in or not.
+        test("XposedOrNot records the exact endpoint it queried",
+             ev.endpoint == seen_url["url"] and "xposedornot.com" in ev.endpoint,
+             f"recorded {ev.endpoint!r}, queried {seen_url.get('url')!r}")
+        test("The recorded endpoint carries the address that was looked up",
+             "someone%40example.com" in ev.endpoint or "someone@example.com" in ev.endpoint,
+             f"got {ev.endpoint!r}")
+
+        # The genuine clean answer must still read as clean, or the fix above
+        # has simply moved the lie to the other side.
+        v._get = _stub_get({"Error": "Not found"})
+        ev = v.check_xposedornot("someone@example.com")
+        test("A genuine 'not found' from XposedOrNot IS clear",
+             ev.result == "clear", f"result={ev.result}")
+
+        v._get = _stub_http_error(429)
+        ev = v.check_xposedornot("someone@example.com")
+        test("An HTTP 429 from XposedOrNot is 'unavailable', not 'clear'",
+             ev.result == "unavailable", f"result={ev.result}")
+
+        v._get = _stub_get(RATE_LIMIT)
+        ev = v.check_infostealer("someone@example.com")
+        test("A rate-limited infostealer body is 'unavailable', not 'clear'",
+             ev.result == "unavailable", f"result={ev.result}: {ev.interpretation[:70]}")
+        test("A rate-limited infostealer answer never says CONFIRMED CLEAR",
+             "CONFIRMED CLEAR" not in ev.interpretation, ev.interpretation[:70])
+        test("Infostealer records the exact endpoint it queried",
+             ev.endpoint == seen_url["url"] and "hudsonrock.com" in ev.endpoint,
+             f"recorded {ev.endpoint!r}, queried {seen_url.get('url')!r}")
+
+        v._get = _stub_http_error(429)
+        ev = v.check_infostealer("someone@example.com")
+        test("An HTTP 429 from the infostealer corpus is 'unavailable'",
+             ev.result == "unavailable", f"result={ev.result}")
+
+        v._get = _stub_get({"stealers": [], "message": "No results found"})
+        ev = v.check_infostealer("someone@example.com")
+        test("A genuine empty infostealer answer IS clear",
+             ev.result == "clear", f"result={ev.result}")
+
+        # And a real hit must still be reported as one.
+        v._get = _stub_get({"stealers": [{"computer_name": "DESKTOP-9F2",
+                                          "date_compromised": "2024-06-01T00:00:00Z"}]})
+        ev = v.check_infostealer("someone@example.com")
+        test("A reported infection IS a hit", ev.result == "hit", f"result={ev.result}")
+        test("An infection tells the user to rotate credentials and revoke sessions",
+             "sign out of all sessions" in ev.interpretation.lower()
+             or "session" in ev.interpretation.lower(), ev.interpretation[:70])
+    finally:
+        v._get = _real_get
 
 
 def test_site_roster():
@@ -557,6 +733,17 @@ def test_pii_recognizer():
         test(f"{number} is a phone, not an Aadhaar",
              "PHONE_IN" in got and "AADHAAR" not in got, f"got {got}")
 
+    # The two cases above are both written "+91", and the lookbehind that
+    # guards them keys on the plus sign. People write the country code without
+    # it constantly — "919876543007", the form a contact export and a WhatsApp
+    # link both use — and that form was never covered here. It is the same
+    # twelve digits and the same one-in-ten chance of clearing Verhoeff, so it
+    # produces the same false Aadhaar report, with nothing catching it.
+    for number in ("919876543007", "918760560500"):
+        got = [e.entity_type for e in recognizer.recognize(f"Call me on {number} anytime")]
+        test(f"Bare-91 {number} is a phone, not an Aadhaar",
+             "PHONE_IN" in got and "AADHAAR" not in got, f"got {got}")
+
     # Benchmark run
     benchmark_path = os.path.join(PROJECT_ROOT, "data", "benchmarks", "pii_ground_truth.json")
     with open(benchmark_path) as f:
@@ -581,9 +768,18 @@ def test_pii_recognizer():
     recall = tp / (tp + fn) if (tp + fn) > 0 else 0
     f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0
 
-    test(f"Precision ≥ 70% ({precision*100:.1f}%)", precision >= 0.70)
-    test(f"Recall ≥ 70% ({recall*100:.1f}%)", recall >= 0.70)
-    test(f"F1 Score ≥ 70% ({f1*100:.1f}%)", f1 >= 0.70)
+    # The thresholds were 70% while the recognizer was scoring 100 / 99.8 / 99.9.
+    # Thirty points of slack is not a floor, it is a formality: every regression
+    # short of halving the recognizer passed underneath it. These sit just below
+    # the measured score — close enough that a real regression trips them,
+    # far enough that a legitimate re-tuning of the recognizer has room to move.
+    # Measured 2026-09-12: precision 100.0%, recall 99.8%, F1 99.9% over 460
+    # ground-truth entities.
+    test(f"Precision ≥ 97% ({precision*100:.1f}%)", precision >= 0.97,
+         f"{fp} false positives against {tp} true")
+    test(f"Recall ≥ 97% ({recall*100:.1f}%)", recall >= 0.97,
+         f"{fn} entities missed against {tp} found")
+    test(f"F1 Score ≥ 97% ({f1*100:.1f}%)", f1 >= 0.97)
 
 
 def test_identity_resolver():
@@ -675,8 +871,34 @@ def test_identity_resolver():
     test("A disagreeing DOB lowers the score",
          resolver.resolve(me, wrong_dob).overall_score
          < resolver.resolve(me, same_name).overall_score)
-    test("A disagreeing DOB defeats the match",
-         not resolver.resolve(me, wrong_dob).is_match)
+
+    # This assertion used to be made against `wrong_dob` above, which carries no
+    # unique identifier — so is_match was already False through has_unique, and
+    # the DOB played no part in it. Deleting date_of_birth from FIELD_WEIGHTS
+    # and EXACT_FIELDS entirely left the test still passing.
+    #
+    # Here the two records are identical but for the date of birth, and both
+    # carry the same UPI ID, so has_unique is True either way. The DOB
+    # comparison is then the only thing left that can decide the outcome.
+    upi_me = {"name": "Rahul Sharma", "upi": "rahul@okaxis", "city": "Mumbai",
+              "date_of_birth": "1994-03-11"}
+    upi_same_dob = {"upi": "rahul@okaxis", "date_of_birth": "11/03/1994"}
+    upi_wrong_dob = {"upi": "rahul@okaxis", "date_of_birth": "1988-01-02"}
+
+    agreeing = resolver.resolve(upi_me, upi_same_dob)
+    disagreeing = resolver.resolve(upi_me, upi_wrong_dob)
+
+    test("The DOB control case has a unique identifier on both sides",
+         agreeing.has_unique_identifier and disagreeing.has_unique_identifier,
+         "the case cannot isolate DOB without one")
+    test("An agreeing DOB alongside a unique identifier IS a match",
+         agreeing.is_match, f"score={agreeing.overall_score}")
+    test("A disagreeing DOB defeats the match despite the unique identifier",
+         not disagreeing.is_match,
+         f"score={disagreeing.overall_score}, matched={disagreeing.matched_fields}")
+    test("The disagreeing DOB is recorded as an unmatched field",
+         "date_of_birth" in disagreeing.unmatched_fields,
+         f"unmatched={disagreeing.unmatched_fields}")
 
     # ── attribution needs something unique ──
     r_shared = resolver.resolve(me, same_name)
@@ -853,21 +1075,61 @@ def test_evidence_policy():
          ev.result != "hit" and "NOT CHECKED" in ev.interpretation)
 
     # k-anonymity: only a 5-character SHA-1 prefix may ever be transmitted.
+    # This used to build the URL in the test body and then assert things about
+    # the string it had just built — the product was never called, so it would
+    # have held just as well if check_password_pwned had sent the whole hash,
+    # or the password itself. The URL asserted on is now the one the function
+    # actually handed to the network layer.
     import hashlib as _h
     pw = "correct horse battery staple"
     full = _h.sha1(pw.encode()).hexdigest().upper()
-    ev_url = f"https://api.pwnedpasswords.com/range/{full[:5]}"
-    test("Password check transmits only a 5-char SHA-1 prefix",
-         ev_url.rsplit("/", 1)[-1] == full[:5] and len(full[:5]) == 5)
-    test("Password check never puts the full hash in the URL",
-         full[5:] not in ev_url)
 
-    # Every Evidence record must be able to justify itself.
+    sent = {}
+    _real_get = verifiers._get
+
+    def _capture(url, headers=None):
+        sent["url"] = url
+        sent["headers"] = headers or {}
+        # One matching suffix line, so the "hit" branch is the one exercised.
+        return _FakeResponse(f"{full[5:]}:42\r\n0000000000000000000000000000000000A:1\r\n")
+
+    try:
+        verifiers._get = _capture
+        ev = verifiers.check_password_pwned(pw)
+    finally:
+        verifiers._get = _real_get
+
+    test("Password check transmits only a 5-char SHA-1 prefix",
+         sent["url"] == f"https://api.pwnedpasswords.com/range/{full[:5]}",
+         f'transmitted {sent.get("url")!r}')
+    test("Password check never puts the full hash in the URL",
+         full[5:] not in sent["url"], f'transmitted {sent.get("url")!r}')
+    test("Password check never transmits the password itself",
+         pw not in sent["url"] and not any(pw in str(x) for x in sent["headers"].values()))
+    test("The recorded endpoint is the URL that was actually queried",
+         ev.endpoint == sent["url"], f"recorded {ev.endpoint!r}")
+    test("A suffix match is reported as a hit", ev.result == "hit", f"got {ev.result}")
+    test("A hit quotes the breach count it was given",
+         "42" in ev.proof, f"proof was {ev.proof!r}")
+    # The raw secret must not travel back out in the evidence either.
+    test("The evidence record never contains the password",
+         pw not in str(ev.to_dict()))
+
+    # Every Evidence record must be able to justify itself — and must carry the
+    # VALUES it was built with, not merely have the keys. asdict() on a
+    # dataclass always returns every declared field, so a key-presence check
+    # alone passes for an instance whose endpoint and proof are both empty.
     e = verifiers.Evidence("t", "x", "http://e", "now", 200, "hit", "p", "i", "cmd")
     d = e.to_dict()
     test("Evidence carries endpoint, proof and interpretation",
          all(k in d for k in ("endpoint", "proof", "interpretation", "queried_at",
                               "http_status", "result", "reproduce")))
+    test("Evidence round-trips the values it was built with",
+         (d["endpoint"], d["proof"], d["interpretation"], d["http_status"],
+          d["result"], d["reproduce"]) == ("http://e", "p", "i", 200, "hit", "cmd"),
+         f"got {d}")
+    test("Evidence with no metadata still serialises a dict, never None",
+         d["metadata"] == {}, f'got {d["metadata"]!r}')
 
     # A blank input must not produce a finding.
     test("Empty email yields not_checked, not a finding",

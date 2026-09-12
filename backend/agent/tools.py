@@ -24,7 +24,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Callable
 
-from backend.agent import account_discovery, verifiers, web_search
+from backend.agent import account_discovery, extra_sources, verifiers, web_search
 from backend.agent.verification import get_verifier
 from backend.agent.memory import Memory, utcnow
 from backend.mock_brokers.network import (
@@ -80,7 +80,8 @@ SEVERITY_BY_FIELD = {
 # minor one.
 XPOSED_LABEL_TO_FIELD = {
     "email addresses": "email", "passwords": "password",
-    "passwords history": "password", "auth tokens": "auth_token",
+    "passwords history": "password", "historical passwords": "password",
+    "credit card details": "credit_card", "auth tokens": "auth_token",
     "security questions and answers": "security_question",
     "names": "name", "titles": "name", "spouses names": "name",
     "mothers maiden names": "security_question", "spouses details": "name",
@@ -113,6 +114,22 @@ XPOSED_LABEL_TO_FIELD = {
 }
 
 
+# Substring hints for labels the table has not seen. Ordered: the first match
+# wins, so the more specific needle must come first.
+_SEVERE_LABEL_HINTS = [
+    ("credit card", "credit_card"), ("debit card", "credit_card"),
+    ("bank account", "bank_account"), ("bank", "bank_account"),
+    ("password", "password"), ("auth token", "auth_token"),
+    ("session", "auth_token"), ("security question", "security_question"),
+    ("passport", "passport"), ("social security", "ssn"),
+    ("government", "government_id"), ("national id", "government_id"),
+    ("aadhaar", "government_id"), ("biometric", "biometric"),
+    ("health", "health"), ("medical", "health"),
+    ("sexual", "sexual_preference"), ("religio", "religion"),
+    ("private message", "private_message"),
+]
+
+
 def xposed_fields(raw) -> list[str]:
     """Canonical field names for one breach's exposed-data labels."""
     import ast as _ast
@@ -133,9 +150,20 @@ def xposed_fields(raw) -> list[str]:
         key = str(label).strip().lower()
         field = XPOSED_LABEL_TO_FIELD.get(key)
         if field is None:
-            # Unknown label: keep a normalised form so it is still shown to the
-            # user, rather than silently dropped.
-            field = re.sub(r"[^a-z0-9]+", "_", key).strip("_")
+            # An unmapped label falls through to a normalised slug, which is not
+            # in SEVERITY_BY_FIELD and therefore scores "low". That is fine for
+            # something genuinely minor, and badly wrong for a severe class the
+            # table simply has not seen: the live catalogue emits both
+            # "Credit card details" and "Historical passwords", neither of which
+            # matched, so a card breach was reported as a minor one. Named
+            # labels are mapped above; this is the safety net for the ones that
+            # get added upstream tomorrow.
+            for needle, severe_field in _SEVERE_LABEL_HINTS:
+                if needle in key:
+                    field = severe_field
+                    break
+            else:
+                field = re.sub(r"[^a-z0-9]+", "_", key).strip("_")
         if field and field not in out:
             out.append(field)
     return out
@@ -315,6 +343,34 @@ def build_tools(ctx: ToolContext) -> dict[str, Callable]:
         email = ctx.profile.get("email", "")
         _hibp._load()
 
+        # Identifiers beyond the email address. A phone number is the identifier
+        # most Indian services key on, and until now nothing checked it against
+        # any breach corpus at all.
+        raw_phone = "".join(c for c in str(ctx.profile.get("phone") or "") if c.isdigit())
+        # Only a genuine 10-digit Indian mobile is searched. Truncating any
+        # number to its last ten digits invents an identifier: '011-2345 6789'
+        # becomes 1123456789, which belongs to somebody else, and a hit on it
+        # would be filed as this user's exposure.
+        phone = raw_phone[-10:] if len(raw_phone) in (10, 11, 12, 13) else ""
+        if len(raw_phone) > 10 and not raw_phone[:-10].lstrip("0").startswith("91"):
+            phone = ""
+        if phone and phone[0] not in "6789":
+            phone = ""
+
+        # DECLARED handles only.
+        #
+        # derive_usernames also returns handles GUESSED from an email or UPI
+        # local part, and a guess is not this person: 'john' from john@gmail.com
+        # matches a stranger on every corpus that indexes usernames. Account
+        # discovery can afford to search guesses because attribution clamps
+        # whatever it finds to tier "candidate". These breach corpora have no
+        # such clamp — a hit here is written straight to the ledger as
+        # match_tier "definite", evidence_class "verified", and it then moves
+        # the risk score and the removal plan. So only a handle the user has
+        # actually claimed may drive them.
+        handles = [h for h, src in account_discovery.derive_usernames(ctx.profile)
+                   if src == "declared"][:2]
+
         checks = [
             verifiers.check_hibp_account(email),
             # Free, keyless, and a different corpus from HIBP. Without this the
@@ -326,6 +382,26 @@ def build_tools(ctx: ToolContext) -> dict[str, Callable]:
             verifiers.check_email_domain_breached(email, _hibp._breaches),
             verifiers.check_gravatar(email),
         ]
+        # Free, keyless corpora that answer for identifiers the checks above
+        # cannot take. Each is wrapped so one flaky third party cannot take the
+        # scan down with it — an exception here must degrade to "could not
+        # check", never to "clear".
+        def _safe(fn, *a):
+            try:
+                return fn(*a)
+            except Exception:
+                return None
+
+        extra = []
+        if email:
+            extra += [_safe(extra_sources.check_leakcheck, email),
+                      _safe(extra_sources.check_github_email_exposure, email)]
+        if len(phone) == 10:
+            extra.append(_safe(extra_sources.check_leakcheck, phone))
+        for h in handles:
+            extra += [_safe(extra_sources.check_leakcheck, h),
+                      _safe(extra_sources.check_infostealer_by_username, h)]
+        checks += [e for e in extra if e is not None]
 
         recorded, not_checked = [], []
         for ev in checks:
@@ -399,6 +475,45 @@ def build_tools(ctx: ToolContext) -> dict[str, Callable]:
                 }
                 exp_id, is_new = ctx.memory.record_exposure(ctx.user_id, ctx.run_id, exp)
                 recorded.append({"exposure_id": exp_id, "source": "Info-stealer infection",
+                                 "evidence_class": "verified", "is_new": is_new})
+
+            elif ev.check in ("leakcheck_public", "github_email_exposure",
+                              "infostealer_username"):
+                # What identifier did this answer for? It is not always the
+                # email — a phone or a handle may be what matched — and saying
+                # so is the whole point of an evidence-led report.
+                meta = getattr(ev, "metadata", None) or {}
+                kind = meta.get("identifier_type") or (
+                    "phone" if ev.target.isdigit() else
+                    "email" if "@" in str(ev.target) else "username")
+                # Sources arrive as {"name": ..., "date": ...} from one corpus
+                # and as bare strings from another. Normalise before they reach
+                # a label, or the user is shown a Python dict.
+                raw_sources = meta.get("sources") or meta.get("named_sources") or []
+                sources = []
+                for item in raw_sources:
+                    name = item.get("name") if isinstance(item, dict) else item
+                    if name and str(name) not in sources:
+                        sources.append(str(name))
+                exp = {
+                    "source_type": "breach",
+                    "source_name": (f"{ev.check.replace('_', ' ').title()} — {kind}"
+                                    if not sources else
+                                    f"{sources[0]} (+{len(sources) - 1} more)"
+                                    if len(sources) > 1 else str(sources[0])),
+                    "source_id": f"{ev.check}:{kind}",
+                    "record_id": "",
+                    "data_found": [kind],
+                    "detail": {"evidence": ev.to_dict(), "identifier_type": kind,
+                               "named_sources": sources, "source_records": raw_sources,
+                               "source_dataset": ev.check},
+                    "match_confidence": 1.0, "match_tier": "definite",
+                    "severity": _severity_of([kind]),
+                    "risk_score": 0.0,
+                    "evidence_class": "verified", "evidence": [ev.to_dict()],
+                }
+                exp_id, is_new = ctx.memory.record_exposure(ctx.user_id, ctx.run_id, exp)
+                recorded.append({"exposure_id": exp_id, "source": exp["source_name"],
                                  "evidence_class": "verified", "is_new": is_new})
 
             elif ev.check == "gravatar":

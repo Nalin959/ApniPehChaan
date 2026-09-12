@@ -103,6 +103,33 @@ def luhn_validate(number: str) -> bool:
 _PII_PATTERNS = []
 
 
+def _aadhaar_plausible(digits: str) -> bool:
+    """
+    A 12-digit run is an Aadhaar number only if the checksum holds AND it is not
+    better explained as a telephone number.
+
+    '91' followed by a ten-digit Indian mobile is twelve digits, and twelve
+    digits clear Verhoeff by chance about one time in ten. A leading '+' is
+    already excluded by the pattern's lookbehind, but the country code is very
+    often written without one — 919876543007 — and in that form the phone match
+    and the Aadhaar match cover exactly the same span, so the checksum decided
+    it and Aadhaar won. The result was telling roughly one Indian mobile in ten
+    that its owner's national ID had leaked, which is the most alarming thing
+    this product can say and was wrong.
+
+    Indian mobiles begin 6-9, so '91' + [6-9] + nine digits is read as a phone.
+    A real Aadhaar can in principle begin '91', which makes this a deliberate
+    trade: the cost of missing one is that a number is reported as a phone
+    rather than a national ID, and the cost of the reverse is a false claim of
+    the most severe kind.
+    """
+    if not verhoeff_validate(digits):
+        return False
+    if len(digits) == 12 and digits.startswith("91") and digits[2] in "6789":
+        return False
+    return True
+
+
 def _compile_patterns():
     """Compile all PII detection patterns."""
     global _PII_PATTERNS
@@ -119,7 +146,7 @@ def _compile_patterns():
         (
             r'(?<![+\d])\b([2-9]\d{3})\s?(\d{4})\s?(\d{4})\b',
             "AADHAAR",
-            lambda m: verhoeff_validate(m.group(1) + m.group(2) + m.group(3)),
+            lambda m: _aadhaar_plausible(m.group(1) + m.group(2) + m.group(3)),
             0.85,
             lambda m: m.group(1) + m.group(2) + m.group(3),
         ),
