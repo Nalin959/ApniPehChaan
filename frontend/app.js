@@ -1162,6 +1162,255 @@ function safeUrl(value) {
         '%' + c.charCodeAt(0).toString(16).toUpperCase().padStart(2, '0'));
 }
 
+/* ── Markdown to HTML Renderer ─────────────────────────────────────────────
+   Converts structured LLM summaries (headings, GFM tables, numbered/bullet
+   lists, code spans, links, and bold/italic markup) into clean, secure HTML. */
+function formatInlineMarkdown(str) {
+    if (!str) return '';
+    let s = escapeHtml(str);
+
+    // 1. Protect code spans
+    const codeSpans = [];
+    s = s.replace(/`([^`]+)`/g, (match, code) => {
+        const id = `@@CODE${codeSpans.length}@@`;
+        codeSpans.push(`<code class="summary-code">${code}</code>`);
+        return id;
+    });
+
+    // 2. Links: [text](url) - only http/https allowed via safeUrl
+    const links = [];
+    s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^\s\)"'<>]+)\)/g, (match, text, url) => {
+        const clean = safeUrl(url);
+        if (!clean) return text;
+        const id = `@@LINK${links.length}@@`;
+        links.push(`<a href="${clean}" target="_blank" rel="noopener noreferrer" class="summary-link">${text}</a>`);
+        return id;
+    });
+
+    // 3. Bold: **text** or __text__
+    s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    s = s.replace(/__([^_]+)__/g, '<strong>$1</strong>');
+
+    // 4. Italic: *text* or _text_ with word-boundary awareness (GFM: no intra-word underscores)
+    s = s.replace(/(^|[^\*])\*([^*\s][^*]*[^*\s]|\S)\*(?!\*)/g, '$1<em>$2</em>');
+    s = s.replace(/(^|[\s(])_([^_\s][^_]*[^_\s]|\S)_(?=[\s).,;:!?]|$)/g, '$1<em>$2</em>');
+
+    // 5. Restore links & code spans
+    s = s.replace(/@@LINK(\d+)@@/g, (m, idx) => links[Number(idx)] || '');
+    s = s.replace(/@@CODE(\d+)@@/g, (m, idx) => codeSpans[Number(idx)] || '');
+
+    return s;
+}
+
+function preprocessMarkdown(text) {
+    if (!text) return '';
+    let raw = String(text).replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    if (raw.includes('\\n') && !raw.includes('\n')) {
+        raw = raw.replace(/\\n/g, '\n');
+    }
+
+    // Defensive fixes if markdown was flattened or lacks breaks:
+    raw = raw.replace(/\|\s*\|/g, '|\n|');
+    raw = raw.replace(/\s*---\s*(#{1,6}\s+)/g, '\n\n---\n\n$1');
+    raw = raw.replace(/([.!?])\s*---\s*/g, '$1\n\n---\n\n');
+    raw = raw.replace(/(#{1,6}\s+[^|\n]+?)\s+(\|)/g, '$1\n\n$2');
+    raw = raw.replace(/(#{1,6}\s+[^\d\n]+?)\s+(\d+\.\s+\*\*)/g, '$1\n\n$2');
+    raw = raw.replace(/([.!?|])\s*(#{1,6}\s+[A-Za-z])/g, '$1\n\n$2');
+    raw = raw.replace(/\|\s*(\*[A-Z])/g, '|\n\n$1');
+    raw = raw.replace(/^(#{1,6}\s+(?:Executive Summary|Summary of Remediation Routes|Concrete Next Actions[A-Za-z ]*?))\s+([A-Z0-9])/gim, '$1\n\n$2');
+    raw = raw.replace(/([.!?])\s*(\d+\.\s+\*\*)/g, '$1\n\n$2');
+
+    return raw;
+}
+
+function renderMarkdown(text) {
+    if (!text) return '';
+    const raw = preprocessMarkdown(text);
+    const lines = raw.split('\n');
+    const out = [];
+    let i = 0;
+
+    const isHr = (line) => /^\s*([-*_]){3,}\s*$/.test(line);
+    const isHeading = (line) => /^\s*#{1,6}\s+/.test(line);
+    const isTopOl = (line) => /^\s{0,3}\d+\.\s+/.test(line);
+    const isTopUl = (line) => /^\s{0,3}[-*•]\s+/.test(line);
+    const isTableRow = (line) => /^\s*\|.*\|\s*$/.test(line);
+    const isTableSep = (line) => /^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)+\|?\s*$/.test(line);
+
+    while (i < lines.length) {
+        const line = lines[i];
+        const trimmed = line.trim();
+
+        if (!trimmed) {
+            i++;
+            continue;
+        }
+
+        if (isHr(trimmed)) {
+            out.push('<hr class="summary-hr">');
+            i++;
+            continue;
+        }
+
+        const headingMatch = trimmed.match(/^\s*(#{1,6})\s+(.*)$/);
+        if (headingMatch) {
+            const level = Math.min(6, Math.max(2, headingMatch[1].length + 1));
+            out.push(`<h${level} class="summary-heading">${formatInlineMarkdown(headingMatch[2])}</h${level}>`);
+            i++;
+            continue;
+        }
+
+        // Markdown Table
+        if (isTableRow(trimmed) && i + 1 < lines.length && isTableSep(lines[i + 1])) {
+            const parseCells = (rowStr) => {
+                let s = rowStr.trim();
+                if (s.startsWith('|')) s = s.substring(1);
+                if (s.endsWith('|')) s = s.substring(0, s.length - 1);
+                return s.split('|').map(c => c.trim());
+            };
+
+            const headers = parseCells(trimmed);
+            i += 2;
+
+            const rows = [];
+            while (i < lines.length && isTableRow(lines[i])) {
+                const cells = parseCells(lines[i]);
+                rows.push(cells);
+                i++;
+            }
+
+            let tableHtml = '<div class="summary-table-wrap"><table class="summary-table">';
+            tableHtml += '<thead><tr>' + headers.map(h => `<th>${formatInlineMarkdown(h)}</th>`).join('') + '</tr></thead>';
+            tableHtml += '<tbody>';
+            for (const r of rows) {
+                tableHtml += '<tr>' + r.map(c => {
+                    let tdContent = formatInlineMarkdown(c);
+                    const lower = c.toLowerCase();
+                    let cls = '';
+                    if (lower.includes('critical')) cls = ' class="td-severity-crit"';
+                    else if (lower.includes('high')) cls = ' class="td-severity-high"';
+                    else if (lower.includes('medium')) cls = ' class="td-severity-med"';
+                    return `<td${cls}>${tdContent}</td>`;
+                }).join('') + '</tr>';
+            }
+            tableHtml += '</tbody></table></div>';
+            out.push(tableHtml);
+            continue;
+        }
+
+        // Top-level Ordered List (with potential nested bullets or continuations)
+        if (isTopOl(line)) {
+            let listHtml = '<ol class="summary-ol">';
+            while (i < lines.length) {
+                const cur = lines[i];
+                const m = cur.match(/^\s{0,3}(\d+)\.\s+(.*)$/);
+                if (m) {
+                    let itemText = formatInlineMarkdown(m[2]);
+                    i++;
+                    const subBullets = [];
+                    while (i < lines.length) {
+                        const sub = lines[i];
+                        const subTrim = sub.trim();
+                        if (!subTrim) {
+                            let nextIdx = i + 1;
+                            while (nextIdx < lines.length && !lines[nextIdx].trim()) nextIdx++;
+                            if (nextIdx < lines.length && (isTopOl(lines[nextIdx]) || /^\s{2,}/.test(lines[nextIdx]))) {
+                                i = nextIdx;
+                                continue;
+                            }
+                            break;
+                        }
+                        const subM = sub.match(/^\s{2,}[-*•]\s+(.*)$/);
+                        if (subM) {
+                            subBullets.push(formatInlineMarkdown(subM[1]));
+                            i++;
+                        } else if (/^\s{2,}\S/.test(sub) && !isTopOl(sub) && !isTopUl(sub) && !isHr(subTrim) && !isHeading(subTrim)) {
+                            itemText += ' ' + formatInlineMarkdown(subTrim);
+                            i++;
+                        } else {
+                            break;
+                        }
+                    }
+                    let subHtml = '';
+                    if (subBullets.length > 0) {
+                        subHtml = '<ul class="summary-sub-ul">' + subBullets.map(b => `<li>${b}</li>`).join('') + '</ul>';
+                    }
+                    listHtml += `<li>${itemText}${subHtml}</li>`;
+                } else {
+                    break;
+                }
+            }
+            listHtml += '</ol>';
+            out.push(listHtml);
+            continue;
+        }
+
+        // Top-level Unordered List
+        if (isTopUl(line)) {
+            let listHtml = '<ul class="summary-ul">';
+            while (i < lines.length) {
+                const cur = lines[i];
+                const m = cur.match(/^\s{0,3}[-*•]\s+(.*)$/);
+                if (m) {
+                    let itemText = formatInlineMarkdown(m[1]);
+                    i++;
+                    const subBullets = [];
+                    while (i < lines.length) {
+                        const sub = lines[i];
+                        const subTrim = sub.trim();
+                        if (!subTrim) {
+                            let nextIdx = i + 1;
+                            while (nextIdx < lines.length && !lines[nextIdx].trim()) nextIdx++;
+                            if (nextIdx < lines.length && (isTopUl(lines[nextIdx]) || /^\s{2,}/.test(lines[nextIdx]))) {
+                                i = nextIdx;
+                                continue;
+                            }
+                            break;
+                        }
+                        const subM = sub.match(/^\s{2,}[-*•]\s+(.*)$/);
+                        if (subM) {
+                            subBullets.push(formatInlineMarkdown(subM[1]));
+                            i++;
+                        } else if (/^\s{2,}\S/.test(sub) && !isTopUl(sub) && !isTopOl(sub) && !isHr(subTrim) && !isHeading(subTrim)) {
+                            itemText += ' ' + formatInlineMarkdown(subTrim);
+                            i++;
+                        } else {
+                            break;
+                        }
+                    }
+                    let subHtml = '';
+                    if (subBullets.length > 0) {
+                        subHtml = '<ul class="summary-sub-ul">' + subBullets.map(b => `<li>${b}</li>`).join('') + '</ul>';
+                    }
+                    listHtml += `<li>${itemText}${subHtml}</li>`;
+                } else {
+                    break;
+                }
+            }
+            listHtml += '</ul>';
+            out.push(listHtml);
+            continue;
+        }
+
+        // Regular Paragraph
+        const paraLines = [];
+        while (i < lines.length) {
+            const cur = lines[i];
+            const curTrim = cur.trim();
+            if (!curTrim || isHr(curTrim) || isHeading(curTrim) || isTopOl(cur) || isTopUl(cur) || (isTableRow(curTrim) && i + 1 < lines.length && isTableSep(lines[i + 1]))) {
+                break;
+            }
+            paraLines.push(curTrim);
+            i++;
+        }
+        if (paraLines.length > 0) {
+            out.push(`<p class="summary-p">${formatInlineMarkdown(paraLines.join(' '))}</p>`);
+        }
+    }
+
+    return out.join('\n');
+}
+
 function formatNumber(n) {
     if (n >= 1e9) return (n / 1e9).toFixed(1) + 'B';
     if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
@@ -1244,8 +1493,8 @@ function traceAdd(agent, message, status) {
     if (!message) return;
     if (message.length > 350) {
         const summaryCard = agEl('agent-summary');
-        if (summaryCard && !summaryCard.textContent) {
-            summaryCard.textContent = message;
+        if (summaryCard && !summaryCard.innerHTML.trim()) {
+            summaryCard.innerHTML = renderMarkdown(message);
         }
         return;
     }
@@ -1270,7 +1519,7 @@ function traceAdd(agent, message, status) {
 function traceReasoning(text) {
     const summaryCard = agEl('agent-summary');
     if (summaryCard) {
-        summaryCard.textContent = text;
+        summaryCard.innerHTML = renderMarkdown(text);
     }
 }
 
@@ -1375,7 +1624,7 @@ function agentRender(msg) {
         ['Verified removed', s.removals_verified],
     ].map(([l, v]) => `<div class="risk-stat"><div class="risk-stat-v">${agEsc(v)}</div><div class="risk-stat-l">${agEsc(l)}</div></div>`).join('');
 
-    agEl('agent-summary').textContent = msg.summary || '';
+    agEl('agent-summary').innerHTML = renderMarkdown(msg.summary || '');
 
     // Approval gate
     Agent.drafted = st.requests.filter(r => r.status === 'awaiting_approval');
@@ -1883,6 +2132,7 @@ async function agentReset() {
         });
         traceClear();
         agEl('agent-outcome').hidden = true;
+        agEl('agent-summary').innerHTML = '';
         agEl('approval-panel').hidden = true;
         agEl('ledger-panel').hidden = true;
         traceAdd('orchestrator', 'Identity reset. The demo can be run again from a clean slate.', 'ok');
@@ -2265,23 +2515,7 @@ const RightsAdvisor = {
     },
 
     formatMarkdown(text) {
-        if (!text) return '';
-        let s = escapeHtml(text);
-
-        // Bold
-        s = s.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
-        // Inline code
-        s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
-        // Headers
-        s = s.replace(/^### (.*$)/gim, '<h3>$1</h3>');
-        s = s.replace(/^## (.*$)/gim, '<h4>$1</h4>');
-        // Bullets
-        s = s.replace(/^\s*[-•]\s+(.*$)/gim, '<li>$1</li>');
-        s = s.replace(/(<li>.*<\/li>)/gs, '<ul>$1</ul>');
-        // Newlines
-        s = s.replace(/\n\n/g, '<p></p>');
-
-        return s;
+        return renderMarkdown(text);
     }
 };
 
