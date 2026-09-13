@@ -433,6 +433,11 @@ class Memory:
             "overdue": len(self.overdue_requests(user_id)),
         }
 
+    def reset_user(self, user_id: str):
+        """Wipe all agent records for a given user from SQLite."""
+        for table in ("exposures", "requests", "agent_events", "identities", "runs"):
+            self._exec(f"DELETE FROM {table} WHERE user_id=?", (user_id,))
+
 
 _memory: Any = None
 

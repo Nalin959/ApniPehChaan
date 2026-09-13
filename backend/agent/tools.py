@@ -1308,6 +1308,8 @@ def build_tools(ctx: ToolContext) -> dict[str, Callable]:
             company_name=spec.get("company_name") or spec.get("operator") or spec.get("name", exp["source_name"]),
             company_address=spec.get("address") or spec.get("privacy_url", "Corporate Grievance Office"),
             detected_pii_summary=pii_summary,
+            ai_tailored=True,
+            exposure_context=f"Source: {exp.get('source_name')} ({exp.get('source_type')}). Discovered telemetry: {json.dumps(exp.get('detail') or {})[:200]}",
         )
         if gen.get("status") != "generated":
             return {"error": gen.get("message", "notice generation failed")}

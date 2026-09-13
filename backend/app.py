@@ -146,6 +146,8 @@ class NoticeRequest(BaseModel):
     company_email: str = ""
     company_address: str = ""
     detected_pii_summary: str = ""
+    ai_tailored: bool = True
+    exposure_context: str = ""
 
 class TrackRequest(BaseModel):
     jurisdiction: str = "dpdp"
@@ -459,6 +461,8 @@ async def generate_notice(req: NoticeRequest):
         company_name=req.company_name,
         company_address=req.company_address,
         detected_pii_summary=req.detected_pii_summary,
+        ai_tailored=req.ai_tailored,
+        exposure_context=req.exposure_context,
     )
 
     if result.get("status") == "generated":
@@ -466,6 +470,8 @@ async def generate_notice(req: NoticeRequest):
             "reference_id": result.get("reference_id"),
             "jurisdiction": req.jurisdiction,
             "company": req.company_name,
+            "ai_generated": result.get("ai_generated", False),
+            "ai_model": result.get("ai_model"),
         })
 
     return result
@@ -1054,20 +1060,34 @@ def _expert_privacy_reply(user_msg: str, tab: str, risk_score: float | None, exp
 
 
 
+@app.get("/api/agent/threat-surface/{user_id}")
+async def agent_threat_surface(user_id: str):
+    """Retrieve AI-correlated threat surface intelligence for a user."""
+    profile = _memory.get_profile(user_id) or {}
+    exposures = [e for e in _memory.get_exposures(user_id) if e.get("status") != "not_mine"]
+    from backend.agent.multi_agent_swarm import ForensicsAgent
+    from backend.agent.tools import ToolContext, build_tools
+    from backend.mock_brokers.network import get_network
+    ctx = ToolContext(
+        memory=_memory, network=get_network(), user_id=user_id, run_id="",
+        profile=profile, emit=lambda *a, **kw: None, auto_approve=False
+    )
+    tools = build_tools(ctx)
+    agent = ForensicsAgent(ctx, tools)
+    return agent._analyze_threat_intelligence(profile, exposures)
+
+
+@app.get("/api/agent/threat-surface")
+async def agent_threat_surface_latest():
+    """Retrieve AI-correlated threat surface for the most recently active user."""
+    row = _memory._row("SELECT user_id FROM runs ORDER BY started_at DESC LIMIT 1")
+    if not row or not row.get("user_id"):
+        return {"overall_surface_grade": "MINIMAL", "threat_vectors": []}
+    return await agent_threat_surface(row["user_id"])
+
+
 def _chat_grounding(user_id: str | None = None) -> tuple[str, int]:
-    """
-    The user's ACTUAL findings, rendered for the assistant's system prompt.
-
-    Without this the assistant was told only a risk NUMBER and a COUNT, so the
-    most obvious question a user can ask — "which companies have my data?" —
-    could not be answered from evidence. What came back instead was a plausible
-    generic account of how a risk score is computed, listing contributors like
-    dark-web pastes and broker records that were not in this user's ledger at
-    all. That is exactly the fabrication this product exists to avoid, and it
-    was happening in the one component that talks directly to the user.
-
-    So the assistant is handed the real rows and told to answer only from them.
-    """
+    """Ground the Copilot on verified exposures, active notices, and threat vectors."""
     try:
         if not user_id:
             row = _memory._row("SELECT user_id FROM runs ORDER BY started_at DESC LIMIT 1")
@@ -1075,12 +1095,13 @@ def _chat_grounding(user_id: str | None = None) -> tuple[str, int]:
         if not user_id:
             return "", 0
         exposures = [e for e in _memory.get_exposures(user_id) if e.get("status") != "not_mine"]
+        requests = _memory.get_requests(user_id) if user_id else []
     except Exception:
         return "", 0
 
     if not exposures:
         return ("\nTHE USER'S ACTUAL FINDINGS: none recorded yet. No scan has produced an "
-                "exposure. Say so plainly rather than describing what a scan might find.\n"), 0
+                "exposure. Advise the user to deploy the Privacy Agent to discover their digital footprint.\n"), 0
 
     confirmed = [e for e in exposures if e.get("status") != "unconfirmed"]
     candidates = [e for e in exposures if e.get("status") == "unconfirmed"]
@@ -1097,9 +1118,17 @@ def _chat_grounding(user_id: str | None = None) -> tuple[str, int]:
     if len(confirmed) > 25:
         lines.append(f"  ...and {len(confirmed) - 25} more confirmed exposure(s).")
     if candidates:
-        lines.append(f"  {len(candidates)} UNCONFIRMED candidate(s) are held back pending the "
-                     f"user's confirmation and are NOT counted as theirs: "
+        lines.append(f"  {len(candidates)} UNCONFIRMED candidate(s) held back pending confirmation: "
                      + ", ".join(str(c.get("source_name")) for c in candidates[:8]))
+
+    if requests:
+        lines.append("\nACTIVE STATUTORY ERASURE NOTICES & COMPLIANCE DEADLINES:")
+        for r in requests[:6]:
+            lines.append(
+                f"  - Ref {r.get('reference_id')}: Controller={r.get('broker')} | "
+                f"Jurisdiction={str(r.get('jurisdiction')).upper()} | Status={r.get('status')} | "
+                f"Deadline={str(r.get('response_deadline', ''))[:10]}")
+
     lines.append(
         "  If asked something these rows do not answer, say you do not have it and suggest "
         "running a scan. Never name a company, a breach or a data type that is not listed "
@@ -1273,8 +1302,7 @@ async def agent_reset(req: AgentScanRequest):
     """Wipe this identity so a demo can be re-run from a clean slate."""
     removed = _network.reset_subject(req.name, req.email)
     user_id = _memory.upsert_user(_profile_of(req))
-    for table in ("exposures", "requests", "agent_events", "identities", "runs"):
-        _memory._exec(f"DELETE FROM {table} WHERE user_id=?", (user_id,))
+    _memory.reset_user(user_id)
     return {"status": "reset", "user_id": user_id, "broker_records_cleared": removed}
 
 
@@ -1473,8 +1501,7 @@ async def agent_confirm(req: ConfirmRequest):
 
     if req.is_mine:
         _memory.set_exposure_status(req.exposure_id, "exposed")
-        _memory._exec("UPDATE exposures SET evidence_class=?, match_tier=? WHERE id=?",
-                      ("self_declared", "user_confirmed", req.exposure_id))
+        _memory.update_exposure(req.exposure_id, evidence_class="self_declared", match_tier="user_confirmed")
     else:
         _memory.set_exposure_status(req.exposure_id, "not_mine")
 

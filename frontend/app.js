@@ -710,8 +710,10 @@ function initLegalForm() {
 
     // Copy button
     document.getElementById('btn-copy-notice').addEventListener('click', () => {
-        if (state.generatedNotice) {
-            navigator.clipboard.writeText(state.generatedNotice.notice_text).then(() => {
+        const preview = document.getElementById('notice-preview-content');
+        const liveText = (preview.innerText || preview.textContent || '').trim();
+        if (liveText) {
+            navigator.clipboard.writeText(liveText).then(() => {
                 showToast('Notice copied to clipboard!', 'success');
             });
         }
@@ -985,6 +987,11 @@ function renderNoticePreview(data) {
     const preview = document.getElementById('notice-preview-content');
     preview.textContent = data.notice_text;
 
+    // Make the notice text editable so user can tweak before dispatch
+    preview.contentEditable = 'true';
+    preview.spellcheck = false;
+    preview.setAttribute('data-editable', 'true');
+
     // Show action buttons
     document.getElementById('btn-copy-notice').style.display = '';
     document.getElementById('btn-dispatch-notice').style.display = '';
@@ -1002,10 +1009,30 @@ async function dispatchNotice() {
     if (!state.generatedNotice) return;
 
     const data = state.generatedNotice;
+
+    // Get the (possibly edited) notice text from the editable preview
+    const preview = document.getElementById('notice-preview-content');
+    const noticeBody = (preview.innerText || preview.textContent || '').trim();
+
+    // Recipient email from the form field
+    const recipientEmail = (document.getElementById('legal-company-email').value || '').trim();
+    const companyName = data.recipient?.company_name || document.getElementById('legal-company').value || 'Data Controller';
+
+    // Build subject line
+    const subject = `Data Erasure / Privacy Notice – ${companyName} [Ref: ${data.reference_id || ''}]`;
+
+    // Open the default mail client via mailto: link
+    const mailtoUrl = `mailto:${encodeURIComponent(recipientEmail)}` +
+        `?subject=${encodeURIComponent(subject)}` +
+        `&body=${encodeURIComponent(noticeBody)}`;
+
+    window.open(mailtoUrl, '_blank');
+
+    // Also persist dispatch to backend for compliance tracking
     const payload = {
         jurisdiction: data.jurisdiction,
-        company_name: data.recipient.company_name,
-        company_email: document.getElementById('legal-company-email').value,
+        company_name: companyName,
+        company_email: recipientEmail,
         user_name: data.sender.name,
         user_email: data.sender.email,
         notice_reference: data.reference_id,
@@ -1021,13 +1048,14 @@ async function dispatchNotice() {
         const result = await resp.json();
 
         if (result.status === 'dispatched') {
-            showToast(result.message, 'success');
+            showToast(result.message + ' — Mail app opened.', 'success');
             navigateTo('compliance');
         } else {
-            showToast('Dispatch failed', 'error');
+            showToast('Notice opened in mail app. Backend dispatch failed — track manually.', 'warning');
         }
     } catch (e) {
-        showToast('Error: ' + e.message, 'error');
+        // mailto already opened, so the user can still send — just warn about tracking
+        showToast('Mail app opened. Backend tracking error: ' + e.message, 'warning');
     }
 }
 
@@ -1477,7 +1505,7 @@ function agProfile() {
         password: (agEl('ag-password')?.value || ''),
         known_usernames: (agEl('ag-usernames')?.value || '').trim(),
         alt_emails: (agEl('ag-altemails')?.value || '').trim(),
-        alt_phones: (agEl('ag-altphones')?.value || '').trim(),
+        alt_phones: getMultiValues('ag-altphones').join(', '),
         date_of_birth: (agEl('ag-dob')?.value || '').trim(),
         upi_id: getMultiValues('ag-upi').join(', '),
         websites: getMultiValues('ag-websites').join(', '),
@@ -2134,6 +2162,7 @@ async function agentReset() {
             body: JSON.stringify(profile),
         });
         traceClear();
+        clearMultiInputs();
         agEl('agent-outcome').hidden = true;
         agEl('agent-summary').innerHTML = '';
         agEl('approval-panel').hidden = true;
@@ -2215,7 +2244,7 @@ function renderCandidates(st) {
 const _multiValues = {};
 
 function initMultiInputs() {
-    const groups = ['ag-phone', 'ag-upi', 'ag-websites'];
+    const groups = ['ag-phone', 'ag-altphones', 'ag-upi', 'ag-websites'];
 
     groups.forEach(groupId => {
         _multiValues[groupId] = [];
@@ -2236,9 +2265,9 @@ function initMultiInputs() {
             });
         }
 
-        // Add on Enter key
+        // Add on Enter key or comma
         input.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
+            if (e.key === 'Enter' || e.key === ',') {
                 e.preventDefault();
                 const val = input.value.trim();
                 if (val) {
@@ -2247,37 +2276,55 @@ function initMultiInputs() {
                 }
             }
         });
+
+        // Add on paste (e.g. pasted comma-separated list)
+        input.addEventListener('paste', () => {
+            setTimeout(() => {
+                const val = input.value.trim();
+                if (val.includes(',') || val.includes('\n')) {
+                    addMultiTag(groupId, val);
+                    input.value = '';
+                }
+            }, 20);
+        });
     });
 }
 
 function addMultiTag(groupId, value) {
-    if (!value || _multiValues[groupId].includes(value)) return;
-    _multiValues[groupId].push(value);
-
+    if (!value) return;
+    if (!_multiValues[groupId]) _multiValues[groupId] = [];
+    const parts = value.split(/[,;\n]+/).map(s => s.trim()).filter(Boolean);
     const tagsContainer = document.getElementById(groupId + '-tags');
-    if (!tagsContainer) return;
 
-    const tag = document.createElement('span');
-    tag.className = 'multi-tag';
-    tag.dataset.value = value;
+    parts.forEach(part => {
+        if (_multiValues[groupId].includes(part)) return;
+        _multiValues[groupId].push(part);
 
-    const text = document.createElement('span');
-    text.textContent = value;
+        if (!tagsContainer) return;
 
-    const removeBtn = document.createElement('button');
-    removeBtn.type = 'button';
-    removeBtn.className = 'multi-tag-remove';
-    removeBtn.textContent = '×';
-    removeBtn.title = 'Remove';
-    removeBtn.addEventListener('click', () => {
-        removeMultiTag(groupId, value, tag);
+        const tag = document.createElement('span');
+        tag.className = 'multi-tag';
+        tag.dataset.value = part;
+
+        const text = document.createElement('span');
+        text.textContent = part;
+
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'multi-tag-remove';
+        removeBtn.textContent = '×';
+        removeBtn.title = 'Remove';
+        removeBtn.addEventListener('click', () => {
+            removeMultiTag(groupId, part, tag);
+        });
+
+        tag.append(text, removeBtn);
+        tagsContainer.appendChild(tag);
     });
-
-    tag.append(text, removeBtn);
-    tagsContainer.appendChild(tag);
 }
 
 function removeMultiTag(groupId, value, tagEl) {
+    if (!_multiValues[groupId]) return;
     const idx = _multiValues[groupId].indexOf(value);
     if (idx !== -1) _multiValues[groupId].splice(idx, 1);
     if (tagEl) {
@@ -2297,9 +2344,24 @@ function getMultiValues(groupId) {
     const input = document.getElementById(groupId);
     if (input) {
         const current = input.value.trim();
-        if (current && !vals.includes(current)) vals.push(current);
+        if (current) {
+            const parts = current.split(/[,;\n]+/).map(s => s.trim()).filter(Boolean);
+            parts.forEach(p => {
+                if (!vals.includes(p)) vals.push(p);
+            });
+        }
     }
     return vals;
+}
+
+function clearMultiInputs() {
+    ['ag-phone', 'ag-altphones', 'ag-upi', 'ag-websites'].forEach(groupId => {
+        _multiValues[groupId] = [];
+        const container = document.getElementById(groupId + '-tags');
+        if (container) container.innerHTML = '';
+        const input = document.getElementById(groupId);
+        if (input) input.value = '';
+    });
 }
 
 /* ── Password Visibility Toggle ──────────────────────────────────────── */

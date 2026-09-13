@@ -456,31 +456,18 @@ def run_discovery(profile: dict, stream: EventStream) -> RunResult:
                               + [{"exposure_id": h.get("exposure_id") or h["id"], "source": h["source"]}
                                  for h in gathered["identifiers"].get("hits", [])])
 
-            if actionable:
-                goal = JUDGEMENT_GOAL.format(
-                    profile=json.dumps(profile, indent=2),
-                    risk=gathered["risk"].get("overall_score"),
-                    level=gathered["risk"].get("risk_level"),
-                    exposures=json.dumps(actionable, indent=2),
-                )
-                summary = (_run_llm(ctx, phase_tools, goal, stream) if mode == "anthropic"
-                           else openai_compat_planner.run(
-                               ctx, phase_tools, JUDGEMENT_SYSTEM, goal, stream))
-            else:
-                goal = NO_EXPOSURES_GOAL.format(
-                    profile=json.dumps(profile, indent=2),
-                    risk=gathered["risk"].get("overall_score"),
-                    level=gathered["risk"].get("risk_level"),
-                )
-                summary = (_run_llm(ctx, {}, goal, stream) if mode == "anthropic"
-                           else openai_compat_planner.run(
-                               ctx, {}, NO_EXPOSURES_SYSTEM, goal, stream))
+            # Strip sensitive secrets like raw passwords before sending profile to LLM
+            planner_profile = {k: v for k, v in profile.items() if k != "password"}
+
+            from backend.agent.multi_agent_swarm import MultiAgentSwarm
+            swarm = MultiAgentSwarm(ctx, tools)
+            summary = swarm.run_discovery_swarm(planner_profile, gathered, actionable, stream)
         else:
             summary = _run_deterministic_discovery(ctx, tools)
     except Exception as exc:                                   # demo must not hard-fail
         error = _explain(exc, mode)
         ctx.emit("orchestrator", "error",
-                 f"LLM planner unavailable — {error}. Falling back to the deterministic "
+                 f"Swarm planner unavailable — {error}. Falling back to the deterministic "
                  f"pipeline over the same tools.", status="error")
         summary = _run_deterministic_discovery(ctx, tools)
         mode = "deterministic_fallback"
@@ -493,7 +480,7 @@ def run_discovery(profile: dict, stream: EventStream) -> RunResult:
 
 
 def run_remediation(profile: dict, request_ids: list[str], stream: EventStream) -> RunResult:
-    """Phase 2: the user approved; dispatch, follow up, verify, escalate."""
+    """Phase 2: the user approved; dispatch, follow up, verify, escalate via RemediationAgent."""
     memory, ctx, tools, mode = _prepare(profile, stream, auto_approve=True)
     risk_before = 0.0
     assessment_before = tools["assess_exposure_risk"]()
@@ -501,20 +488,22 @@ def run_remediation(profile: dict, request_ids: list[str], stream: EventStream) 
 
     error = ""
     try:
-        if mode in ("anthropic", "openai_compat"):
-            goal = REMEDIATION_GOAL.format(request_ids=", ".join(request_ids))
-            REMEDIATION_TOOLS = ("submit_erasure_request", "check_request_status",
-                                 "verify_removal", "escalate_to_regulator")
-            phase_tools = {k: v for k, v in tools.items() if k in REMEDIATION_TOOLS}
-            summary = (_run_llm(ctx, phase_tools, goal, stream) if mode == "anthropic"
-                       else openai_compat_planner.run(ctx, phase_tools, SYSTEM, goal, stream))
-        else:
-            summary = _run_deterministic_remediation(ctx, tools, request_ids)
+        from backend.agent.multi_agent_swarm import RemediationAgent
+        remediation_agent = RemediationAgent(ctx, tools)
+        rem_res = remediation_agent.execute_remediation(request_ids)
+        summary = (
+            f"Dispatched {rem_res['dispatched_count']} statutory notice(s). "
+            f"Independently verified removal at {len(rem_res['verified_removed'])} controller(s)"
+            + (f" ({', '.join(rem_res['verified_removed'])})" if rem_res['verified_removed'] else "")
+            + ". "
+            + (f"{len(rem_res['escalated'])} unresolved and escalated to regulators: {'; '.join(rem_res['escalated'])}."
+               if rem_res['escalated'] else "No escalations required.")
+        )
+        ctx.emit("remediation", "summary", summary)
     except Exception as exc:
         error = _explain(exc, mode)
         ctx.emit("orchestrator", "error",
-                 f"LLM planner unavailable — {error}. Falling back to the deterministic "
-                 f"pipeline over the same tools.", status="error")
+                 f"Remediation agent error — {error}. Running deterministic fallback.", status="error")
         summary = _run_deterministic_remediation(ctx, tools, request_ids)
         mode = "deterministic_fallback"
 

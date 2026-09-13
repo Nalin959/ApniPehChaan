@@ -27,8 +27,8 @@ PROVIDERS = {
     "gemini": {
         "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
         "key_env": "GEMINI_API_KEY",
-        "default_model": "gemini-3.8-flash",
-        "fallback_models": ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-3.7-flash"],
+        "default_model": "gemini-3.5-flash-lite",
+        "fallback_models": ["gemini-3.6-flash", "gemini-3.1-flash-lite", "gemini-3.8-flash", "gemini-3.7-flash"],
         "signup": "https://aistudio.google.com/apikey",
         "note": "Primary reasoning planner driven by Google Gemini.",
     },
@@ -148,6 +148,51 @@ def available() -> bool:
 def model_for(provider: str) -> str:
     return (os.environ.get("OPENAI_COMPAT_MODEL")
             or PROVIDERS[provider]["default_model"])
+
+
+def get_llm_completion(
+    messages: list[dict],
+    max_tokens: int = 1200,
+    temperature: float = 0.2,
+    preferred_provider: str | None = None,
+) -> tuple[str | None, str | None]:
+    """
+    Query configured LLM providers (Gemini, Groq, etc.) with automatic failover.
+    Returns (completion_text, provider_and_model_used) or (None, None).
+    """
+    from openai import OpenAI
+
+    providers_to_try = configured_all()
+    if preferred_provider and preferred_provider in providers_to_try:
+        providers_to_try.remove(preferred_provider)
+        providers_to_try.insert(0, preferred_provider)
+
+    for prov in providers_to_try:
+        spec = PROVIDERS[prov]
+        primary_model = model_for(prov)
+        candidates = [primary_model] + [m for m in spec.get("fallback_models", []) if m != primary_model]
+
+        for cand in candidates:
+            try:
+                client = OpenAI(api_key=os.environ[spec["key_env"]], base_url=spec["base_url"])
+                effective_tokens = max(max_tokens, 800) if "gpt-oss" in cand else max_tokens
+                resp = client.chat.completions.create(
+                    model=cand,
+                    messages=messages,
+                    max_tokens=effective_tokens,
+                    temperature=temperature,
+                )
+                msg = resp.choices[0].message
+                content = (msg.content or "").strip()
+                if not content and getattr(msg, "reasoning", None):
+                    content = str(msg.reasoning).strip()
+                if content:
+                    return content, f"{cand} ({prov})"
+            except Exception:
+                continue
+
+    return None, None
+
 
 
 def _schema_for(fn, brief: bool = False) -> dict:

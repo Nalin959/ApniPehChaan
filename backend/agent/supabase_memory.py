@@ -458,3 +458,41 @@ class SupabaseMemory:
             "overdue": len(self.overdue_requests(user_id)),
         }
 
+    def reset_user(self, user_id: str):
+        """Wipe all agent records for a given user from Supabase."""
+        self.flush()
+        for table in ("exposures", "requests", "agent_events", "identities", "runs"):
+            try:
+                self._request("DELETE", table, params={"user_id": f"eq.{user_id}"})
+            except Exception as e:
+                print(f"[Supabase] Reset user table {table} error: {e}")
+        self._exposures_cache = {k: v for k, v in self._exposures_cache.items() if k[0] != user_id}
+        self._cached_users.discard(user_id)
+
+    def _exec(self, sql: str, params: tuple = ()):
+        """Compatibility shim for SQLite _exec calls over Supabase PostgREST."""
+        self.flush()
+        sql_upper = sql.upper().strip()
+        if "DELETE FROM" in sql_upper and "WHERE USER_ID=?" in sql_upper and len(params) >= 1:
+            parts = sql.strip().split()
+            table = parts[2].strip().lower()
+            user_id = str(params[0])
+            try:
+                self._request("DELETE", table, params={"user_id": f"eq.{user_id}"})
+            except Exception as e:
+                print(f"[Supabase] _exec DELETE error on {table}: {e}")
+            if table == "exposures":
+                self._exposures_cache = {k: v for k, v in self._exposures_cache.items() if k[0] != user_id}
+                self._cached_users.discard(user_id)
+            return
+
+        if "UPDATE EXPOSURES SET" in sql_upper and "WHERE ID=?" in sql_upper and len(params) >= 1:
+            exp_id = str(params[-1])
+            set_part = sql_upper.split("SET", 1)[1].split("WHERE", 1)[0].strip()
+            cols = [c.split("=")[0].strip().lower() for c in set_part.split(",")]
+            update_data = {col: val for col, val in zip(cols, params[:-1])}
+            self.update_exposure(exp_id, **update_data)
+            return
+
+        print(f"[Supabase] Warning: unhandled _exec query: {sql}")
+

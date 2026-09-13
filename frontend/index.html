@@ -230,7 +230,15 @@
                         <details class="ident-more">
                             <summary>More identifiers <span>(optional — each one stops strangers being flagged as you)</span></summary>
                             <label>Other emails<input type="text" id="ag-altemails" placeholder="old@work.com, me@college.edu" autocomplete="off"></label>
-                            <label>Other phones<input type="text" id="ag-altphones" placeholder="+91 98200 11223" autocomplete="off"></label>
+                            <label>Other phone(s)
+                                <div class="multi-input-group" id="ag-altphones-group">
+                                    <div class="multi-tags" id="ag-altphones-tags"></div>
+                                    <div class="multi-input-row">
+                                        <input type="text" id="ag-altphones" placeholder="+91 98200 11223" autocomplete="off">
+                                        <button type="button" class="multi-add-btn" data-group="ag-altphones" title="Add other phone">+</button>
+                                    </div>
+                                </div>
+                            </label>
                             <div class="agent-form-row">
                                 <label>Date of birth<input type="date" id="ag-dob"></label>
                                 <label>UPI ID(s)
