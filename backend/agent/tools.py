@@ -1075,107 +1075,115 @@ def build_tools(ctx: ToolContext) -> dict[str, Callable]:
                  f"{', '.join(k for k, _ in checked)}…",
                  tool_name="match_unique_identifiers")
 
-        _pastes._load()
-        corpus = getattr(_pastes, "_pastes", []) or []
-
-        # The only paste corpus shipped with this project is
-        # data/synthetic_pastes/pastes_corpus.json — randomly GENERATED records
-        # for fictional people (see data/download_datasets.py
-        # generate_synthetic_pastes). A "hit" against it is fabricated by
-        # construction, so recording one as evidence_class "verified" /
-        # severity "critical" and telling the user it is "proof this record
-        # concerns you" asserts something untrue about real people's data.
-        # orchestrator.py already keeps this corpus out of the pipeline
-        # (out["pastes"] = {"exposures": []}); this tool was the remaining way in.
+        # REAL leak corpora, not the shipped sample. The only paste corpus in
+        # the repo is data/synthetic_pastes/pastes_corpus.json — randomly
+        # GENERATED records for fictional people (data/download_datasets.py
+        # generate_synthetic_pastes). Searching that and calling a hit "proof
+        # this record concerns you" asserted something untrue about real
+        # people's data, so this tool now queries services that index actual
+        # dumps. Both are free and keyless, and both apply their own exact-match
+        # pass, so a substring coincidence cannot be reported as a match:
+        #   - ProxyNova combination lists: an address next to a PLAINTEXT
+        #     password. Worse than breach membership — nothing needs cracking.
+        #   - LeakCheck: breach membership for an email or a phone number.
         #
-        # Reporting zero hits instead would be just as wrong — "0 confirmed
-        # exposure(s) across 50 leak record(s)" reads as a completed clean
-        # search. So when no real corpus is configured the check reports as
-        # UNAVAILABLE, per the project's rule that a check which could not
-        # actually run never comes back "clear".
-        from backend.scanners import paste_scanner as _paste_mod
-        corpus_is_synthetic = "synthetic" in str(
-            getattr(_paste_mod, "PASTES_FILE", "")).lower()
-        searchable = [] if corpus_is_synthetic else corpus
+        # A third party going down must degrade to "could not check", never to
+        # "clear" — the same rule verify_breach_exposure follows.
+        def _safe_find(fn, *a):
+            try:
+                return fn(*a)
+            except Exception as exc:
+                return extra_sources.Finding(
+                    getattr(fn, "__name__", "leak_corpus"), str(a[0])[:40] if a else "",
+                    "", utcnow(), None, "unavailable",
+                    f"The check raised {type(exc).__name__}.",
+                    "COULD NOT CHECK — this is not a clean result.", "")
 
-        hits = []
+        # No free corpus indexes these, so they must be reported as unchecked
+        # rather than quietly counted as searched and found nothing.
+        CORPUS_SEARCHABLE = {"email", "phone"}
+        _SEV = {"proxynova_combolist": "critical"}
+
+        hits, corpus_ran, corpus_unavailable, not_searchable = [], [], [], []
+
         for kind, value in checked:
-            needle = value.lower()
-            digits = "".join(c for c in value if c.isdigit())
-            for entry in searchable:
-                blob = json.dumps(entry, default=str).lower()
-                # Concatenating EVERY digit in the record and searching that
-                # invented identifiers. A row holding "(1000, ... '2026-08-06"
-                # collapses to "...10002026080...", in which a ten-digit window
-                # spans three unrelated columns — and a user whose phone equalled
-                # that window was told it "appears verbatim" in the dump, which
-                # is a false positive and a false proof statement. Every entry in
-                # the shipped corpus contains at least one such window. Matching
-                # per written number keeps real formatting working without
-                # manufacturing a number nobody ever wrote down.
-                found = needle in blob
-                if not found and len(digits) >= 10:
-                    found = any(
-                        digits in "".join(c for c in run if c.isdigit())
-                        for run in _NUMERIC_RUN_RE.findall(blob))
-                if not found:
+            if kind not in CORPUS_SEARCHABLE:
+                not_searchable.append({
+                    "check": "leak_corpus", "kind": kind,
+                    "why": (f"No free leak corpus indexes {kind.upper()} values, so it "
+                            f"could not be searched. Absence of a finding here proves "
+                            f"nothing about your {kind.upper()}.")})
+                continue
+
+            if kind == "email":
+                findings = [_safe_find(extra_sources.check_proxynova_credentials, value),
+                            _safe_find(extra_sources.check_leakcheck, value, "email")]
+            else:
+                findings = [_safe_find(extra_sources.check_leakcheck, value, "phone")]
+
+            for f in findings:
+                corpus_ran.append(f.check)
+                if f.result == "unavailable":
+                    corpus_unavailable.append(f.check)
                     continue
-                title = entry.get("title") or entry.get("paste_id") or "leak dump"
-                ev = {
-                    "check": "unique_identifier_in_leak", "target": f"{kind}",
-                    "endpoint": f"(local corpus) {title}",
-                    "queried_at": utcnow(), "http_status": None, "result": "hit",
-                    "proof": f"Your {kind} appears verbatim in '{title}'.",
-                    "interpretation": (
-                        f"CONFIRMED: {kind} is unique to you, so a verbatim match is proof "
-                        f"this record concerns you — unlike a name match, which is not."),
-                    # Never echo any part of the identifier here. This string is
-                    # persisted into the exposure's evidence blob and returned by
-                    # the API, so `value[:4]` put the first four characters of the
-                    # user's Aadhaar or PAN into stored, retrievable data.
-                    "reproduce": (f"grep -i '<your {kind}>' "
-                                  f"data/synthetic_pastes/pastes_corpus.json"),
-                }
+                if f.result != "hit":
+                    continue
+
+                fields = [kind]
+                if f.check == "proxynova_combolist":
+                    fields.append("password")
                 exp = {
-                    "source_type": "paste", "source_name": title,
-                    "source_id": "leak:" + str(title), "record_id": kind,
-                    "data_found": [kind], "detail": {"identifier": kind, "source": title},
+                    "source_type": "paste", "source_name": f.check,
+                    "source_id": "leak:" + f.check + ":" + kind, "record_id": kind,
+                    "data_found": fields,
+                    "detail": {"identifier": kind, "source": f.check,
+                               "metadata": f.metadata},
                     "match_confidence": 1.0, "match_tier": "definite",
-                    "severity": "critical" if kind in ("aadhaar", "pan", "passport") else "high",
-                    "risk_score": 0.0,
-                    "evidence_class": "verified", "evidence": [ev],
+                    "severity": _SEV.get(f.check, "high"), "risk_score": 0.0,
+                    "evidence_class": "verified", "evidence": [f.to_dict()],
                 }
                 exp_id, is_new = ctx.memory.record_exposure(ctx.user_id, ctx.run_id, exp)
                 hits.append({"exposure_id": exp_id, "identifier": kind,
-                             "source": title, "is_new": is_new})
-                break   # one hit per identifier is enough to establish exposure
+                             "source": f.check, "is_new": is_new})
+
+        corpus_complete = bool(corpus_ran) and not corpus_unavailable
 
         for bad in invalid:
             ctx.emit("discovery", "identifiers",
                      f"{bad['kind'].upper()} rejected: {bad['why']}", status="error")
 
-        if corpus_is_synthetic:
+        if corpus_unavailable:
             ctx.emit("discovery", "identifiers",
-                     "Leak-corpus check UNAVAILABLE — no real paste corpus is configured "
-                     "(the only one shipped is a synthetic sample), so your identifiers "
-                     "could NOT be checked against leak dumps. This is not a clean result.",
-                     status="error", tool_output={"hits": 0, "corpus_available": False})
+                     f"Leak-corpus search INCOMPLETE — {len(corpus_unavailable)} of "
+                     f"{len(corpus_ran)} corpus check(s) could not be reached "
+                     f"({', '.join(sorted(set(corpus_unavailable)))}). "
+                     f"{len(hits)} confirmed exposure(s) from the checks that did run; "
+                     f"absence of a finding in the rest proves nothing.",
+                     status="error",
+                     tool_output={"hits": len(hits), "corpus_complete": False})
+        elif corpus_ran:
+            ctx.emit("discovery", "identifiers",
+                     f"Leak-corpus search complete: {len(hits)} confirmed exposure(s) "
+                     f"across {len(corpus_ran)} real corpus check(s) "
+                     f"({', '.join(sorted(set(corpus_ran)))}).",
+                     tool_output={"hits": len(hits), "corpus_complete": True})
         else:
             ctx.emit("discovery", "identifiers",
-                     f"Identifier search complete: {len(hits)} confirmed exposure(s) across "
-                     f"{len(searchable)} leak record(s).",
-                     tool_output={"hits": len(hits)})
+                     "No identifier could be searched against a leak corpus — the free "
+                     "corpora index email addresses and phone numbers only. This is not "
+                     "a clean result for the identifiers that could not be searched.",
+                     status="error",
+                     tool_output={"hits": 0, "corpus_complete": False})
 
         return {
             "searched": [k for k, _ in checked],
             "supplied": supplied,
             "invalid": invalid,
             "hits": hits,
-            "corpus_available": not corpus_is_synthetic,
-            "not_checked": ([{"check": "leak_corpus", "why": "No real paste corpus is "
-                              "configured; the shipped corpus is synthetic sample data."}]
-                            if corpus_is_synthetic else []),
-            "corpus_size": len(searchable),
+            "corpus_checks_run": sorted(set(corpus_ran)),
+            "corpus_unavailable": sorted(set(corpus_unavailable)),
+            "corpus_complete": corpus_complete,
+            "not_checked": not_searchable,
             "where_each_helps": {
                 "email": "Identifier-keyed lookups (Gravatar, HIBP), leak matching, and "
                          "corroborating a profile page.",

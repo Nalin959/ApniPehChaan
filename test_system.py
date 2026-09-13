@@ -1537,6 +1537,12 @@ def test_fiduciary_and_threat_surface():
         fast_tools = dict(tools)
         fast_tools["search_open_web"] = lambda: {"confirmed": [], "search_degraded": False, "pages_fetched": 0}
         fast_tools["browse_indian_registry"] = lambda: {"total_scanned": 0, "categories": {}}
+        # match_unique_identifiers queries real leak corpora (ProxyNova, LeakCheck)
+        # over the network; stub it for the same isolation reason as the two above.
+        fast_tools["match_unique_identifiers"] = lambda: {
+            "searched": [], "supplied": [], "invalid": [], "hits": [],
+            "corpus_checks_run": [], "corpus_unavailable": [],
+            "corpus_complete": False, "not_checked": []}
         d_summary = _run_deterministic_discovery(ctx, fast_tools)
         test("Deterministic discovery includes threat surface intelligence", "Threat surface analysis" in d_summary)
         test("Deterministic discovery captures attack vectors in summary", "attack vector" in d_summary)
@@ -1604,28 +1610,37 @@ def test_regressions_2026_09_13():
     # match_unique_identifiers searched data/synthetic_pastes/ — randomly
     # GENERATED records for fictional people — and recorded hits as
     # evidence_class "verified" / severity "critical", telling the user the
-    # match was "proof this record concerns you". Reporting zero hits would be
-    # equally wrong, because "0 exposure(s) across 50 leak record(s)" reads as a
-    # completed clean search; the check must report as UNAVAILABLE instead.
+    # match was "proof this record concerns you". It now queries REAL corpora
+    # (ProxyNova combination lists, LeakCheck) instead. Reporting zero hits for
+    # an identifier nothing can search would be equally wrong, because it reads
+    # as a completed clean search — it must report as unchecked.
+    import inspect as _inspect
+    from backend.agent import tools as _tools_mod
+    test("The synthetic corpus is no longer consulted for attribution",
+         "synthetic_pastes" not in _inspect.getsource(
+             _tools_mod.build_tools).split("def search_paste_dumps")[0],
+         "match_unique_identifiers still reads the synthetic corpus")
+
     import tempfile as _tf
     from backend.agent.tools import build_tools, ToolContext
     from backend.agent.memory import Memory
     with _tf.TemporaryDirectory() as d:
         mem = Memory(os.path.join(d, "reg.db"))
-        prof = {"name": "Aarav Patel", "email": corpus_email or "x@example.invalid",
-                "country": "IN"}
+        # Aadhaar only: no free corpus indexes it, so this stays offline.
+        prof = {"name": "T", "aadhaar": "234567890124", "country": "IN"}
         uid = mem.upsert_user(prof)
         ctx = ToolContext(memory=mem, network=None, user_id=uid,
                           run_id=mem.start_run(uid, "reg"), profile=prof,
                           emit=lambda *a, **k: None)
         res = build_tools(ctx)["match_unique_identifiers"]()
-        test("Synthetic corpus produces no attributed exposure",
+        test("An identifier no corpus indexes is reported unchecked, not clean",
+             any(n.get("kind") == "aadhaar" for n in res.get("not_checked", []))
+             and res.get("corpus_complete") is False,
+             f"not_checked={res.get('not_checked')} "
+             f"corpus_complete={res.get('corpus_complete')}")
+        test("An unsearchable identifier records no exposure",
              len(res.get("hits", [])) == 0 and len(mem.get_exposures(uid)) == 0,
-             f"hits={len(res.get('hits', []))} exposures={len(mem.get_exposures(uid))}")
-        test("A corpus that cannot really be searched reports UNAVAILABLE, not clean",
-             res.get("corpus_available") is False and bool(res.get("not_checked")),
-             f"corpus_available={res.get('corpus_available')} "
-             f"not_checked={res.get('not_checked')}")
+             f"hits={len(res.get('hits', []))}")
 
     # ── 4. Info-stealer routed to "monitor" as an unattributed dump ──────────
     # source_type "infostealer" had no branch in determine_legal_basis and fell
