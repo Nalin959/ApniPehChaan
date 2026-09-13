@@ -1704,14 +1704,25 @@ async def agent_approve(req: AgentApproveRequest):
 
 @app.post("/api/agent/reset")
 async def agent_reset(req: AgentScanRequest):
-    """Wipe this identity so a demo can be re-run from a clean slate."""
-    if not (req.name or "").strip() and not (req.email or "").strip():
-        raise HTTPException(status_code=400,
-                            detail="A name or email is required to identify what to reset.")
-    removed = _network.reset_subject(req.name, req.email)
+    """Wipe this identity or all demo records so everything can be re-run from a clean slate."""
+    name = (req.name or "").strip()
+    email = (req.email or "").strip()
+    if not name and not email:
+        if hasattr(_memory, "wipe_all"):
+            _memory.wipe_all()
+        return {"status": "reset", "user_id": None, "broker_records_cleared": 0}
+    removed = _network.reset_subject(name, email)
     user_id = _memory.upsert_user(_profile_of(req))
     _memory.reset_user(user_id)
     return {"status": "reset", "user_id": user_id, "broker_records_cleared": removed}
+
+
+@app.post("/api/agent/wipe-all")
+async def agent_wipe_all():
+    """Wipe all demo records from memory and storage so the app starts completely from scratch."""
+    if hasattr(_memory, "wipe_all"):
+        _memory.wipe_all()
+    return {"status": "wiped"}
 
 
 async def _pump(websocket: WebSocket, fn, *args):

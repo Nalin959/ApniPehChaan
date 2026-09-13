@@ -18,6 +18,7 @@ const state = {
 
 // ═══ Initialization ═════════════════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded', () => {
+    resetSitewideState();
     initParticles();
     initNavigation();
     initScanForm();
@@ -26,27 +27,108 @@ document.addEventListener('DOMContentLoaded', () => {
     initProfileSync();
     fetchSystemStatus();
     initRightsAdvisor();
-    restoreLatestAgentState();
 });
 
-async function restoreLatestAgentState() {
+function resetSitewideState() {
+    // Wipe local & session storage
     try {
-        const resp = await fetch('/api/agent/latest');
-        const data = await resp.json();
-        if (data && data.user_id && (data.exposures?.length || data.summary?.exposures_total)) {
-            syncAgentToExposuresAndDashboard({ state: data });
-        } else {
-            renderAgentExposures({ exposures: [] });
-        }
-    } catch(e) {}
+        localStorage.removeItem('apnipehchaan_profile');
+        localStorage.removeItem('sovereign_profile');
+        sessionStorage.clear();
+    } catch (e) {}
 
-    // Hydrate Threat Surface Matrix
-    try {
-        fetch('/api/agent/threat-surface')
-            .then(r => r.json())
-            .then(renderThreatSurface)
-            .catch(() => {});
-    } catch(e) {}
+    // Clear all text & date input fields sitewide
+    const textInputIds = [
+        'ag-name', 'ag-email', 'ag-city', 'ag-usernames', 'ag-altemails',
+        'ag-dob', 'ag-aadhaar', 'ag-pan', 'ag-declared',
+        'input-name', 'input-email', 'input-phone', 'input-city', 'input-pan', 'input-aadhaar',
+        'user-name', 'user-email', 'user-phone', 'user-id-number', 'user-address'
+    ];
+    textInputIds.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+    });
+
+    const countryEl = document.getElementById('ag-country');
+    if (countryEl) countryEl.value = 'IN';
+    const guessEl = document.getElementById('ag-guess');
+    if (guessEl) guessEl.checked = true;
+
+    // Clear all multi-inputs and chips
+    if (typeof clearMultiInputs === 'function') {
+        clearMultiInputs();
+    }
+
+    // Hide all active agent panels & outcomes
+    const outcome = typeof agEl === 'function' ? agEl('agent-outcome') : document.getElementById('agent-outcome');
+    if (outcome) outcome.hidden = true;
+    const summary = typeof agEl === 'function' ? agEl('agent-summary') : document.getElementById('agent-summary');
+    if (summary) summary.innerHTML = '';
+    const apv = typeof agEl === 'function' ? agEl('approval-panel') : document.getElementById('approval-panel');
+    if (apv) apv.hidden = true;
+    const ledger = typeof agEl === 'function' ? agEl('ledger-panel') : document.getElementById('ledger-panel');
+    if (ledger) ledger.hidden = true;
+    const rp = typeof agEl === 'function' ? agEl('plan-panel') : document.getElementById('plan-panel');
+    if (rp) rp.hidden = true;
+    const rc = typeof agEl === 'function' ? agEl('candidates-panel') : document.getElementById('candidates-panel');
+    if (rc) rc.hidden = true;
+
+    // Reset in-memory application & agent state
+    state.agentState = null;
+    state.agentSummary = null;
+    state.agentRisk = null;
+    state.scanResults = null;
+    state.generatedNotice = null;
+    state.complianceRequests = [];
+    state.isScanning = false;
+
+    if (typeof Agent !== 'undefined') {
+        Agent.userId = null;
+        Agent.riskBefore = null;
+        Agent.drafted = [];
+        Agent.profile = null;
+    }
+
+    // Reset radar, scan progress, and idle log
+    const prog = document.getElementById('scan-progress-fill'); if (prog) prog.style.width = '0%';
+    const sweep = document.getElementById('radar-sweep'); if (sweep) sweep.classList.remove('active');
+    const badge = document.getElementById('radar-status-badge'); if (badge) { badge.textContent = 'STANDBY'; badge.classList.remove('active'); }
+    const statusText = document.getElementById('radar-status-text'); if (statusText) statusText.textContent = 'Autonomous Privacy Engine Ready';
+    const logEl = document.getElementById('scan-log'); if (logEl) logEl.innerHTML = '<div class="log-entry log-idle">Awaiting agent deployment... Configure your identity and click &ldquo;Deploy Privacy Agent&rdquo;.</div>';
+
+    // Reset dashboard counters & metrics
+    const scoreEl = document.getElementById('risk-score-value');
+    if (scoreEl) scoreEl.textContent = '—';
+    ['breach-count', 'broker-count', 'paste-count', 'infostealer-count'].forEach(cid => {
+        const el = document.getElementById(cid);
+        if (el) el.textContent = '0';
+    });
+    const lvlBadge = document.getElementById('risk-level-badge');
+    if (lvlBadge) { lvlBadge.textContent = 'Not Scanned'; lvlBadge.style.background = ''; lvlBadge.style.color = ''; }
+    const alarmCard = document.getElementById('stat-infostealer');
+    if (alarmCard) alarmCard.classList.remove('stat-alarm');
+    const riskCard = document.getElementById('stat-risk-score');
+    if (riskCard) riskCard.style.borderColor = '';
+    const recsCard = document.getElementById('recommendations-card');
+    if (recsCard) recsCard.style.display = 'none';
+
+    // Empty exposures & threat surface
+    if (typeof renderAgentExposures === 'function') {
+        renderAgentExposures({ exposures: [] });
+    }
+    if (typeof renderThreatSurface === 'function') {
+        renderThreatSurface(null);
+    }
+
+    // Reset live trace
+    if (typeof traceClear === 'function') {
+        traceClear();
+    }
+
+    // Update RightsAdvisor if present
+    if (window.RightsAdvisor && typeof window.RightsAdvisor.updateContextStats === 'function') {
+        window.RightsAdvisor.updateContextStats();
+    }
 }
 
 // ═══ Particle Background ════════════════════════════════════════════════════
@@ -153,7 +235,7 @@ function navigateTo(section) {
     if (section === 'exposures') {
         if (state.agentState) renderAgentExposures(state.agentState);
         else if (state.scanResults) renderExposures(state.scanResults);
-        else restoreLatestAgentState();
+        else renderAgentExposures({ exposures: [] });
     }
     if (section === 'legal') {
         prefillLegalForm();
@@ -2494,7 +2576,11 @@ function renderAgentExposures(st) {
 
     const ordered = urgent.concat(cards);
     if (ordered.length === 0) {
-        container.innerHTML = `<div class="glass-card empty-state"><div class="empty-icon">✅</div><h3>No Significant Exposures</h3><p>No critical data exposures were found for the provided identity.</p></div>`;
+        if (state.agentState || state.scanResults) {
+            container.innerHTML = `<div class="glass-card empty-state"><div class="empty-icon">✅</div><h3>No Significant Exposures</h3><p>No critical data exposures were found for the provided identity.</p></div>`;
+        } else {
+            container.innerHTML = `<div class="glass-card empty-state"><div class="empty-icon">🛡️</div><h3>No Exposures Discovered Yet</h3><p>Configure your identity and deploy the Privacy Agent to discover exposures across breach intelligence and data broker networks.</p></div>`;
+        }
     } else {
         ordered.forEach(c => container.appendChild(c));
     }
@@ -2546,21 +2632,6 @@ function initProfileSync() {
         ['ag-pan', 'input-pan'],
     ];
 
-    // Load from localStorage if present
-    const saved = localStorage.getItem('apnipehchaan_profile') || localStorage.getItem('sovereign_profile');
-    if (saved) {
-        try {
-            const p = JSON.parse(saved);
-            Object.entries(p).forEach(([k, val]) => {
-                // Credentials are never written here, but an older build's
-                // leftover entry must not be restored into a password field.
-                if (MASKED_MULTI_GROUPS.has(k)) return;
-                const el = document.getElementById(k);
-                if (el && val && !el.value) el.value = val;
-            });
-        } catch(e) {}
-    }
-
     pairs.forEach(group => {
         group.forEach(id => {
             const el = document.getElementById(id);
@@ -2573,12 +2644,6 @@ function initProfileSync() {
                         if (other) other.value = val;
                     }
                 });
-                const profileObj = {};
-                ['ag-name', 'ag-email', 'ag-phone', 'ag-city', 'ag-aadhaar', 'ag-pan', 'input-name', 'input-email'].forEach(fid => {
-                    const f = document.getElementById(fid);
-                    if (f) profileObj[fid] = f.value;
-                });
-                localStorage.setItem('apnipehchaan_profile', JSON.stringify(profileObj));
             });
         });
     });
@@ -2706,64 +2771,19 @@ async function agentApprove() {
 }
 
 async function agentReset() {
-    const profile = agProfile();
-    if (!profile.name && !profile.email) { alert('Enter the identity you want to reset.'); return; }
     agentSetBusy(true);
     try {
+        const profile = (typeof agProfile === 'function') ? agProfile() : {};
         await fetch('/api/agent/reset', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(profile),
         });
-        traceClear();
-        clearMultiInputs();
-        agEl('agent-outcome').hidden = true;
-        agEl('agent-summary').innerHTML = '';
-        agEl('approval-panel').hidden = true;
-        agEl('ledger-panel').hidden = true;
-        const rp = agEl('plan-panel'); if (rp) rp.hidden = true;
-        const rc = agEl('candidates-panel'); if (rc) rc.hidden = true;
-
-        // The server has wiped this identity, so nothing derived from it may be
-        // left on screen. state.agentState in particular is what
-        // navigateTo('exposures') re-renders from, so leaving it set repainted
-        // the Exposures tab and the Command Center with the exact findings that
-        // had just been deleted — the reset looked like it had not happened.
-        state.agentState = null;
-        state.agentSummary = null;
-        state.agentRisk = null;
-        state.scanResults = null;
-        Agent.userId = null;
-        Agent.riskBefore = null;
-        Agent.drafted = [];
-        renderAgentExposures({ exposures: [] });
-        renderThreatSurface(null);
-
-        const scoreEl = document.getElementById('risk-score-value');
-        if (scoreEl) scoreEl.textContent = '—';
-        ['breach-count', 'broker-count', 'paste-count', 'infostealer-count'].forEach(cid => {
-            const el = document.getElementById(cid);
-            if (el) el.textContent = '0';
-        });
-        const lvlBadge = document.getElementById('risk-level-badge');
-        if (lvlBadge) { lvlBadge.textContent = 'Not Scanned'; lvlBadge.style.background = ''; lvlBadge.style.color = ''; }
-        const alarmCard = document.getElementById('stat-infostealer');
-        if (alarmCard) alarmCard.classList.remove('stat-alarm');
-        const riskCard = document.getElementById('stat-risk-score');
-        if (riskCard) riskCard.style.borderColor = '';
-        const recsCard = document.getElementById('recommendations-card');
-        if (recsCard) recsCard.style.display = 'none';
-        if (window.RightsAdvisor) window.RightsAdvisor.updateContextStats();
-
-        const prog = document.getElementById('scan-progress-fill'); if (prog) prog.style.width = '0%';
-        const sweep = document.getElementById('radar-sweep'); if (sweep) sweep.classList.remove('active');
-        const badge = document.getElementById('radar-status-badge'); if (badge) { badge.textContent = 'STANDBY'; badge.classList.remove('active'); }
-        const statusText = document.getElementById('radar-status-text'); if (statusText) statusText.textContent = 'Autonomous Privacy Engine Ready';
-        const logEl = document.getElementById('scan-log'); if (logEl) logEl.innerHTML = '<div class="log-entry log-idle">Awaiting agent deployment... Configure your identity and click &ldquo;Deploy Privacy Agent&rdquo;.</div>';
-
-        traceAdd('orchestrator', 'Identity reset. The demo can be run again from a clean slate.', 'ok');
     } catch (e) {
-        traceAdd('orchestrator', 'Reset failed: ' + e.message, 'error');
+        console.warn('Backend reset call:', e);
     }
+    resetSitewideState();
+    traceAdd('orchestrator', 'Identity and workspace reset sitewide. Ready for clean deployment.', 'ok');
     agentSetBusy(false);
 }
 

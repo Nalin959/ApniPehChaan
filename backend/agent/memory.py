@@ -451,6 +451,12 @@ class Memory:
         """Wipe all agent records for a given user from SQLite."""
         for table in ("exposures", "requests", "agent_events", "identities", "runs"):
             self._exec(f"DELETE FROM {table} WHERE user_id=?", (user_id,))
+        self._exec("DELETE FROM users WHERE id=?", (user_id,))
+
+    def wipe_all(self):
+        """Wipe all tables from SQLite."""
+        for table in ("exposures", "requests", "agent_events", "identities", "runs", "users"):
+            self._exec(f"DELETE FROM {table}")
 
 
 _memory: Any = None

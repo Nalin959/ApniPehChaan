@@ -619,9 +619,27 @@ class SupabaseMemory:
                 self._request("DELETE", table, params={"user_id": f"eq.{user_id}"})
             except Exception as e:
                 print(f"[Supabase] Reset user table {table} error: {e}")
+        try:
+            self._request("DELETE", "users", params={"id": f"eq.{user_id}"})
+        except Exception as e:
+            print(f"[Supabase] Reset user table users error: {e}")
         with self._lock:
             self._exposures_cache = {k: v for k, v in self._exposures_cache.items() if k[0] != user_id}
             self._cached_users.discard(user_id)
+
+    def wipe_all(self):
+        """Wipe all agent records across all tables from Supabase."""
+        self.flush()
+        for table in ("agent_events", "identities", "requests", "exposures", "runs", "users"):
+            try:
+                self._request("DELETE", table, params={"id": "not.is.null"})
+            except Exception as e:
+                print(f"[Supabase] Wipe all table {table} error: {e}")
+        with self._lock:
+            self._exposures_cache.clear()
+            self._cached_users.clear()
+            self._pending_events.clear()
+            self._pending_new_exposures.clear()
 
     def _exec(self, sql: str, params: tuple = ()):
         """Compatibility shim for SQLite _exec calls over Supabase PostgREST."""
