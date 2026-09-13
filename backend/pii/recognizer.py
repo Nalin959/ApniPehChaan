@@ -1,5 +1,5 @@
 """
-recognizer.py — Hybrid PII Recognition Engine for SovereignPrivacy AI.
+recognizer.py — Hybrid PII Recognition Engine for ApniPehChaan.
 
 Implements multi-pattern PII detection combining:
   • Regex-based pattern matching for structured identifiers

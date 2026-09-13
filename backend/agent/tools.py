@@ -1649,7 +1649,7 @@ def build_tools(ctx: ToolContext) -> dict[str, Callable]:
     def analyze_threat_surface() -> dict:
         """Perform cross-exposure correlation to map multi-vector attack surfaces:
         credential stuffing risk, spear-phishing exposure, and SIM swap vulnerability.
-        Generates an actionable Sovereign Privacy defense hardening matrix."""
+        Generates an actionable ApniPehChaan defense hardening matrix."""
         exposures = ctx.memory.get_exposures(ctx.user_id)
         p = ctx.profile
 

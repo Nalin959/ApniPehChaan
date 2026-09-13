@@ -1,4 +1,4 @@
-# SovereignPrivacy AI — Presentation & Demo Guide
+# ApniPehChaan — Presentation & Demo Guide
 
 ## Track: Digital Identity & Sovereign Privacy Protection
 > **Mission**: Build proactive personal agents that actively monitor web data leaks, handle automated right-to-be-forgotten legal requests, and protect individual privacy against invasive data-scraping networks.

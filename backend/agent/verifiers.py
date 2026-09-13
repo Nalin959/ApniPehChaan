@@ -51,7 +51,7 @@ import urllib.request
 from dataclasses import dataclass, asdict
 from datetime import datetime, timezone
 
-USER_AGENT = "SovereignPrivacy-AI/2.0 (privacy self-service tool)"
+USER_AGENT = "ApniPehChaan/2.0 (privacy self-service tool)"
 TIMEOUT = 15
 
 

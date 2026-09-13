@@ -1,5 +1,5 @@
 """
-memory.py — Durable agent memory for SovereignPrivacy AI.
+memory.py — Durable agent memory for ApniPehChaan.
 
 Everything the agent learns and does is written here, so that:
   • state survives a server restart (the previous build kept the audit chain
@@ -21,7 +21,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-DB_PATH = os.environ.get("SOVEREIGN_DB", os.path.join(PROJECT_ROOT, "data", "sovereign.db"))
+DB_PATH = os.environ.get("APNIPEHCHAAN_DB") or os.environ.get("SOVEREIGN_DB") or os.path.join(PROJECT_ROOT, "data", "sovereign.db")
 
 
 def utcnow() -> str:

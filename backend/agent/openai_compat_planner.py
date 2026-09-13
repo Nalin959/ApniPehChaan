@@ -114,7 +114,7 @@ ESSENTIAL_TOOLS = (
 
 def configured() -> str | None:
     """Which OpenAI-compatible provider is active (Gemini primary, Groq backup)."""
-    pinned = (os.environ.get("OPENAI_COMPAT_PROVIDER") or os.environ.get("SOVEREIGN_PLANNER") or "").strip().lower()
+    pinned = (os.environ.get("OPENAI_COMPAT_PROVIDER") or os.environ.get("APNIPEHCHAAN_PLANNER") or os.environ.get("SOVEREIGN_PLANNER") or "").strip().lower()
     if pinned in PROVIDERS and os.environ.get(PROVIDERS[pinned]["key_env"]):
         return pinned
     all_conf = configured_all()
@@ -127,6 +127,7 @@ def configured_all() -> list[str]:
     Enforces Gemini as primary reasoning engine with Groq as high-speed backup.
     """
     pinned = (os.environ.get("OPENAI_COMPAT_PROVIDER")
+              or os.environ.get("APNIPEHCHAAN_PLANNER")
               or os.environ.get("SOVEREIGN_PLANNER") or "").strip().lower()
     names = [n for n in PROVIDERS if os.environ.get(PROVIDERS[n]["key_env"])]
     # Gemini first, Groq second, followed by others

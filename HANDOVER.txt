@@ -1,5 +1,5 @@
 ================================================================================
-SOVEREIGNPRIVACY AI — COMPLETE PROJECT HANDOVER & CONTEXT EXPORT
+APNIPEHCHAAN — COMPLETE PROJECT HANDOVER & CONTEXT EXPORT
 ================================================================================
 Document:           HANDOVER.txt
 Generated:          2026-09-13T02:35:00+05:30
@@ -32,7 +32,7 @@ TABLE OF CONTENTS
 1. EXECUTIVE SUMMARY & ARCHITECTURAL MANDATE
 ================================================================================
 
-SovereignPrivacy AI is an autonomous personal AI agent that empowers individuals
+ApniPehChaan is an autonomous personal AI agent that empowers individuals
 to proactively find where their sensitive personal information (PII) is exposed
 online, cross-correlate multi-breach attack vectors, assess statutory rights
 under privacy legislation, and execute enforceable Right-to-be-Forgotten legal
@@ -156,7 +156,7 @@ All agent prompts live in `backend/agent/prompts.py` and are crafted to guide
 autonomous tool calling while strictly forbidding hallucination or unauthorized dispatch:
 
 --- [PROMPT 1: FULL DISCOVERY SYSTEM PROMPT] ---
-You are SovereignPrivacy, an autonomous privacy agent acting on behalf of ONE person
+You are ApniPehChaan, an autonomous privacy agent acting on behalf of ONE person
 — the data principal whose identity is given to you. You work for them, not for any company.
 
 Your goal: find where this person's personal data is exposed online, judge which exposures
@@ -189,7 +189,7 @@ what you found, what you did, and what the person should do next.
 
 
 --- [PROMPT 2: JUDGEMENT SYSTEM PROMPT (TOKEN-OPTIMIZED)] ---
-You are SovereignPrivacy, an autonomous privacy agent acting for one person.
+You are ApniPehChaan, an autonomous privacy agent acting for one person.
 Decide what can be done about exposures that have already been discovered.
 
 Hard rules:
@@ -418,7 +418,7 @@ Total Time: 3 Minutes
    mobile numbers, PAN cards, and resumes exposed across commercial brokers and
    leaks. While India's DPDP Act 2023 grants citizens a statutory Section 12 Right
    to Erasure, exercizing it requires hours of legal research, finding corporate
-   Grievance Officers, and drafting formal notices. SovereignPrivacy AI is an
+   Grievance Officers, and drafting formal notices. ApniPehChaan is an
    autonomous agent that bridges this gap: it discovers verified exposures without
    paid APIs, correlates attack vectors, drafts statutory notices, and tracks legal
    deadlines with zero false positives."
@@ -439,7 +439,7 @@ Total Time: 3 Minutes
         Credential Stuffing, Spear-Phishing, and SIM Swap attack vectors."
   2. Point out IIMjobs and Zomato cards:
      - "Other tools mark breaches as non-removable. But under DPDP Act 2023 Section 12,
-        operating companies remain legally accountable Data Fiduciaries. SovereignPrivacy
+        operating companies remain legally accountable Data Fiduciaries. ApniPehChaan
         provides direct self-serve deletion links or statutory notices to their registered
         Grievance Officers."
 

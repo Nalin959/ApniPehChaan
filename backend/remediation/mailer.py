@@ -465,8 +465,10 @@ def prepare_notice(
     # Correlates a controller's reply back to the audit chain entry without
     # needing them to quote the reference id in their prose.
     if reference_id:
+        msg["X-ApniPehChaan-Reference"] = reference_id
         msg["X-SovereignPrivacy-Reference"] = reference_id
     if statute:
+        msg["X-ApniPehChaan-Statute"] = statute
         msg["X-SovereignPrivacy-Statute"] = statute
     msg.set_content(body)
 

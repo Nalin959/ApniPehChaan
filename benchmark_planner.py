@@ -17,7 +17,7 @@ forbidding it is three paragraphs up the system prompt.
 
 Usage:
     .venv/bin/python benchmark_planner.py                # whatever .env selects
-    SOVEREIGN_PLANNER=groq .venv/bin/python benchmark_planner.py
+    APNIPEHCHAAN_PLANNER=groq .venv/bin/python benchmark_planner.py
     OPENAI_COMPAT_MODEL=llama-3.3-70b-versatile .venv/bin/python benchmark_planner.py
 """
 

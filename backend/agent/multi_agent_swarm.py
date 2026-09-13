@@ -94,7 +94,7 @@ class ForensicsAgent:
             found = ", ".join(e.get("data_found") or [])
             exposure_snippets.append(f"- {e.get('source_name')} ({e.get('source_type')}): {found}")
 
-        prompt = f"""You are SovereignPrivacy's Forensics AI Analyst. Analyze this victim's personal data exposures:
+        prompt = f"""You are ApniPehChaan's Forensics AI Analyst. Analyze this victim's personal data exposures:
 
 TARGET IDENTITY:
 - Name: {profile.get('name', 'Anonymous')}
@@ -417,7 +417,7 @@ class MultiAgentSwarm:
         exempt = legal.get("exempt_records", [])
 
         user_name = profile.get("name", "User")
-        prompt = f"""You are the Lead Coordinator for SovereignPrivacy's Collaborative Multi-Agent Swarm.
+        prompt = f"""You are the Lead Coordinator for ApniPehChaan's Collaborative Multi-Agent Swarm.
 Synthesize the final authoritative privacy intelligence report for {user_name} based on findings from your specialized sub-agents:
 
 1. 🕵️ FORENSICS AGENT FINDINGS:

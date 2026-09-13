@@ -1,5 +1,5 @@
 -- ==============================================================================
--- SovereignPrivacy AI — Supabase PostgreSQL Schema
+-- ApniPehChaan — Supabase PostgreSQL Schema
 -- ==============================================================================
 -- Run this script in the Supabase SQL Editor (Dashboard -> SQL Editor -> New Query)
 -- to create all necessary tables, indexes, and Row Level Security policies.

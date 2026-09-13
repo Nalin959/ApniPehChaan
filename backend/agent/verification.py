@@ -211,7 +211,7 @@ class Verifier:
                 import smtplib
                 from email.message import EmailMessage
                 msg = EmailMessage()
-                msg["Subject"] = "Your SovereignPrivacy verification code"
+                msg["Subject"] = "Your ApniPehChaan verification code"
                 msg["From"] = os.environ.get("SMTP_FROM", os.environ["SMTP_USER"])
                 msg["To"] = value
                 msg.set_content(

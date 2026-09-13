@@ -7,7 +7,8 @@ if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
 # Vercel serverless environment has a read-only filesystem outside /tmp
-if "VERCEL" in os.environ and not os.environ.get("SOVEREIGN_DB"):
-    os.environ["SOVEREIGN_DB"] = "/tmp/sovereign.db"
+if "VERCEL" in os.environ and not os.environ.get("APNIPEHCHAAN_DB") and not os.environ.get("SOVEREIGN_DB"):
+    os.environ["APNIPEHCHAAN_DB"] = "/tmp/apnipehchaan.db"
+    os.environ["SOVEREIGN_DB"] = "/tmp/apnipehchaan.db"
 
 from backend.app import app

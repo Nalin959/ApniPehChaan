@@ -30,8 +30,8 @@ from backend.agent.prompts import (
 from backend.agent.tools import ToolContext, build_tools
 from backend.mock_brokers.network import get_network
 
-MODEL = os.environ.get("SOVEREIGN_MODEL", "claude-opus-5")
-EFFORT = os.environ.get("SOVEREIGN_EFFORT", "high")
+MODEL = os.environ.get("APNIPEHCHAAN_MODEL") or os.environ.get("SOVEREIGN_MODEL", "claude-opus-5")
+EFFORT = os.environ.get("APNIPEHCHAAN_EFFORT") or os.environ.get("SOVEREIGN_EFFORT", "high")
 MAX_TOKENS = 8000
 
 
@@ -47,12 +47,12 @@ def planner_mode() -> str:
     """
     Which planner drives the loop.
 
-    SOVEREIGN_PLANNER pins a choice ("anthropic" / a provider name / "deterministic");
+    APNIPEHCHAAN_PLANNER pins a choice ("anthropic" / a provider name / "deterministic");
     otherwise whichever key is configured wins, Anthropic first when both are.
     Every planner calls the identical tools, so this changes who decides the
     order — never what the product does or finds.
     """
-    pinned = (os.environ.get("SOVEREIGN_PLANNER") or "").strip().lower()
+    pinned = (os.environ.get("APNIPEHCHAAN_PLANNER") or os.environ.get("SOVEREIGN_PLANNER") or "").strip().lower()
     if pinned == "deterministic":
         return "deterministic"
     if pinned == "anthropic" and anthropic_available():

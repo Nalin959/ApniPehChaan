@@ -95,7 +95,7 @@ class NoticeGenerator:
         days = config["response_deadline_days"]
 
         system_msg = (
-            "You are SovereignPrivacy AI's Senior Privacy Counsel. Draft a formal, rigorous, "
+            "You are ApniPehChaan's Senior Privacy Counsel. Draft a formal, rigorous, "
             "and legally binding statutory data erasure notice on behalf of the Data Principal. "
             "The notice must be authoritative, cite specific statutory sections, and assert "
             "unconditional demands for complete deletion of the individual's personal data across all "

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-test_system.py — SovereignPrivacy AI Automated Test Suite.
+test_system.py — ApniPehChaan Automated Test Suite.
 
 Tests all core components:
   1. Dataset integrity validation
@@ -1548,7 +1548,7 @@ def test_fiduciary_and_threat_surface():
 
 if __name__ == "__main__":
     print(f"\n{BOLD}{'═' * 60}{RESET}")
-    print(f"{BOLD}  SovereignPrivacy AI — Automated Test Suite{RESET}")
+    print(f"{BOLD}  ApniPehChaan — Automated Test Suite{RESET}")
     print(f"{BOLD}{'═' * 60}{RESET}")
 
     start = time.time()

@@ -1,5 +1,5 @@
 """
-supabase_memory.py — Supabase PostgREST Storage Adapter for SovereignPrivacy AI.
+supabase_memory.py — Supabase PostgREST Storage Adapter for ApniPehChaan.
 
 Provides persistent cloud database storage across serverless functions (Vercel)
 and worker nodes without requiring external heavy database drivers. Uses Python's

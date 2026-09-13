@@ -187,7 +187,7 @@ import urllib.request
 from dataclasses import dataclass, asdict, field
 from datetime import datetime, timezone
 
-USER_AGENT = "SovereignPrivacy-AI/2.0 (privacy self-service tool)"
+USER_AGENT = "ApniPehChaan/2.0 (privacy self-service tool)"
 TIMEOUT = 20
 
 # ProxyNova caps its response at 20 rows. Needed to tell "nothing matched" from

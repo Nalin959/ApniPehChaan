@@ -1,4 +1,4 @@
-# SovereignPrivacy AI — Project Handover & System Status
+# ApniPehChaan — Project Handover & System Status
 
 **Author & Developer:** Nalin Sharma  
 **Date:** September 13, 2026  
@@ -8,7 +8,7 @@
 
 ## 1. Executive Summary & Core Mandate
 
-SovereignPrivacy AI is an autonomous, privacy-preserving agent designed to discover where an individual's personal data is exposed across the web, breaches, and dark web dumps, and automate statutory Right-to-be-Forgotten erasure requests under India's Digital Personal Data Protection (DPDP) Act 2023 and the GDPR.
+ApniPehChaan is an autonomous, privacy-preserving agent designed to discover where an individual's personal data is exposed across the web, breaches, and dark web dumps, and automate statutory Right-to-be-Forgotten erasure requests under India's Digital Personal Data Protection (DPDP) Act 2023 and the GDPR.
 
 ### Core Guarantees Delivered
 1. **Zero False Positives / Zero Collision Risk**: The system operates on **exact unique identifiers** (Email, Indian Mobile, Aadhaar, PAN, UPI ID, and explicitly declared handles). A user's legal name is never used to attribute stranger accounts or breach records.

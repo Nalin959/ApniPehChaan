@@ -1,6 +1,6 @@
 #!/bin/bash
 # ═══════════════════════════════════════════════════════════════════════════
-# SovereignPrivacy AI — One-Command Demo Launcher
+# ApniPehChaan — One-Command Demo Launcher
 # ═══════════════════════════════════════════════════════════════════════════
 
 set -e
@@ -10,7 +10,7 @@ VENV_DIR="$SCRIPT_DIR/.venv"
 PORT=8000
 
 echo "═══════════════════════════════════════════════════════════════"
-echo "  SovereignPrivacy AI — Setup & Launch"
+echo "  ApniPehChaan — Setup & Launch"
 echo "═══════════════════════════════════════════════════════════════"
 echo ""
 
@@ -37,7 +37,7 @@ fi
 
 # Step 4: Launch server
 echo ""
-echo "[4/4] Launching SovereignPrivacy AI server on port $PORT..."
+echo "[4/4] Launching ApniPehChaan server on port $PORT..."
 echo ""
 echo "═══════════════════════════════════════════════════════════════"
 echo "  Dashboard: http://127.0.0.1:$PORT"
