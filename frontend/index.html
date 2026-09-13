@@ -329,6 +329,21 @@
                 <div class="agent-summary" id="agent-summary"></div>
             </div>
 
+            <!-- AI Threat Surface & Attack-Vector Matrix (Multi-Agent Swarm) -->
+            <div class="threat-surface-container" id="threat-surface-container" hidden>
+                <div class="threat-surface-header">
+                    <div class="threat-surface-title">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                        <span>AI Threat Surface &amp; Attack-Vector Matrix</span>
+                        <span class="badge-ai">✨ Gemini Threat Intelligence</span>
+                    </div>
+                    <div class="threat-surface-grade" id="threat-surface-grade">MODERATE</div>
+                </div>
+                <div class="threat-vectors-grid" id="threat-vectors-grid">
+                    <!-- Correlated attack vectors rendered dynamically by Forensics Agent -->
+                </div>
+            </div>
+
             <!-- Human-in-the-loop approval gate -->
             <div class="agent-panel approval-panel" id="approval-panel" hidden>
                 <h3 class="agent-panel-title">Approval Required</h3>
@@ -632,6 +647,13 @@
                             <label for="legal-pii-summary">Detected PII Summary</label>
                             <textarea id="legal-pii-summary" rows="3" placeholder="Email address, phone number, PAN card number detected in breach database..."></textarea>
                         </div>
+                        <div class="form-group notice-ai-toggle-wrap" style="margin-top: 6px; margin-bottom: 12px; display: flex; align-items: center; gap: 10px;">
+                            <input type="checkbox" id="legal-ai-toggle" checked style="width: 18px; height: 18px; accent-color: #06b6d4; cursor: pointer;">
+                            <label for="legal-ai-toggle" style="margin: 0; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 8px;">
+                                <span>✨ AI-Tailored Notice (Gemini)</span>
+                                <span class="badge-ai">Recommended</span>
+                            </label>
+                        </div>
                         <div class="form-actions">
                             <button type="submit" class="action-btn primary-action" id="btn-generate-notice">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
@@ -643,9 +665,10 @@
 
                 <div class="glass-card legal-preview-card" id="legal-preview-card">
                     <div class="preview-header">
-                        <h3 class="card-title">
+                        <h3 class="card-title" style="display: flex; align-items: center; gap: 8px;">
                             <svg viewBox="0 0 20 20" fill="currentColor" class="title-icon"><path d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z"/></svg>
                             Notice Preview
+                            <span id="notice-ai-badge" class="badge-ai" style="display:none;">✨ Gemini AI Tailored</span>
                         </h3>
                         <div class="preview-actions">
                             <button class="icon-btn" id="btn-copy-notice" title="Copy to Clipboard" style="display:none;">
@@ -707,10 +730,10 @@
 
     </main>
 
-    <!-- ═══ Sitewide Rights Advisor Widget ═══════════════════════════════════════ -->
+    <!-- ═══ Sitewide AI Privacy Copilot Widget ═══════════════════════════════════════ -->
     <div id="ai-advisor-container">
         <!-- Floating Trigger Button -->
-        <button id="ai-advisor-trigger" class="ai-advisor-trigger" title="Ask the SovereignPrivacy Rights Advisor">
+        <button id="ai-advisor-trigger" class="ai-advisor-trigger" title="Open SovereignPrivacy AI Copilot">
             <div class="ai-advisor-icon">
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M12 2a10 10 0 0 1 10 10c0 5.523-4.477 10-10 10a9.96 9.96 0 0 1-4.587-1.11L3 22l1.11-4.413A9.96 9.96 0 0 1 2 12C2 6.477 6.477 2 12 2z"/>
@@ -718,18 +741,18 @@
                 </svg>
                 <span class="ai-advisor-pulse"></span>
             </div>
-            <span class="ai-advisor-label">Rights Advisor</span>
+            <span class="ai-advisor-label">AI Copilot</span>
         </button>
 
-        <!-- Slide-out Rights Advisor Panel -->
+        <!-- Slide-out AI Copilot Panel -->
         <div id="ai-advisor-panel" class="ai-advisor-panel" hidden>
             <div class="advisor-header">
                 <div class="advisor-header-info">
                     <div class="advisor-avatar">🛡️</div>
                     <div>
-                        <div class="advisor-title">SovereignPrivacy Rights Advisor</div>
+                        <div class="advisor-title">SovereignPrivacy AI Copilot</div>
                         <div class="advisor-status" id="advisor-model-tag">
-                            <span class="status-dot online"></span> Groq · GPT-OSS Active
+                            <span class="status-dot online"></span> Gemini Flash · Swarm Copilot
                         </div>
                     </div>
                 </div>
@@ -750,7 +773,7 @@
             <div class="advisor-messages" id="advisor-messages">
                 <div class="advisor-msg bot">
                     <div class="advisor-msg-bubble">
-                        👋 Hello! I'm your <b>SovereignPrivacy Rights Advisor</b>. I provide real-time privacy intelligence (India DPDP Act 2023, EU GDPR, US CCPA) and autonomous remediation guidance across all tabs. How can I assist your privacy defense today?
+                        👋 Hello! I'm your <b>SovereignPrivacy AI Copilot</b>. Grounded in your real-time scan ledger, active statutory erasure notices, and multi-agent swarm telemetry. Ask me anything about your threat vectors, statutory rights under India's DPDP Act 2023 / GDPR, or how to eliminate your exposed data.
                     </div>
                     <span class="advisor-msg-time">Ready</span>
                 </div>

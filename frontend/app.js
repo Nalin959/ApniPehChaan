@@ -729,6 +729,7 @@ async function generateNotice() {
     // Auto-fill user data from scan if available
     const userProfile = getSavedProfile();
 
+    const aiTailored = document.getElementById('legal-ai-toggle')?.checked ?? true;
     const payload = {
         jurisdiction: state.selectedJurisdiction,
         user_name: userProfile.name || '',
@@ -739,6 +740,7 @@ async function generateNotice() {
         company_email: document.getElementById('legal-company-email').value,
         company_address: document.getElementById('legal-company-address').value,
         detected_pii_summary: document.getElementById('legal-pii-summary').value,
+        ai_tailored: aiTailored,
     };
 
     try {
@@ -995,6 +997,17 @@ function renderNoticePreview(data) {
     // Show action buttons
     document.getElementById('btn-copy-notice').style.display = '';
     document.getElementById('btn-dispatch-notice').style.display = '';
+
+    // Show AI badge if notice was generated via LLM
+    const aiBadge = document.getElementById('notice-ai-badge');
+    if (aiBadge) {
+        if (data.ai_generated) {
+            aiBadge.style.display = 'inline-flex';
+            aiBadge.textContent = `✨ AI-Drafted (${data.ai_model || 'Gemini'})`;
+        } else {
+            aiBadge.style.display = 'none';
+        }
+    }
 
     // Show receipt
     const receipt = document.getElementById('notice-receipt');
@@ -1538,13 +1551,71 @@ function traceAdd(agent, message, status) {
                     (status === 'awaiting_approval' ? ' approval' : '');
     const a = document.createElement('span');
     a.className = 'trace-agent a-' + (agent || 'orchestrator');
-    a.textContent = agent || 'agent';
+    const AGENT_LABELS = {
+        forensics: '🕵️ Forensics',
+        legal_counsel: '⚖️ Legal',
+        remediation: '🛡️ Remediation',
+        swarm_coordinator: '🤖 Lead',
+        orchestrator: '⚡ Swarm',
+        identity: '🪪 Identity',
+        discovery: '🔍 Discovery',
+        risk: '📊 Risk',
+        action: '📝 Action',
+        followup: '⏱️ Followup',
+        verification: '✅ Verify'
+    };
+    a.textContent = AGENT_LABELS[agent] || agent || 'agent';
     const m = document.createElement('span');
     m.className = 'trace-msg';
     m.textContent = message;
     row.append(a, m);
     box.appendChild(row);
     box.scrollTop = box.scrollHeight;
+}
+
+function renderThreatSurface(data) {
+    const container = document.getElementById('threat-surface-container');
+    const grid = document.getElementById('threat-vectors-grid');
+    const gradeEl = document.getElementById('threat-surface-grade');
+    if (!container || !grid) return;
+
+    if (!data) {
+        container.hidden = true;
+        return;
+    }
+
+    const vectors = data.threat_vectors || data.vectors || [];
+    if (!vectors.length) {
+        container.hidden = true;
+        return;
+    }
+
+    const grade = (data.overall_surface_grade || 'MODERATE').toUpperCase();
+    if (gradeEl) {
+        gradeEl.textContent = grade;
+        gradeEl.className = 'threat-surface-grade ' + grade;
+    }
+
+    grid.innerHTML = '';
+    vectors.forEach(v => {
+        const card = document.createElement('div');
+        card.className = 'threat-vector-card';
+        const sev = (v.severity || 'medium').toLowerCase();
+        const sources = (v.affected_sources || []).join(', ');
+
+        card.innerHTML = `
+            <div class="threat-vector-top">
+                <div class="threat-vector-name">${agEsc(v.vector || 'Compound Threat Vector')}</div>
+                <span class="threat-vector-sev ${sev}">${sev}</span>
+            </div>
+            ${sources ? `<div class="threat-vector-sources">Correlated Sources: <span>${agEsc(sources)}</span></div>` : ''}
+            <div class="threat-vector-model">${agEsc(v.adversary_playbook || v.threat_model || 'Adversary leverages correlated credentials and contact telemetry across services.')}</div>
+            <div class="threat-vector-fix"><strong>Shield Action:</strong> ${agEsc(v.blue_team_mitigation || v.mitigation || 'Rotate credentials immediately and configure hardware 2FA.')}</div>
+        `;
+        grid.appendChild(card);
+    });
+
+    container.hidden = false;
 }
 
 function traceReasoning(text) {
@@ -1586,6 +1657,12 @@ function agentOnMessage(msg) {
     if (msg.type === 'agent_event') {
         Agent.steps = (Agent.steps || 0) + 1;
         traceAdd(msg.agent, msg.message, msg.status);
+        if (msg.tool_output && (msg.tool_name === 'analyze_threat_surface' || msg.agent === 'forensics')) {
+            const tm = msg.tool_output.threat_surface || msg.tool_output;
+            if (tm && (tm.threat_vectors || tm.overall_surface_grade)) {
+                renderThreatSurface(tm);
+            }
+        }
     } else if (msg.type === 'agent_reasoning') {
         traceReasoning(msg.text);
     } else if (msg.type === 'phase_complete') {
@@ -1606,10 +1683,6 @@ function agentSetBusy(busy) {
     if (approve) approve.disabled = busy;
     agEl('trace-live').hidden = !busy;
 
-    // A static "Agent working…" for two minutes is indistinguishable from a
-    // hang. An LLM planner spends a round trip per decision, so a full run
-    // legitimately takes 1-3 minutes — the button has to show that it is
-    // progressing, not just that it is busy.
     if (busy) {
         Agent.startedAt = Date.now();
         Agent.steps = 0;
@@ -1656,6 +1729,14 @@ function agentRender(msg) {
     ].map(([l, v]) => `<div class="risk-stat"><div class="risk-stat-v">${agEsc(v)}</div><div class="risk-stat-l">${agEsc(l)}</div></div>`).join('');
 
     agEl('agent-summary').innerHTML = renderMarkdown(msg.summary || '');
+
+    // Fetch and render Threat Surface Matrix
+    if (msg.user_id) {
+        fetch('/api/agent/threat-surface/' + encodeURIComponent(msg.user_id))
+            .then(r => r.json())
+            .then(renderThreatSurface)
+            .catch(() => {});
+    }
 
     // Approval gate
     Agent.drafted = st.requests.filter(r => r.status === 'awaiting_approval');
