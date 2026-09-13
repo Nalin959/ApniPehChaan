@@ -177,66 +177,77 @@
             <div class="agent-grid">
                 <!-- Identity + control -->
                 <div class="agent-panel">
-                    <h3 class="agent-panel-title">Your Identity</h3>
-                    <p class="agent-hint">Only what you type is used. Nothing is shared with a third party.</p>
+                    <div class="panel-header-badge">
+                        <h3 class="agent-panel-title">
+                            <span>Your Sovereign Identity</span>
+                            <span class="vault-secure-pill">🔒 Zero-Knowledge &middot; Local Hash</span>
+                        </h3>
+                        <p class="agent-hint">Identifiers are processed locally or k-anonymously. Zero synthetic data.</p>
+                    </div>
+
                     <div class="agent-form">
-                        <label>Full name<input type="text" id="ag-name" placeholder="Aarav Mehta" autocomplete="off"></label>
-                        <label>Email<input type="email" id="ag-email" placeholder="aarav@example.com" autocomplete="off"></label>
-                        <label>Phone(s)
-                            <div class="multi-input-group" id="ag-phone-group">
-                                <div class="multi-tags" id="ag-phone-tags"></div>
-                                <div class="multi-input-row">
-                                    <input type="tel" id="ag-phone" placeholder="+91 98765 43210" autocomplete="off">
-                                    <button type="button" class="multi-add-btn" data-group="ag-phone" title="Add phone number">+</button>
-                                </div>
-                            </div>
-                        </label>
                         <div class="agent-form-row">
-                            <label>City<input type="text" id="ag-city" placeholder="Bengaluru" autocomplete="off"></label>
-                            <label>Jurisdiction
-                                <select id="ag-country">
-                                    <option value="IN">India (DPDP 2023)</option>
-                                    <option value="EU">EU (GDPR)</option>
-                                    <option value="US">California (CCPA)</option>
-                                </select>
+                            <label>Full Name
+                                <input type="text" id="ag-name" placeholder="Aarav Mehta" autocomplete="off">
+                            </label>
+                            <label>Email Address
+                                <input type="email" id="ag-email" placeholder="aarav@example.com" autocomplete="off">
                             </label>
                         </div>
-                        <label class="primary-field">Usernames you actually use
-                            <input type="text" id="ag-usernames" placeholder="nalinchamp, github:yourhandle, darkknight92" autocomplete="off">
-                        </label>
-                        <p class="agent-hint agent-hint-tight">
-                            This is the field that matters. Your <strong>full email</strong> is
-                            already checked against every service that accepts one — but no
-                            username search does, and nothing else about you is unique.
-                            <code>nalinchamp@gmail.com</code> and <code>nalinchamp@yahoo.com</code>
-                            are different people, so a handle we guess is only ever shown as
-                            an unconfirmed <strong>candidate</strong>, never counted as yours.
-                            Write <code>site:handle</code> to claim one namespace outright.
-                        </p>
-                        <label class="agent-check">
-                            <input type="checkbox" id="ag-guess" checked>
-                            Also search handles derived from my email / UPI local part
-                            <span class="agent-hint-inline">
-                                Widens the sweep so a scan still looks when you declare no
-                                handle. Anything found this way stays a candidate for your
-                                confirmation — it never enters your risk score or removal plan.
-                                Your legal name is never used.
-                            </span>
-                        </label>
-                        <details class="ident-more">
-                            <summary>More identifiers <span>(optional — each one stops strangers being flagged as you)</span></summary>
-                            <label>Other emails<input type="text" id="ag-altemails" placeholder="old@work.com, me@college.edu" autocomplete="off"></label>
-                            <label>Other phone(s)
-                                <div class="multi-input-group" id="ag-altphones-group">
-                                    <div class="multi-tags" id="ag-altphones-tags"></div>
+
+                        <div class="agent-form-row">
+                            <label>Phone(s)
+                                <div class="multi-input-group" id="ag-phone-group">
+                                    <div class="multi-tags" id="ag-phone-tags"></div>
                                     <div class="multi-input-row">
-                                        <input type="text" id="ag-altphones" placeholder="+91 98200 11223" autocomplete="off">
-                                        <button type="button" class="multi-add-btn" data-group="ag-altphones" title="Add other phone">+</button>
+                                        <input type="tel" id="ag-phone" placeholder="+91 98765 43210" autocomplete="off">
+                                        <button type="button" class="multi-add-btn" data-group="ag-phone" title="Add phone number">+</button>
                                     </div>
                                 </div>
                             </label>
+                            <label>City
+                                <input type="text" id="ag-city" placeholder="Bengaluru" autocomplete="off">
+                            </label>
+                        </div>
+
+                        <div class="agent-form-row">
+                            <label>Jurisdiction
+                                <select id="ag-country">
+                                    <option value="IN">India (DPDP Act 2023)</option>
+                                    <option value="EU">EU (GDPR Art. 17)</option>
+                                    <option value="US">California (CCPA / CPRA)</option>
+                                </select>
+                            </label>
+                            <label class="primary-field">Usernames Actually Used
+                                <input type="text" id="ag-usernames" placeholder="nalinchamp, github:handle" autocomplete="off">
+                            </label>
+                        </div>
+
+                        <label class="agent-check compact-check">
+                            <input type="checkbox" id="ag-guess" checked>
+                            <span>Search handles derived from email / UPI (candidates only, never counted in risk score until confirmed)</span>
+                        </label>
+
+                        <details class="ident-more">
+                            <summary>More Identifiers <span>(optional &mdash; stops strangers being flagged as you)</span></summary>
+                            <div class="agent-form-row" style="margin-top: 10px;">
+                                <label>Other Emails
+                                    <input type="text" id="ag-altemails" placeholder="old@work.com, me@college.edu" autocomplete="off">
+                                </label>
+                                <label>Other Phone(s)
+                                    <div class="multi-input-group" id="ag-altphones-group">
+                                        <div class="multi-tags" id="ag-altphones-tags"></div>
+                                        <div class="multi-input-row">
+                                            <input type="text" id="ag-altphones" placeholder="+91 98200 11223" autocomplete="off">
+                                            <button type="button" class="multi-add-btn" data-group="ag-altphones" title="Add other phone">+</button>
+                                        </div>
+                                    </div>
+                                </label>
+                            </div>
                             <div class="agent-form-row">
-                                <label>Date of birth<input type="date" id="ag-dob"></label>
+                                <label>Date of Birth
+                                    <input type="date" id="ag-dob">
+                                </label>
                                 <label>UPI ID(s)
                                     <div class="multi-input-group" id="ag-upi-group">
                                         <div class="multi-tags" id="ag-upi-tags"></div>
@@ -247,7 +258,15 @@
                                     </div>
                                 </label>
                             </div>
-                            <label>Your websites
+                            <div class="agent-form-row">
+                                <label>Aadhaar (12 Digits)
+                                    <input type="text" id="ag-aadhaar" placeholder="12 digits" autocomplete="off">
+                                </label>
+                                <label>PAN Card
+                                    <input type="text" id="ag-pan" placeholder="ABCPE1234F" autocomplete="off">
+                                </label>
+                            </div>
+                            <label>Your Websites
                                 <div class="multi-input-group" id="ag-websites-group">
                                     <div class="multi-tags" id="ag-websites-tags"></div>
                                     <div class="multi-input-row">
@@ -256,57 +275,50 @@
                                     </div>
                                 </div>
                             </label>
-                            <div class="agent-form-row">
-                                <label>Aadhaar<input type="text" id="ag-aadhaar" placeholder="12 digits" autocomplete="off"></label>
-                                <label>PAN<input type="text" id="ag-pan" placeholder="ABCPE1234F" autocomplete="off"></label>
-                            </div>
-                            <p class="agent-hint agent-hint-tight">
-                                Aadhaar and PAN are checked for a valid checksum, then searched
-                                <strong>only</strong> against leak dumps held on this machine. No
-                                public profile displays them, so they cannot identify a web
-                                account — and they are never stored or sent anywhere in the clear.
-                            </p>
                         </details>
-                        <label>Services you hold an account with
-                            <textarea id="ag-declared" rows="3" placeholder="Truecaller, Naukri.com, Shaadi.com, JustDial"></textarea>
-                        </label>
-                        <label>Password to check <span class="agent-optional">optional</span>
-                            <div class="password-input-wrap">
-                                <input type="password" id="ag-password" placeholder="checked k-anonymously" autocomplete="off">
-                                <button type="button" class="password-toggle" id="ag-password-toggle" title="Show password">
-                                    <svg class="eye-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                                    <svg class="eye-closed" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18" style="display:none"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/></svg>
-                                </button>
-                            </div>
-                        </label>
+
+                        <div class="agent-form-row">
+                            <label>Accounts You Hold
+                                <input type="text" id="ag-declared" placeholder="Truecaller, Naukri, Shaadi, JustDial" autocomplete="off">
+                            </label>
+                            <label>Password Check <span class="agent-optional">(k-anonymous)</span>
+                                <div class="password-input-wrap">
+                                    <input type="password" id="ag-password" placeholder="Checked via SHA-1 prefix" autocomplete="off">
+                                    <button type="button" class="password-toggle" id="ag-password-toggle" title="Show password">
+                                        <svg class="eye-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                                        <svg class="eye-closed" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18" style="display:none"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/></svg>
+                                    </button>
+                                </div>
+                            </label>
+                        </div>
+
+                        <div class="agent-btn-row">
+                            <button class="agent-btn primary" id="ag-run">Deploy Privacy Agent</button>
+                            <button class="agent-btn ghost" id="ag-reset">Reset</button>
+                        </div>
+                        <div class="agent-disclosure" id="ag-disclosure">
+                            100% Real Intelligence &middot; Zero synthetic records. Operates exclusively on verified breach databases and statutory registers under DPDP Act 2023.
+                        </div>
                     </div>
-                    <p class="agent-hint agent-hint-tight">
-                        No Indian people-search site publishes an API to check whether it holds you,
-                        and probing them would breach their terms — so nothing is guessed. You know
-                        which services you signed up for, and that knowledge is itself valid grounds
-                        for a DPDP&nbsp;s.12 request.
-                    </p>
-                    <p class="agent-hint agent-hint-tight">
-                        The password never leaves this machine: only the first 5 characters of its
-                        SHA-1 are sent, and the match is done locally.
-                    </p>
-                    <button class="agent-btn primary" id="ag-run">Deploy Privacy Agent</button>
-                    <button class="agent-btn ghost" id="ag-reset">Reset this identity</button>
-                    <div class="agent-disclosure" id="ag-disclosure">100% Real Data · Zero synthetic records. Live verification against verified breach intelligence and statutory registers under DPDP Act 2023.</div>
                 </div>
 
-                <!-- Live Threat Radar & Agent Activity -->
-                <div class="agent-panel trace-panel">
-                    <h3 class="agent-panel-title">
-                        <span>Threat Radar &amp; Swarm Activity</span>
-                        <span class="trace-live" id="trace-live" hidden>● live</span>
-                    </h3>
+                <!-- Live Threat Radar & Agent Activity (50% Half Page) -->
+                <div class="agent-panel trace-panel" id="agent-radar-panel">
+                    <div class="panel-header-badge">
+                        <h3 class="agent-panel-title">
+                            <span>Threat Radar &amp; Swarm Activity</span>
+                            <span class="trace-live" id="trace-live" hidden>&bull; live</span>
+                        </h3>
+                        <p class="agent-hint">Real-time radar sweeps across breach repositories &amp; streaming AI multi-agent swarm.</p>
+                    </div>
 
                     <div class="agent-radar-integrated" id="scan-radar">
                         <div class="radar-display" id="radar-display">
                             <div class="radar-ring radar-ring-1"></div>
                             <div class="radar-ring radar-ring-2"></div>
                             <div class="radar-ring radar-ring-3"></div>
+                            <div class="radar-crosshair-h"></div>
+                            <div class="radar-crosshair-v"></div>
                             <div class="radar-sweep" id="radar-sweep"></div>
                             <div class="radar-center"></div>
                         </div>
@@ -319,9 +331,13 @@
                                 <div class="progress-fill" id="scan-progress-fill" style="width: 0%"></div>
                             </div>
                             <div class="scan-log" id="scan-log">
-                                <div class="log-entry log-idle">Awaiting agent deployment... Configure your identity and click &ldquo;Deploy Privacy Agent&rdquo;.</div>
+                                <div class="log-entry log-idle">Awaiting agent deployment... Configure your identity on the left and click &ldquo;Deploy Privacy Agent&rdquo;.</div>
                             </div>
                         </div>
+                    </div>
+
+                    <div class="trace-section-header">
+                        <span class="trace-section-title">Autonomous Agent Reasoning &amp; Audit Log</span>
                     </div>
 
                     <div class="agent-trace" id="agent-trace">

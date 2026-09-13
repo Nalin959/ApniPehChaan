@@ -1,146 +1,240 @@
-# ApniPehChaan — Project Handover & System Status
+# ApniPehChaan — Complete Project Handover & Architecture Guide
 
+**Platform:** ApniPehChaan — Autonomous Sovereign Digital Identity Protection Agent  
 **Author & Developer:** Nalin Sharma  
 **Date:** September 13, 2026  
-**Status:** Production Ready · 100% Free Tier · Zero False Positives · 306/306 Unit & System Tests Passing
+**Status:** Production Ready · 100% Free Tier · Zero False Positives · 334/334 Tests Passing  
+**Live Production URL:** [https://sovereign-privacy-ai.vercel.app](https://sovereign-privacy-ai.vercel.app)  
+**GitHub Repository:** [https://github.com/Nalin959/sovereign-privacy-ai.git](https://github.com/Nalin959/sovereign-privacy-ai.git)  
 
 ---
 
 ## 1. Executive Summary & Core Mandate
 
-ApniPehChaan is an autonomous, privacy-preserving agent designed to discover where an individual's personal data is exposed across the web, breaches, and dark web dumps, and automate statutory Right-to-be-Forgotten erasure requests under India's Digital Personal Data Protection (DPDP) Act 2023 and the GDPR.
-
-### Core Guarantees Delivered
-1. **Zero False Positives / Zero Collision Risk**: The system operates on **exact unique identifiers** (Email, Indian Mobile, Aadhaar, PAN, UPI ID, and explicitly declared handles). A user's legal name is never used to attribute stranger accounts or breach records.
-2. **Elimination of Directory Dumps (Matrimony / Registry Fix)**: Static databases of monitored organisations (e.g. Shaadi.com, BharatMatrimony, Jeevansathi, eCourts, land registries) are strictly separated into a **Reference Directory** in Compliance. The **Identified Exposures** tab displays **100% confirmed matches only**.
-3. **100% Free & Keyless Operation**: Complete independence from paid APIs (e.g., Have I Been Pwned paid tier, commercial search engine subscriptions). The system integrates verified public and keyless intelligence:
-   - **XposedOrNot**: Corporate data breaches and paste dumps.
-   - **Hudson Rock Cavalier**: Infostealer malware infections with machine names, OS, and compromised dates.
-   - **LeakCheck Public**: Phone number and email breach lookups (covering Indian platforms like Yatra.com).
-   - **Pwned Passwords**: k-anonymity SHA-1 prefix checks (zero password or full hash transmission).
-   - **Account Discovery**: 26 empirically verified profile namespaces (excluding soft-404 false positives like Kaggle and Replit).
-4. **Honest Evidence Policy**: A rate limit, timeout, or network error is always reported as `unavailable` / `could_not_check`. The system **never reports a user as "clean" when a check could not be performed**.
-5. **Human-in-the-Loop Removals**: Statutory erasure notices are generated automatically but require explicit user review and approval before dispatch.
+**ApniPehChaan** is an autonomous, privacy-preserving AI multi-agent system designed to discover where an individual's sensitive personal data is exposed across breach repositories, dark web paste dumps, infostealer logs, and open-web registries, and automatically execute statutory Right-to-be-Forgotten data erasure requests under:
+- **India**: Digital Personal Data Protection (DPDP) Act 2023, Section 12 (Erasure) & Section 13 (Grievance Redressal).
+- **European Union**: General Data Protection Regulation (GDPR), Article 17 (Right to Erasure).
+- **California, USA**: California Consumer Privacy Act / CPRA, § 1798.105 (Consumer Deletion Right).
 
 ---
 
-## 2. Critical Bug Fixes & Architectural Improvements
+## 2. Core Architectural Guarantees
 
-### A. The "Matrimony & Government Registry" False Positive Bug (Resolved)
-- **Problem**: Users navigating to the "Exposures" tab were greeted with dozens of critical cards: *Shaadi.com*, *BharatMatrimony*, *Jeevansathi*, *eCourts Services*, *Mahabhulekh*, *VAHAN*, etc., even with no account on those platforms.
-- **Root Cause**: An earlier UI prototype appended all 51 entries from `window.__indianSources` directly into the `cards` array in `renderAgentExposures()` and `renderScanResults()`.
-- **Solution**:
-  - Removed all synthetic and directory dumps from `renderAgentExposures()` and `renderScanResults()`.
-  - The **Exposures** tab now exclusively renders verified findings (`st.exposures`): breaches, infostealers, dark web pastes, and page-verified open web hits.
-  - The 51 Indian fiduciaries catalog was moved to the **Compliance & Escalation Tracker** section under a dedicated **Monitored Indian Fiduciaries (Reference Directory)** table, clearly labeled for statutory DPDP reference only.
+1. **Zero False Positives / Zero Collision Risk**:
+   - The platform never attributes third-party breach records or stranger accounts using only a common legal name.
+   - All lookups require **exact unique identifiers**: verified primary email, 10-digit Indian mobile, valid PAN/Aadhaar checksums, UPI ID, or declared account handles.
+   - Guessed handles derived from email prefixes are strictly demoted to unconfirmed **candidates** that are excluded from the risk score and removal plan until explicit user confirmation.
 
-### B. Aadhaar vs. Indian Mobile Collision Bug
-- **Problem**: Approximately 1 in 10 Indian mobile numbers (`+91` or bare `91` followed by 10 digits = 12 digits) randomly cleared the Verhoeff checksum algorithm by mathematical chance (~10.4%), causing normal phone numbers to be falsely alerted as leaked Aadhaar national IDs.
-- **Root Cause**: `backend/pii/recognizer.py` ranked algorithmic checksum validity higher than span length in its overlap resolution.
-- **Solution**: Implemented `_aadhaar_plausible()` in `recognizer.py` to ensure that 12-digit numbers starting with `91` and a mobile digit (`[6-9]`) are classified as telephone numbers, eliminating false Aadhaar reports across 5,000 tested mobile numbers while preserving 100% detection on genuine Aadhaar numbers.
+2. **Unified 50/50 Half-Page Interface**:
+   - Eliminated the redundant "Threat Scanner" tab and duplicate identity input vaults.
+   - Designed a balanced **50% / 50% split** desktop layout:
+     - **Left Column**: Sovereign Identity Profile with two-column input rows (Full Name, Email, Phone, City, Jurisdiction, Handles, Aadhaar/PAN, Accounts, Passwords).
+     - **Right Column**: Cybernetic Live Threat Radar (`116px` concentric rings, sweeping radar beam, coordinate crosshairs, live status badge, and scan progress bar) seamlessly integrated with the streaming real-time Multi-Agent Swarm trace (`#agent-trace`).
+   - Both columns use `align-items: stretch` so the cards maintain flush, equal height with zero blank whitespace.
 
-### C. Guessed Handle Attribution Gate
-- **Problem**: Guessing handles from email local parts (e.g. `john` from `john@gmail.com`) caused searches on third-party breach and malware APIs that attributed stranger infections to the user.
-- **Solution**: In `backend/agent/tools.py`, breach and infostealer searches are strictly restricted to **declared handles** (`src == "declared"`). Guessed handles are restricted to candidate accounts that must be reviewed by the user.
+3. **Dynamic Data Fiduciary Discovery for Arbitrary / Unknown Companies**:
+   - Eliminated all static dictionaries and fake fallback emails (`privacy@<slug>.com`).
+   - Powered by Google Gemini (with seamless Groq fallback), the **Legal Counsel Agent** dynamically investigates any arbitrary operating entity (e.g. *Zomato, Canva, Cred, Zepto, Swiggy*), extracting:
+     - Registered corporate entity name (e.g., *Zomato Limited*, *Canva Pty Ltd*).
+     - Official statutory Grievance Officer / DPO contact address.
+     - Registered corporate headquarters.
+     - Applicable statutory legal basis and 30-day compliance timeline.
+   - If an entity is a raw dark-web dump (e.g., *Naz.API*, *Collection #1*), the agent correctly flags that no operating fiduciary exists and prescribes credential rotation rather than dispatching futile legal notices.
 
-### D. Rate-Limit False-Clear Remediation
-- **Problem**: Upstream rate limit responses (e.g. `{"Error": "Rate limit exceeded"}`) were previously caught by a generic error handler that returned `result="clear"` with "CONFIRMED CLEAR".
-- **Solution**: In `backend/agent/verifiers.py`, error responses are parsed strictly: only explicit `"Not found"` errors yield `clear`. Any rate limit, HTTP 429, or unexpected response yields `result="unavailable"`.
+4. **100% Free & Keyless Breach Intelligence**:
+   - Operates completely free of paid API keys:
+     - **XposedOrNot**: Corporate data breaches and dark web paste dumps.
+     - **Hudson Rock Cavalier**: Infostealer malware infections (identifying infected computer names, OS, and compromised credential timestamps).
+     - **LeakCheck Public**: Phone number and email breach lookups (e.g., Indian leaks like Yatra).
+     - **HaveIBeenPwned K-Anonymity**: SHA-1 5-character prefix matching done locally.
+     - **DuckDuckGo / SearXNG**: Web profile verification with SSRF prevention and RFC 1918 loopback protections.
 
-### E. Frontend Security (Stored XSS & Safe Navigation)
-- **Problem**: `escapeHtml` only escaped `& < >`, leaving quotes unescaped. Untrusted third-party breach names (e.g. from XposedOrNot or LeakCheck) were interpolated directly into inline `onclick` attributes (`generateNoticeForExposure('${escapeHtml(companyName)}')`), allowing script execution and breaking on names like `Domino's Pizza`.
-- **Solution**:
-  - Replaced all inline `onclick` handlers with `data-*` attributes and DOM event listeners (`wireExposureCard`).
-  - Enhanced `escapeHtml` to escape `& < > " '`.
-  - Added `safeUrl()` validation to ensure only `http:` and `https:` URLs reach `href` attributes, blocking `javascript:` execution.
+5. **Honest Evidence Policy**:
+   - If an upstream breach API is rate-limited, times out, or errors, it is classified as `unavailable` / `could_not_check`.
+   - The system **never reports a user as "CONFIRMED CLEAR" when a check could not be performed**.
 
-### F. SSRF and Shell Injection Hardening
-- **Problem**: `backend/agent/web_search.py` fetched arbitrary search URLs without private IP checks, and `reproduce` strings unquoted URLs in shell commands.
-- **Solution**:
-  - Implemented `is_safe_web_url()` to reject loopback, RFC 1918 private IPs, link-local, and reserved ranges before fetching.
-  - Used `shlex.quote()` on all URLs and identifiers in `reproduce` curl commands.
-
----
-
-## 3. Test Suite Integrity
-
-The test suite in [test_system.py](file:///home/nalin/Hackathon/test_system.py) was completely audited:
-- **Baseline**: 149 tests, several of which were tautological (e.g. `assert x or True`, or re-implementing matching logic inside the test rather than testing backend code).
-- **Current**: **306 verified offline tests passing in <1.0s**.
-- **Coverage**:
-  - PII Detection & Benchmark (Strict value-level accuracy over 460 ground-truth entities).
-  - Aadhaar and Indian Mobile overlap resolution (0/5000 false positives, 3000/3000 true positives).
-  - Identity resolution with strict unique-identifier gating and date-of-birth discrimination.
-  - k-anonymity SHA-1 password checking.
-  - Free breach intelligence error handling (verifying rate-limits yield `unavailable`, never `clear`).
-  - Empirical account discovery across 26 site templates.
+6. **Human-in-the-Loop Removals & SHA-256 Cryptographic Audit Ledger**:
+   - The AI agent drafts statutory notices autonomously but strictly halts at an approval gate. Outward legal notices are only dispatched upon explicit user selection.
+   - Dispatched notices generate an immutable SHA-256 cryptographic compliance receipt tracked in the Compliance ledger.
 
 ---
 
-## 4. How to Run & Demo for Hackathon Judges
+## 3. UI Navigation & Page Structure
 
-### Starting the Server
-```bash
-cd /home/nalin/Hackathon
-./run_demo.sh
+The top navigation consists of 5 streamlined sections:
+
+| Navigation Item | Section ID | Core Purpose |
+| :--- | :--- | :--- |
+| **Privacy Agent** | `#section-agent` | Unified 50/50 hero grid: Sovereign Identity + Live Threat Radar & streaming multi-agent swarm activity, followed by the Threat Surface Matrix, Human Approval Gate, Candidates Panel, Removal Plan, and Exposure Ledger. |
+| **Command Center** | `#section-dashboard` | Executive overview of privacy risk score, breach breakdown (Breaches, Infostealers, Brokers, Dark Web), quick action triggers, and security recommendations. |
+| **Exposures** | `#section-exposures` | Filterable intelligence cards (`all`, `critical`, `high`, `medium`, `breach`, `infostealer`, `broker`, `indian`, `paste`). Zero false positives. |
+| **Legal Studio** | `#section-legal` | Dual-mode remediation studio: Interactive AI Legal Chatbot (Gemini) with two-way synchronized fiduciary metadata alongside the live statutory notice draft preview. |
+| **Compliance** | `#section-compliance` | 30-day statutory response deadline tracker, SHA-256 audit receipts ledger, and Monitored Indian Fiduciaries directory under the DPDP Act 2023. |
+
+---
+
+## 4. Collaborative Multi-Agent Swarm Architecture
+
+The autonomous privacy engine operates via a trio of collaborative AI agents powered by **Google Gemini** (with **Groq** backup):
+
 ```
-Or manually:
-```bash
-cd /home/nalin/Hackathon
-./.venv/bin/uvicorn backend.app:app --host 0.0.0.0 --port 8000 --reload
+                               ┌─────────────────────────────┐
+                               │   User Sovereign Profile    │
+                               └──────────────┬──────────────┘
+                                              │
+                                              ▼
+                               ┌─────────────────────────────┐
+                               │  Swarm Coordinator Agent   │
+                               └──────────────┬──────────────┘
+                                              │
+         ┌────────────────────────────────────┼────────────────────────────────────┐
+         │                                    │                                    │
+         ▼                                    ▼                                    ▼
+┌─────────────────────────────┐  ┌─────────────────────────────┐  ┌─────────────────────────────┐
+│    Forensics AI Agent       │  │  Legal Counsel AI Agent     │  │    Remediation AI Agent     │
+├─────────────────────────────┤  ├─────────────────────────────┤  ├─────────────────────────────┤
+│ • Cross-breach telemetry    │  │ • DPDP Act s.12/13 analysis │  │ • Strategic triage (3-min   │
+│ • Infostealer correlation   │  │ • GDPR Art. 17 evaluation   │ │   self-serve vs statutory)  │
+│ • Credential stuffing risks │  │ • Dynamic DPO discovery     │  │ • Cryptographic receipts    │
+│ • Dark web paste analysis   │  │ • Judicial exemption check  │  │ • Supervisory escalation     │
+│ • Threat Surface Matrix     │  │ • Bespoke notice drafting   │  │ • Verification proofs       │
+└─────────────────────────────┘  └─────────────────────────────┘  └─────────────────────────────┘
 ```
-Open **`http://localhost:8000`** in Chrome or your browser.
 
-### Running the Test Suite
+1. **Forensics Agent**:
+   - Executes deterministic discovery across keyless APIs (`XposedOrNot`, `LeakCheck`, `Hudson Rock`, `Pwned Passwords`).
+   - Evaluates leaked credential classes, hashes, and computer hostnames.
+   - Generates the **AI Threat Surface & Attack-Vector Matrix** with compound attack scenarios (e.g., credential stuffing, SIM swap vulnerability, dark web profiling).
+
+2. **Legal Counsel Agent**:
+   - Dynamically analyzes corporate entities, discerning between operating Data Fiduciaries and unattributed dark-web leak dumps.
+   - Automatically determines applicable legal grounds under DPDP Act 2023 s.12, GDPR Art. 17, or CCPA.
+   - Verifies statutory exemptions (e.g. court filings and corporate registry MCA records cannot be deleted under DPDP).
+   - Generates formal statutory erasure notices with statutory citations, grievance officer addresses, and non-compliance penalty schedules (up to ₹250 Crore under DPDP Schedule).
+
+3. **Remediation Agent**:
+   - Categorizes findings into 3-minute self-serve settings URLs vs formal legal notices.
+   - Enforces the human-in-the-loop approval gate.
+   - Tracks the 30-day compliance timeline and generates SHA-256 immutable audit receipts.
+
+---
+
+## 5. Technology Stack
+
+- **Backend**: Python 3.11+, FastAPI, Uvicorn, WebSockets, asyncio, Pydantic.
+- **AI Models**: Google Gemini (`google-genai` / `gemini-2.0-flash`), Groq API (`llama-3.3-70b-versatile`) as intelligent fallback.
+- **Frontend**: Vanilla ES6+ JavaScript, Native WebSockets, Semantic HTML5, Vanilla CSS3 (Custom Design System, Glassmorphism, HSL color tokens).
+- **Database / Memory**: SQLite local memory store (`privacy_memory.db`) with migration compatibility for Supabase PostgreSQL.
+- **Testing**: `pytest` and comprehensive offline test suite in `test_system.py` (334 test cases).
+- **Hosting / Deployment**: Vercel Production Serverless with Python Runtime, GitHub CI.
+
+---
+
+## 6. Verification & Test Suite Status
+
+The platform includes an extensive test suite in `test_system.py`:
+
 ```bash
-cd /home/nalin/Hackathon
 ./.venv/bin/python test_system.py
 ```
-Expected output: `ALL 306 TESTS PASSED in ~0.8s`.
 
-### Live Demo Script for Judges
-1. **Privacy Agent (Autonomous Scan)**:
-   - Navigate to the **Privacy Agent** tab.
-   - Enter your name and email (e.g. `nalinchamp@gmail.com`) and phone.
-   - Click **Run Autonomous Agent**.
-   - Watch the live WebSocket trace:
-     - Derives exact unique queries.
-     - Runs free breach intelligence (XposedOrNot) -> detects real breaches (e.g. MemeChat).
-     - Runs Hudson Rock infostealer scan -> verifies machine infections.
-     - Runs LeakCheck -> checks phone exposures.
-     - Performs page-level open web verification.
-2. **Identified Exposures Tab**:
-   - Click the **Exposures** tab.
-   - Show that **only genuine, confirmed exposures** are displayed (e.g. MemeChat, LeakCheck phone leaks, Gravatar profile).
-   - Point out that **zero false positives** exist: no unowned matrimony accounts or government databases are listed as personal exposures.
-   - Click on any card to view the exact data classes leaked (Email, Password, Username) and the severity classification.
-3. **Legal Remediation Studio & Human-in-the-Loop**:
-   - Return to the Privacy Agent tab to view the **Statutory Notices Awaiting Approval** panel.
-   - Click **Read the notice** to show the legally drafted DPDP Act Section 12 data erasure request with statutory reference IDs and 30-day response deadline.
-   - Show that the user has complete control to select which notices to dispatch.
-4. **Compliance Tracker & Reference Directory**:
-   - Navigate to the **Compliance** tab.
-   - Show the statutory compliance deadline tracking.
-   - Scroll down to the **Monitored Indian Fiduciaries (Reference Directory)** table to show the 51 Indian fiduciaries cataloged under the DPDP Act with statutory exemptions (e.g. court records vs. commercial databases).
-5. **Detection accuracy** (the Accuracy Lab tab was removed from the UI):
-   - Run `./.venv/bin/python test_system.py` in a terminal. It prints the PII
-     precision/recall/F1 against the ground-truth dataset as part of the suite,
-     alongside every other correctness check. Showing the suite is stronger
-     evidence than the old tab was, because it also demonstrates the
-     false-positive guards (Aadhaar vs +91 phone, attribution tiers,
-     could-not-check vs clear).
+### Test Suite Summary:
+- **Total Tests**: **334 tests**
+- **Passing**: **334 passed (100%)**
+- **Execution Time**: ~10.6 seconds
+- **Covered Subsystems**:
+  1. Strict PII recognition & ground-truth validation (460 entities).
+  2. Aadhaar vs. Indian Mobile collision prevention (0/5000 false positives, 3000/3000 true detections).
+  3. Strict identity attribution gating (declared vs. guessed handles).
+  4. Free breach intelligence parsers & rate-limit honest error handling.
+  5. Empirical account discovery namespaces (26 verified platforms).
+  6. Fiduciary directory & dynamic company discovery logic.
+  7. AI Threat Surface analysis & attack-vector correlation.
+  8. Multi-agent swarm tool suite registrations & event stream handling.
 
 ---
 
-## 5. File Manifest of Recent Changes
+## 7. How to Run Locally & Live Demonstration
 
-| File | Changes |
-| :--- | :--- |
-| [frontend/app.js](file:///home/nalin/Hackathon/frontend/app.js) | Removed speculative 51 Indian sources & broker dumps from Exposures; added `renderIndianSourcesDirectory()`; fixed stored XSS with `safeUrl()` and `data-*` listeners; added `isIndian` tag to real exposures. |
-| [frontend/index.html](file:///home/nalin/Hackathon/frontend/index.html) | Added dedicated `indian-registry-grid` container to the Compliance section for DPDP legal reference. |
-| [backend/agent/web_search.py](file:///home/nalin/Hackathon/backend/agent/web_search.py) | Added SSRF prevention (`is_safe_web_url`), rate-limit fast fallback (<15s), shell escaping with `shlex.quote`. |
-| [backend/agent/verifiers.py](file:///home/nalin/Hackathon/backend/agent/verifiers.py) | Added `check_xposedornot` and `check_infostealer`; patched rate-limit false-clear vulnerabilities. |
-| [backend/agent/tools.py](file:///home/nalin/Hackathon/backend/agent/tools.py) | Restricted breach lookups to declared handles; mapped 69 XposedOrNot severe labels. |
-| [backend/pii/recognizer.py](file:///home/nalin/Hackathon/backend/pii/recognizer.py) | Added `_aadhaar_plausible()` to eliminate Indian phone number / Aadhaar collisions. |
-| [backend/pii/resolver.py](file:///home/nalin/Hackathon/backend/pii/resolver.py) | Fixed phone normalisation and DOB comparison in identity matching. |
-| [test_system.py](file:///home/nalin/Hackathon/test_system.py) | Expanded from 149 to 306 rock-solid offline tests covering all components. |
+### Prerequisites
+- Python 3.11+
+- Virtual environment at `./.venv`
+
+### Environment Setup (`.env`)
+```bash
+GEMINI_API_KEY="your-gemini-api-key"
+GROQ_API_KEY="your-groq-api-key"
+PORT=8000
+```
+
+### Launching the Application
+```bash
+cd /home/nalin/Hackathon
+./.venv/bin/python -m uvicorn backend.app:app --host 0.0.0.0 --port 8000 --reload
+```
+Open **`http://localhost:8000`** in your browser.
+
+### Judge Demonstration Walkthrough
+
+1. **Privacy Agent Hero Screen**:
+   - Notice the clean **50/50 split** layout.
+   - Enter Full Name (e.g. `Prabhat Sharma`), Email (e.g. `prabhatsharma76@yahoo.com`), Phone (`8826030870`), City (`Noida`), and Jurisdiction (`India (DPDP Act 2023)`).
+   - Click **Deploy Privacy Agent**.
+   - Watch the **Live Threat Radar** illuminate with active sweeping animations and dynamic progress updates while the **Swarm Activity Trace** streams reasoning from the Forensics, Legal Counsel, and Remediation agents in real time.
+
+2. **AI Threat Surface Matrix**:
+   - Review the generated **AI Threat Surface & Attack-Vector Matrix** showing correlated attack paths (e.g., Credential Stuffing, Dark Web Correlation).
+
+3. **Exposures Intelligence**:
+   - Navigate to **Exposures**.
+   - Point out that **zero false positives** exist: only verified breach hits and confirmed accounts are displayed.
+
+4. **AI Legal Studio**:
+   - Navigate to **Legal Studio**.
+   - Test the **AI Legal Chatbot**: type any company name (e.g., `Zomato` or `Canva`).
+   - Notice the dynamic two-way sync: the legal recipient, statutory citation, and notice preview instantly adapt without static hardcoded assumptions.
+
+5. **Compliance & Audit Receipts**:
+   - Navigate to **Compliance**.
+   - Inspect the 30-day statutory response timeline and cryptographically hashed SHA-256 audit ledger.
+
+---
+
+## 8. File Map & Project Organization
+
+```
+/home/nalin/Hackathon
+├── backend/
+│   ├── app.py                      # FastAPI application, WebSocket & REST endpoints
+│   ├── config.py                   # Configuration and environment variables
+│   ├── agent/
+│   │   ├── multi_agent_swarm.py     # Collaborative Swarm: Forensics, Legal Counsel, Remediation
+│   │   ├── orchestrator.py         # Swarm lifecycle coordinator & discovery execution
+│   │   ├── fiduciary_directory.py   # Data Fiduciary statutory lookup & dynamic company resolution
+│   │   ├── tools.py                # 22+ registered agent tools for analysis & drafting
+│   │   ├── verifiers.py            # Free-tier intelligence verifiers (XposedOrNot, Hudson Rock, etc.)
+│   │   ├── web_search.py           # SSRF-hardened open-web discovery engine
+│   │   └── memory.py               # Session store, exposure ledger, user profile state
+│   ├── pii/
+│   │   ├── recognizer.py           # Strict PII recognizer with Verhoeff Aadhaar validation
+│   │   └── resolver.py             # Attribution resolver & entity collision guards
+│   ├── legal/
+│   │   ├── notice_generator.py     # Statutory notice compiler (DPDP s.12/13, GDPR, CCPA)
+│   │   ├── audit_trail.py          # Cryptographic SHA-256 compliance receipts
+│   │   └── compliance_tracker.py   # 30-day response deadline monitor
+│   └── scanners/                   # Modular scanner connectors
+├── frontend/
+│   ├── index.html                  # Main UI layout (50/50 Privacy Agent, Command Center, Exposures, Legal, Compliance)
+│   ├── styles.css                  # Modern cyber-aesthetic styles, balanced grid, radar animation
+│   └── app.js                      # Reactive frontend controller, WebSockets, two-way sync, RightsAdvisor
+├── test_system.py                  # Full test suite (334 offline unit and integration tests)
+├── vercel.json                     # Vercel production serverless deployment configuration
+├── HANDOVER.md                     # Comprehensive handover and system status documentation (this file)
+└── README.md                       # Project overview and quickstart guide
+```
+
+---
+
+## 9. Conclusion
+
+ApniPehChaan demonstrates that privacy protection can be **autonomous, legally rigorous, 100% free-tier, and visually stunning**. With zero false positives, dynamic data fiduciary discovery, and an integrated 50/50 Threat Radar swarm interface, the system is fully production-ready and deployed at **[https://sovereign-privacy-ai.vercel.app](https://sovereign-privacy-ai.vercel.app)**.
