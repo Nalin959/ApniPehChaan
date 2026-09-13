@@ -1090,7 +1090,10 @@ class AgentScanRequest(BaseModel):
     # valid grounds for a DPDP s.12 request, and needs no scraping.
     declared_accounts: str = ""
     # Optional. Checked k-anonymously — only a 5-char SHA-1 prefix is sent.
+    # `password` is the original single-value field; `passwords` carries every
+    # credential the user entered. Both are checked, de-duplicated.
     password: str = ""
+    passwords: list[str] = []
 
     # ── Optional corroborating identifiers ──
     # All optional. Each one lets more candidate profiles be resolved in either
@@ -1131,10 +1134,21 @@ class AgentChatRequest(BaseModel):
     context: dict = Field(default_factory=dict)
 
 
+def _all_passwords(req: AgentScanRequest) -> list[str]:
+    """Every supplied credential, order preserved, de-duplicated. Empty strings
+    are dropped so a blank field cannot be checked as if it were a password."""
+    out: list[str] = []
+    for p in [req.password, *(req.passwords or [])]:
+        if p and p not in out:
+            out.append(p)
+    return out
+
+
 def _profile_of(req: AgentScanRequest) -> dict:
     return {"name": req.name, "email": req.email, "phone": req.phone,
             "city": req.city, "country": req.country or "IN",
             "declared_accounts": req.declared_accounts, "password": req.password,
+            "passwords": _all_passwords(req),
             "alt_emails": req.alt_emails, "alt_phones": req.alt_phones,
             "known_usernames": req.known_usernames, "date_of_birth": req.date_of_birth,
             "upi_id": req.upi_id, "websites": req.websites,

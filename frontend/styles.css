@@ -2661,6 +2661,13 @@ body {
 .password-input-wrap {
     position: relative; display: flex; align-items: stretch; width: 100%;
 }
+
+/* With an add button in the row, the eye toggle must clear it. The toggle is
+   absolutely positioned against this wrap, so without an offset it renders on
+   top of the 38px button. */
+.password-input-wrap.has-add { gap: 6px; }
+.password-input-wrap.has-add > input { flex: 1; min-width: 0; }
+.password-input-wrap.has-add .password-toggle { right: 48px; }
 .password-input-wrap input {
     flex: 1; padding-right: 42px;
 }

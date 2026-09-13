@@ -171,8 +171,26 @@ def _run_mandatory_discovery(ctx: ToolContext, tools: dict) -> dict:
     out["identity"] = tools["build_identity_profile"]()
     out["identifiers"] = tools["match_unique_identifiers"]()
     out["breaches"] = tools["verify_breach_exposure"]()
-    if ctx.profile.get("password"):
-        out["password"] = tools["verify_password_exposure"](ctx.profile["password"])
+    # Check every supplied credential, not just the first. Reusing one breached
+    # password across accounts is the whole point of a credential-stuffing
+    # attack, so checking one and reporting on it would understate the risk.
+    _pws, _seen = [], set()
+    for _p in [ctx.profile.get("password", ""), *(ctx.profile.get("passwords") or [])]:
+        if _p and _p not in _seen:
+            _seen.add(_p)
+            _pws.append(_p)
+    if _pws:
+        _results = [tools["verify_password_exposure"](p) for p in _pws]
+        # Keep the single-value shape for existing callers; add the full set.
+        out["password"] = _results[0]
+        out["passwords"] = _results
+        _hits = sum(1 for r in _results if r.get("result") == "hit")
+        if len(_results) > 1:
+            ctx.emit("discovery", "password",
+                     f"Checked {len(_results)} password(s) k-anonymously: "
+                     f"{_hits} found in breach corpora.",
+                     status="error" if _hits else "ok",
+                     tool_output={"checked": len(_results), "compromised": _hits})
     out["accounts"] = tools["discover_accounts"]()
     # The open web, not just the site list. A fixed roster of sites can only
     # find what is on the roster; this asks a search engine for the identifiers
@@ -500,7 +518,9 @@ def run_discovery(profile: dict, stream: EventStream) -> RunResult:
                                  for h in gathered["identifiers"].get("hits", [])])
 
             # Strip sensitive secrets like raw passwords before sending profile to LLM
-            planner_profile = {k: v for k, v in profile.items() if k != "password"}
+            _SECRET_KEYS = {"password", "passwords"}
+            planner_profile = {k: v for k, v in profile.items()
+                               if k not in _SECRET_KEYS}
 
             # phase_tools, not tools. This restriction was computed above and
             # then thrown away: the swarm was handed the full 22-tool dict,

@@ -1893,7 +1893,10 @@ function agProfile() {
         city: agEl('ag-city').value.trim(),
         country: agEl('ag-country').value,
         declared_accounts: (agEl('ag-declared')?.value || '').trim(),
-        password: (agEl('ag-password')?.value || ''),
+        // `password` stays for the existing single-value contract; `passwords`
+        // carries every one the user added.
+        passwords: getMultiValues('ag-password'),
+        password: (getMultiValues('ag-password')[0] || ''),
         known_usernames: (agEl('ag-usernames')?.value || '').trim(),
         alt_emails: (agEl('ag-altemails')?.value || '').trim(),
         alt_phones: getMultiValues('ag-altphones').join(', '),
@@ -2549,6 +2552,9 @@ function initProfileSync() {
         try {
             const p = JSON.parse(saved);
             Object.entries(p).forEach(([k, val]) => {
+                // Credentials are never written here, but an older build's
+                // leftover entry must not be restored into a password field.
+                if (MASKED_MULTI_GROUPS.has(k)) return;
                 const el = document.getElementById(k);
                 if (el && val && !el.value) el.value = val;
             });
@@ -2830,8 +2836,13 @@ function renderCandidates(st) {
  */
 const _multiValues = {};
 
+// Groups whose tags must never render their value on screen. The password
+// field has an eye toggle precisely so a screen recording cannot capture a
+// credential; a plaintext tag beside it would defeat that.
+const MASKED_MULTI_GROUPS = new Set(['ag-password']);
+
 function initMultiInputs() {
-    const groups = ['ag-phone', 'ag-altphones', 'ag-upi', 'ag-websites'];
+    const groups = ['ag-phone', 'ag-altphones', 'ag-upi', 'ag-websites', 'ag-password'];
 
     groups.forEach(groupId => {
         _multiValues[groupId] = [];
@@ -2880,7 +2891,11 @@ function initMultiInputs() {
 function addMultiTag(groupId, value) {
     if (!value) return;
     if (!_multiValues[groupId]) _multiValues[groupId] = [];
-    const parts = value.split(/[,;\n]+/).map(s => s.trim()).filter(Boolean);
+    // A comma is a legal password character, so only non-secret groups are
+    // split on separators. A password is taken exactly as typed.
+    const parts = MASKED_MULTI_GROUPS.has(groupId)
+        ? [value]
+        : value.split(/[,;\n]+/).map(s => s.trim()).filter(Boolean);
     const tagsContainer = document.getElementById(groupId + '-tags');
 
     parts.forEach(part => {
@@ -2894,7 +2909,12 @@ function addMultiTag(groupId, value) {
         tag.dataset.value = part;
 
         const text = document.createElement('span');
-        text.textContent = part;
+        if (MASKED_MULTI_GROUPS.has(groupId)) {
+            text.textContent = '\u2022'.repeat(Math.min(Math.max(part.length, 6), 12));
+            text.title = 'Hidden on purpose';
+        } else {
+            text.textContent = part;
+        }
 
         const removeBtn = document.createElement('button');
         removeBtn.type = 'button';
@@ -2930,9 +2950,11 @@ function getMultiValues(groupId) {
     const vals = [...(_multiValues[groupId] || [])];
     const input = document.getElementById(groupId);
     if (input) {
-        const current = input.value.trim();
+        const current = MASKED_MULTI_GROUPS.has(groupId) ? input.value : input.value.trim();
         if (current) {
-            const parts = current.split(/[,;\n]+/).map(s => s.trim()).filter(Boolean);
+            const parts = MASKED_MULTI_GROUPS.has(groupId)
+                ? [current]
+                : current.split(/[,;\n]+/).map(s => s.trim()).filter(Boolean);
             parts.forEach(p => {
                 if (!vals.includes(p)) vals.push(p);
             });
@@ -2942,7 +2964,7 @@ function getMultiValues(groupId) {
 }
 
 function clearMultiInputs() {
-    ['ag-phone', 'ag-altphones', 'ag-upi', 'ag-websites'].forEach(groupId => {
+    ['ag-phone', 'ag-altphones', 'ag-upi', 'ag-websites', 'ag-password'].forEach(groupId => {
         _multiValues[groupId] = [];
         const container = document.getElementById(groupId + '-tags');
         if (container) container.innerHTML = '';

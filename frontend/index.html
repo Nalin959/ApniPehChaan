@@ -219,7 +219,7 @@
                                 </select>
                             </label>
                             <label class="primary-field">Usernames Actually Used
-                                <input type="text" id="ag-usernames" placeholder="nalinchamp, github:handle" autocomplete="off">
+                                <input type="text" id="ag-usernames" placeholder="yourhandle, github:yourhandle" autocomplete="off">
                             </label>
                         </div>
 
@@ -281,14 +281,18 @@
                             <label>Accounts You Hold
                                 <input type="text" id="ag-declared" placeholder="Truecaller, Naukri, Shaadi, JustDial" autocomplete="off">
                             </label>
-                            <label>Password Check <span class="agent-optional">(k-anonymous)</span>
-                                <div class="password-input-wrap">
+                            <label>Password Check <span class="agent-optional">(k-anonymous &mdash; add several)</span>
+                              <div class="multi-input-group" id="ag-password-group">
+                                <div class="multi-tags" id="ag-password-tags"></div>
+                                <div class="password-input-wrap has-add">
                                     <input type="password" id="ag-password" placeholder="Checked via SHA-1 prefix" autocomplete="off">
                                     <button type="button" class="password-toggle" id="ag-password-toggle" title="Show password">
                                         <svg class="eye-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                                         <svg class="eye-closed" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18" style="display:none"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/></svg>
                                     </button>
+                                    <button type="button" class="multi-add-btn" data-group="ag-password" title="Add another password">+</button>
                                 </div>
+                              </div>
                             </label>
                         </div>
 
