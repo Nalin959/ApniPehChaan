@@ -11,7 +11,8 @@ CREATE TABLE IF NOT EXISTS public.users (
     name          TEXT,
     email         TEXT,
     phone         TEXT,
-    pan           TEXT,
+    pan           TEXT,   -- deprecated: always ''. PII identifiers are matched
+                          -- in memory and never stored (see upsert_user).
     city          TEXT,
     country       TEXT DEFAULT 'IN',
     created_at    TIMESTAMPTZ DEFAULT NOW()
@@ -52,12 +53,17 @@ CREATE TABLE IF NOT EXISTS public.exposures (
     record_id        TEXT,
     data_found       JSONB DEFAULT '[]'::jsonb,
     detail           JSONB DEFAULT '{}'::jsonb,
-    match_confidence REAL DEFAULT 1.0,
-    match_tier       TEXT DEFAULT 'definite',
-    evidence_class   TEXT DEFAULT 'verified',
+    -- These MUST default to "nothing is claimed". A column default of
+    -- 'verified'/'definite' means any row written without an explicit
+    -- evidence_class asserts to the user that a live check proved the finding.
+    -- The product's stated evidence policy is the opposite: nothing is
+    -- reported as verified unless a check actually returned a hit.
+    match_confidence REAL DEFAULT 0.0,
+    match_tier       TEXT DEFAULT '',
+    evidence_class   TEXT DEFAULT '',
     evidence         JSONB DEFAULT '[]'::jsonb,
     risk_score       REAL DEFAULT 0.0,
-    severity         TEXT DEFAULT 'medium',
+    severity         TEXT DEFAULT '',
     status           TEXT DEFAULT 'exposed', -- exposed | requested | acknowledged | removed | reappeared
     discovered_at    TIMESTAMPTZ DEFAULT NOW(),
     removed_at       TIMESTAMPTZ,
@@ -110,6 +116,17 @@ CREATE TABLE IF NOT EXISTS public.audit_receipts (
     previous_hash TEXT NOT NULL,
     hash          TEXT NOT NULL
 );
+
+-- ─── MIGRATIONS FOR EXISTING PROJECTS ─────────────────────────────────────────
+-- CREATE TABLE IF NOT EXISTS does not alter a table that already exists, so a
+-- project created before the fix above keeps the unsafe defaults. These are
+-- idempotent; re-running this script brings an existing project into line.
+ALTER TABLE public.exposures ALTER COLUMN match_confidence SET DEFAULT 0.0;
+ALTER TABLE public.exposures ALTER COLUMN match_tier      SET DEFAULT '';
+ALTER TABLE public.exposures ALTER COLUMN evidence_class  SET DEFAULT '';
+ALTER TABLE public.exposures ALTER COLUMN severity        SET DEFAULT '';
+-- The PAN column is no longer written to; clear anything an earlier build left.
+UPDATE public.users SET pan = '' WHERE pan IS NOT NULL AND pan <> '';
 
 -- ─── INDEXES ──────────────────────────────────────────────────────────────────
 CREATE INDEX IF NOT EXISTS idx_exposures_user ON public.exposures(user_id);

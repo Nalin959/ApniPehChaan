@@ -199,8 +199,14 @@ def _run_deterministic_discovery(ctx: ToolContext, tools: dict) -> str:
     brokers, pastes, risk = g["brokers"], g["pastes"], g["risk"]
 
     web = g["web"]
+    # discover_accounts() returns {"attributed": [...], "candidates": [...]}.
+    # Reading a "found" key it has never returned made this silently empty, so
+    # every account attributed to the user was dropped from removal planning —
+    # no plan_removal, no notice — and the summary below reported "0 live
+    # account(s)" however many were actually found. Candidates stay out on
+    # purpose: they are unconfirmed.
     actionable = [{"exposure_id": a["exposure_id"], "name": a["site"]}
-                  for a in accounts.get("found", [])]
+                  for a in accounts.get("attributed", [])]
     actionable += [{"exposure_id": w["exposure_id"], "name": w["domain"]}
                    for w in web.get("confirmed", [])]
     actionable += [{"exposure_id": d["exposure_id"], "name": d["service"]}
@@ -218,7 +224,7 @@ def _run_deterministic_discovery(ctx: ToolContext, tools: dict) -> str:
     # is the escalation, not the default — most services have a delete button,
     # and serving a legal notice on one of those wastes 30 days to achieve what
     # a link achieves in three minutes.
-    drafted, self_serve, refused = [], [], []
+    drafted, self_serve, refused, rotate = [], [], [], []
     for rec in actionable:
         plan = tools["plan_removal"](rec["exposure_id"])
         method = plan.get("method")
@@ -229,14 +235,21 @@ def _run_deterministic_discovery(ctx: ToolContext, tools: dict) -> str:
             d = tools["draft_erasure_request"](rec["exposure_id"], plan.get("jurisdiction") or "")
             if "request_id" in d:
                 drafted.append(d)
+        elif method == "credential_rotation":
+            # Not a removal at all, and not something anyone does "in minutes".
+            # It used to be swept into the self-serve bucket and reported as
+            # such, which is how an active credential compromise came out as
+            # "can be removed yourself in minutes".
+            rotate.append(rec["name"])
         else:
             self_serve.append({"service": rec["name"], "method": method,
+                               "label": plan.get("label", "") or method,
                                "url": plan.get("url", ""), "steps": plan.get("steps", []),
                                "minutes": plan.get("effort_minutes"),
                                "escalation": plan.get("escalation", "")})
 
     n_verified = len(breaches.get("verified_exposures", []))
-    n_found = len(accounts.get("found", []))
+    n_found = len(accounts.get("attributed", []))
     n_declared = len(declared.get("declared", []))
     n_unchecked = len(breaches.get("not_checked", []))
     n_idhits = len(idmatch.get("hits", []))
@@ -256,14 +269,26 @@ def _run_deterministic_discovery(ctx: ToolContext, tools: dict) -> str:
            (f"Open-web search completed and found no page carrying your identifiers "
             f"verbatim ({web.get('pages_fetched', 0)} result(s) read). "
             if not web.get("confirmed") else ""))
+        # An incomplete breach sweep must not read as an all-clear either.
+        + (f"The breach sweep was INCOMPLETE — {len(breaches.get('unavailable', []))} corpus/"
+           f"corpora could not be reached (rate limit or timeout), so absence of a finding "
+           f"there proves nothing; re-run to finish it. "
+           if breaches.get("unavailable") else "")
         + f"Found {n_found} live account(s) by searching {accounts.get('sites_checked', 0)} sites, "
         f"{n_verified} verified breach/profile exposure(s)"
         + (f", {n_declared} you declared" if n_declared else "")
         + f". {n_unchecked} check(s) could not run and nothing was guessed. "
         f"Privacy Risk Score {risk['overall_score']} ({risk['risk_level']}). "
-        + (f"{len(self_serve)} can be removed yourself in minutes — no legal notice needed "
-           f"({', '.join(s['service'] for s in self_serve[:4])}"
+        # Only self_serve is a minutes-long job. privacy_form, email_request and
+        # statutory_only also land in this bucket and take days to weeks, so
+        # each one's own label is quoted rather than asserting "in minutes" for
+        # all of them.
+        + (f"{len(self_serve)} can be actioned directly without a statutory notice "
+           f"({'; '.join(s['service'] + ' — ' + str(s['label']).lower() for s in self_serve[:4])}"
            f"{'…' if len(self_serve) > 4 else ''}). " if self_serve else "")
+        + (f"{len(rotate)} need credential rotation TODAY rather than any removal request "
+           f"({', '.join(rotate[:4])}) — an info-stealer took the saved passwords live, so "
+           f"monitoring is not a response. " if rotate else "")
         + (f"Drafted {len(drafted)} statutory notice(s) where no self-serve route exists. "
            if drafted else "No statutory notice was necessary. ")
         + (f"{len(refused)} source(s) cannot be erased at all. " if refused else "")
@@ -277,11 +302,14 @@ def _run_deterministic_discovery(ctx: ToolContext, tools: dict) -> str:
 
 def _run_deterministic_remediation(ctx: ToolContext, tools: dict, request_ids: list[str]) -> str:
     ctx.emit("orchestrator", "plan", f"Dispatching {len(request_ids)} approved notice(s).")
-    removed, pending, escalated = [], [], []
+    removed, pending, escalated, not_sent, unverifiable = [], [], [], [], []
 
     for rid in request_ids:
         sub = tools["submit_erasure_request"](rid)
         if sub.get("status") != "submitted":
+            # Nothing left the machine — no SMTP, a refused unverified
+            # addressee, or a send failure. Say so instead of counting it.
+            not_sent.append(sub.get("broker") or sub.get("service") or rid)
             continue
         broker = sub.get("broker", "")
         # Follow up twice: enough for a prompt or slow controller to complete.
@@ -291,19 +319,34 @@ def _run_deterministic_remediation(ctx: ToolContext, tools: dict, request_ids: l
             if status.get("status") == "completed":
                 break
         req = ctx.memory.get_request(rid)
+        if not req:
+            continue
         v = tools["verify_removal"](req["exposure_id"])
         if v.get("verified_removed"):
             removed.append(broker)
+        elif v.get("verifiable") is False:
+            # Nothing to re-query. A breach or paste record cannot be
+            # un-published, so the absence of a verification is not evidence
+            # the controller ignored the notice — escalating on it accused a
+            # controller of non-compliance on no evidence at all.
+            unverifiable.append(broker)
+            pending.append(broker)
         else:
             esc = tools["escalate_to_regulator"](rid)
             escalated.append(f"{broker} → {esc.get('authority')}")
             pending.append(broker)
 
+    sent_count = len(request_ids) - len(not_sent)
     summary = (
-        f"Dispatched {len(request_ids)} notice(s). "
-        f"Verified removal at {len(removed)} controller(s)"
+        f"Dispatched {sent_count} of {len(request_ids)} approved notice(s). "
+        + (f"{len(not_sent)} could NOT be transmitted ({', '.join(not_sent[:4])}) — the drafts "
+           f"are exported for you to send yourself. " if not_sent else "")
+        + f"Verified removal at {len(removed)} controller(s)"
         + (f" ({', '.join(removed)})" if removed else "")
         + ". "
+        + (f"{len(unverifiable)} cannot be independently verified "
+           f"({', '.join(unverifiable[:4])}) — a published breach record cannot be re-queried, "
+           f"so no removal is claimed for it. " if unverifiable else "")
         + (f"{len(escalated)} unresolved and escalated: {'; '.join(escalated)}." if escalated
            else "No escalations required.")
     )
@@ -459,8 +502,14 @@ def run_discovery(profile: dict, stream: EventStream) -> RunResult:
             # Strip sensitive secrets like raw passwords before sending profile to LLM
             planner_profile = {k: v for k, v in profile.items() if k != "password"}
 
+            # phase_tools, not tools. This restriction was computed above and
+            # then thrown away: the swarm was handed the full 22-tool dict,
+            # including submit_erasure_request, so the withholding the comment
+            # above describes was not actually in effect. Every tool the
+            # discovery swarm uses (determine_legal_basis, plan_removal,
+            # draft_erasure_request, analyze_threat_surface) is in this set.
             from backend.agent.multi_agent_swarm import MultiAgentSwarm
-            swarm = MultiAgentSwarm(ctx, tools)
+            swarm = MultiAgentSwarm(ctx, phase_tools)
             summary = swarm.run_discovery_swarm(planner_profile, gathered, actionable, stream)
         else:
             summary = _run_deterministic_discovery(ctx, tools)
@@ -491,11 +540,25 @@ def run_remediation(profile: dict, request_ids: list[str], stream: EventStream) 
         from backend.agent.multi_agent_swarm import RemediationAgent
         remediation_agent = RemediationAgent(ctx, tools)
         rem_res = remediation_agent.execute_remediation(request_ids)
+        # dispatched_count is now what actually left the machine. It used to be
+        # len(request_ids), so with no SMTP configured — where nothing is
+        # transmitted at all — the user was still told "Dispatched 3 statutory
+        # notice(s)".
+        not_sent = rem_res.get("not_sent") or []
+        unverifiable = rem_res.get("unverifiable") or []
         summary = (
-            f"Dispatched {rem_res['dispatched_count']} statutory notice(s). "
-            f"Independently verified removal at {len(rem_res['verified_removed'])} controller(s)"
+            f"Dispatched {rem_res['dispatched_count']} of "
+            f"{rem_res.get('requested_count', rem_res['dispatched_count'])} approved statutory "
+            f"notice(s). "
+            + (f"{len(not_sent)} could NOT be transmitted ({', '.join(not_sent[:4])}) — those "
+               f"drafts are exported for you to send from your own mail client. "
+               if not_sent else "")
+            + f"Independently verified removal at {len(rem_res['verified_removed'])} controller(s)"
             + (f" ({', '.join(rem_res['verified_removed'])})" if rem_res['verified_removed'] else "")
             + ". "
+            + (f"{len(unverifiable)} cannot be independently verified "
+               f"({', '.join(unverifiable[:4])}) — a published breach record cannot be "
+               f"re-queried, so no removal is claimed. " if unverifiable else "")
             + (f"{len(rem_res['escalated'])} unresolved and escalated to regulators: {'; '.join(rem_res['escalated'])}."
                if rem_res['escalated'] else "No escalations required.")
         )

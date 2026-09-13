@@ -455,27 +455,60 @@ def prepare_notice(
 
     subject = subject or build_subject(statute, company_name, reference_id)
 
-    msg = EmailMessage()
-    msg["Subject"] = subject
-    msg["From"] = formataddr((sender_name, from_addr)) if sender_name else from_addr
-    msg["To"] = formataddr((recipient_name, recipient)) if recipient_name else recipient
-    msg["Reply-To"] = formataddr((sender_name, reply_to)) if sender_name else reply_to
-    msg["Date"] = formatdate(localtime=True)
-    msg["Message-ID"] = make_msgid(domain=from_addr.split("@")[-1] or None)
-    # Correlates a controller's reply back to the audit chain entry without
-    # needing them to quote the reference id in their prose.
-    if reference_id:
-        msg["X-ApniPehChaan-Reference"] = reference_id
-        msg["X-SovereignPrivacy-Reference"] = reference_id
-    if statute:
-        msg["X-ApniPehChaan-Statute"] = statute
-        msg["X-SovereignPrivacy-Statute"] = statute
-    msg.set_content(body)
+    # ── Header injection. Every one of these fields is caller-supplied and at
+    #    least three of them are user-supplied in practice: `sender_name` is the
+    #    data principal's own name from their profile, and `company_name` and
+    #    `recipient_name` come from the exposure's source name, which may have
+    #    been typed in or produced by a model. A bare CR or LF in any of them
+    #    ends the header and starts a new one, which is how a Bcc gets appended
+    #    to a legal notice.
+    #
+    #    The stdlib does refuse to serialise such a header — but it refuses by
+    #    RAISING ValueError out of the middle of this function, which is not the
+    #    documented contract (a PreparedNotice with `blocked_reason` set) and
+    #    which propagates straight out of send_notice() into the caller. So the
+    #    control characters are rejected here, by name, and the assembly is
+    #    additionally wrapped so no malformed header can escape as an exception.
+    _CTL = "\r\n\x0b\x0c\x1c\x1d\x1e\x85\u2028\u2029"
+    for label, value in (("subject", subject), ("recipient name", recipient_name),
+                         ("sender name", sender_name), ("statute", statute),
+                         ("reference id", reference_id)):
+        if value and any(ch in value for ch in _CTL):
+            prep.blocked_reason = (
+                f"The {label} contains a line break or control character. In a header that "
+                f"terminates the field and begins a new one, so it is how an extra Bcc or a "
+                f"forged body gets spliced into an outbound legal notice. Nothing was built "
+                f"and nothing was written. Strip the line breaks and try again.")
+            return prep
 
-    # ── The verbatim wire copy. SMTP policy so the bytes are exactly what a
-    #    server would receive (CRLF endings, folded headers) — hashing the
-    #    pretty-printed form would produce a digest of something never sent. ────
-    wire = msg.as_bytes(policy=email_policy.SMTP)
+    try:
+        msg = EmailMessage()
+        msg["Subject"] = subject
+        msg["From"] = formataddr((sender_name, from_addr)) if sender_name else from_addr
+        msg["To"] = formataddr((recipient_name, recipient)) if recipient_name else recipient
+        msg["Reply-To"] = formataddr((sender_name, reply_to)) if sender_name else reply_to
+        msg["Date"] = formatdate(localtime=True)
+        msg["Message-ID"] = make_msgid(domain=from_addr.split("@")[-1] or None)
+        # Correlates a controller's reply back to the audit chain entry without
+        # needing them to quote the reference id in their prose.
+        if reference_id:
+            msg["X-ApniPehChaan-Reference"] = reference_id
+            msg["X-SovereignPrivacy-Reference"] = reference_id
+        if statute:
+            msg["X-ApniPehChaan-Statute"] = statute
+            msg["X-SovereignPrivacy-Statute"] = statute
+        msg.set_content(body)
+
+        # ── The verbatim wire copy. SMTP policy so the bytes are exactly what a
+        #    server would receive (CRLF endings, folded headers) — hashing the
+        #    pretty-printed form would produce a digest of something never sent. ──
+        wire = msg.as_bytes(policy=email_policy.SMTP)
+    except (ValueError, TypeError, UnicodeError) as exc:
+        prep.blocked_reason = (
+            f"The message could not be assembled as a valid RFC-5322 mail "
+            f"({type(exc).__name__}: {exc}). Nothing was built, hashed or written. This is "
+            f"almost always an unusable character in the subject, a name or an address.")
+        return prep
     prep.raw_message = wire.decode("utf-8", errors="replace")
     prep.sha256 = hashlib.sha256(wire).hexdigest()
 

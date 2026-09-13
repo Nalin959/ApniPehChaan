@@ -738,7 +738,11 @@ function initLegalForm() {
         if (compDisp) compDisp.textContent = comp;
 
         const chatInput = document.getElementById('legal-chat-company-input');
-        if (chatInput && comp && comp !== 'Data Fiduciary' && chatInput.value !== comp) {
+        // Never rewrite the field the user is typing in: comp is trimmed, so
+        // assigning it back deleted the space they had just pressed and dropped
+        // the caret to the end. "Zomato Limited" came out as "ZomatoLimited".
+        if (chatInput && chatInput !== document.activeElement &&
+            comp && comp !== 'Data Fiduciary' && chatInput.value !== comp) {
             chatInput.value = comp;
         }
 
@@ -754,6 +758,12 @@ function initLegalForm() {
         }
     }
 
+    // generateNoticeForExposure() — which lives outside this closure — ends by
+    // calling updateLegalChatContext(). Without this export that bare call is a
+    // ReferenceError, thrown out of the "Generate Legal Notice" click handler on
+    // every exposure card. Exported the same way as setLegalTargetCompany below.
+    window.updateLegalChatContext = updateLegalChatContext;
+
     // Direct synchronization function for ANY unknown or user-entered company
     window.setLegalTargetCompany = function(name, email, address) {
         const trimmed = (name || '').trim();
@@ -765,8 +775,13 @@ function initLegalForm() {
         const emailEl = document.getElementById('legal-company-email');
         const addrEl = document.getElementById('legal-company-address');
 
-        if (compEl && compEl.value !== trimmed) compEl.value = trimmed;
-        if (chatInput && chatInput.value !== trimmed) chatInput.value = trimmed;
+        // Skip the field the user is currently typing in. `trimmed` differs from
+        // what they typed the moment they press space, so writing it back deleted
+        // that space and moved the caret to the end — a multi-word fiduciary name
+        // could not be entered at all. The peer field still syncs.
+        const active = document.activeElement;
+        if (compEl && compEl !== active && compEl.value !== trimmed) compEl.value = trimmed;
+        if (chatInput && chatInput !== active && chatInput.value !== trimmed) chatInput.value = trimmed;
         if (compDisp) compDisp.textContent = trimmed;
 
         if (email && emailEl) {
@@ -819,24 +834,34 @@ function initLegalForm() {
     });
 
     // Two-way live company sync between chat header input and manual form input
+    const syncCompanyFromInput = (e) => {
+        const raw = e.target.value;
+        if (!raw.trim()) {
+            // The user emptied this field. setLegalTargetCompany() ignores an
+            // empty name, so without this the peer input kept the previous
+            // company — and generateNotice(), which prefers the chat input,
+            // silently addressed the statutory notice to the old fiduciary
+            // while the visible field the user had just cleared read blank.
+            const peerId = e.target.id === 'legal-chat-company-input'
+                ? 'legal-company' : 'legal-chat-company-input';
+            const peer = document.getElementById(peerId);
+            if (peer && peer.value) peer.value = '';
+            updateLegalChatContext();
+            return;
+        }
+        setLegalTargetCompany(raw);
+    };
+
     const chatCompInput = document.getElementById('legal-chat-company-input');
     if (chatCompInput) {
-        chatCompInput.addEventListener('input', (e) => {
-            setLegalTargetCompany(e.target.value);
-        });
-        chatCompInput.addEventListener('change', (e) => {
-            setLegalTargetCompany(e.target.value);
-        });
+        chatCompInput.addEventListener('input', syncCompanyFromInput);
+        chatCompInput.addEventListener('change', syncCompanyFromInput);
     }
 
     const manualCompInput = document.getElementById('legal-company');
     if (manualCompInput) {
-        manualCompInput.addEventListener('input', (e) => {
-            setLegalTargetCompany(e.target.value);
-        });
-        manualCompInput.addEventListener('change', (e) => {
-            setLegalTargetCompany(e.target.value);
-        });
+        manualCompInput.addEventListener('input', syncCompanyFromInput);
+        manualCompInput.addEventListener('change', syncCompanyFromInput);
     }
 
     // Quick prompt chips in Chatbot
@@ -1216,6 +1241,11 @@ const KNOWN_FIDUCIARIES = {
 function getFiduciaryContact(nameOrId) {
     if (!nameOrId) return {};
     const clean = nameOrId.toLowerCase().replace(/[^a-z0-9]/g, '');
+    // A source name with no alphanumerics at all ("—", "***") reduces to "", and
+    // `key.includes("")` is true for every key — so the first entry in the table
+    // was returned as a confident match and the erasure notice would have been
+    // addressed to a fiduciary that had nothing to do with the finding.
+    if (!clean) return {};
     for (const [key, spec] of Object.entries(KNOWN_FIDUCIARIES)) {
         if (clean.includes(key) || key.includes(clean)) return Object.assign({}, spec);
     }
@@ -1441,8 +1471,13 @@ function renderComplianceRequests(requests) {
             req.progress_pct > 70 ? 'var(--accent-warning)' : 'var(--accent-primary)';
 
         const milestonesHtml = (req.milestones || []).map((ms, i) => {
-            const isCompleted = ms.status === 'completed';
-            const isNext = !isCompleted && i === (req.milestones || []).findIndex(m => m.status !== 'completed');
+            // The tracker only ever sets status 'completed' on Day 0, so keying the
+            // timeline off it left Day 7/14/30 permanently un-reached even on a
+            // 20-day-old request. statutory_tracker now computes `reached` against
+            // the real clock; fall back to status for older payloads.
+            const msReached = m => m.reached === true || m.status === 'completed';
+            const isCompleted = msReached(ms);
+            const isNext = !isCompleted && i === (req.milestones || []).findIndex(m => !msReached(m));
             return `
                 <div class="timeline-item ${isCompleted ? 'completed' : ''} ${isNext ? 'active' : ''}">
                     <span class="timeline-label">${escapeHtml(ms.label)}</span>
@@ -2005,7 +2040,21 @@ function agentConnect() {
         ws.onopen = () => { Agent.ws = ws; resolve(ws); };
         ws.onerror = () => reject(new Error('WebSocket failed'));
         ws.onmessage = (ev) => agentOnMessage(JSON.parse(ev.data));
-        ws.onclose = () => { Agent.ws = null; };
+        ws.onclose = () => {
+            Agent.ws = null;
+            if (!Agent.busy) return;
+            // The socket died mid-phase. onerror cannot reject a promise that
+            // already resolved at onopen, and neither phase_complete nor an
+            // error frame can arrive on a closed socket — so nothing else was
+            // ever going to clear the busy flag, and the button sat on
+            // "Working… 42s · 9 steps" for ever with no explanation.
+            traceAdd('orchestrator',
+                'Live agent connection closed before the run finished. Nothing was dispatched — deploy again to retry.',
+                'error');
+            const statusText = document.getElementById('radar-status-text');
+            if (statusText) statusText.textContent = 'Connection lost — agent run interrupted';
+            agentSetBusy(false);
+        };
     });
 }
 
@@ -2665,6 +2714,39 @@ async function agentReset() {
         agEl('agent-summary').innerHTML = '';
         agEl('approval-panel').hidden = true;
         agEl('ledger-panel').hidden = true;
+        const rp = agEl('plan-panel'); if (rp) rp.hidden = true;
+        const rc = agEl('candidates-panel'); if (rc) rc.hidden = true;
+
+        // The server has wiped this identity, so nothing derived from it may be
+        // left on screen. state.agentState in particular is what
+        // navigateTo('exposures') re-renders from, so leaving it set repainted
+        // the Exposures tab and the Command Center with the exact findings that
+        // had just been deleted — the reset looked like it had not happened.
+        state.agentState = null;
+        state.agentSummary = null;
+        state.agentRisk = null;
+        state.scanResults = null;
+        Agent.userId = null;
+        Agent.riskBefore = null;
+        Agent.drafted = [];
+        renderAgentExposures({ exposures: [] });
+        renderThreatSurface(null);
+
+        const scoreEl = document.getElementById('risk-score-value');
+        if (scoreEl) scoreEl.textContent = '—';
+        ['breach-count', 'broker-count', 'paste-count', 'infostealer-count'].forEach(cid => {
+            const el = document.getElementById(cid);
+            if (el) el.textContent = '0';
+        });
+        const lvlBadge = document.getElementById('risk-level-badge');
+        if (lvlBadge) { lvlBadge.textContent = 'Not Scanned'; lvlBadge.style.background = ''; lvlBadge.style.color = ''; }
+        const alarmCard = document.getElementById('stat-infostealer');
+        if (alarmCard) alarmCard.classList.remove('stat-alarm');
+        const riskCard = document.getElementById('stat-risk-score');
+        if (riskCard) riskCard.style.borderColor = '';
+        const recsCard = document.getElementById('recommendations-card');
+        if (recsCard) recsCard.style.display = 'none';
+        if (window.RightsAdvisor) window.RightsAdvisor.updateContextStats();
 
         const prog = document.getElementById('scan-progress-fill'); if (prog) prog.style.width = '0%';
         const sweep = document.getElementById('radar-sweep'); if (sweep) sweep.classList.remove('active');

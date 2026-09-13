@@ -21,6 +21,14 @@ from backend.agent.memory import utcnow
 from backend.agent.openai_compat_planner import get_llm_completion
 from backend.remediation.notice_generator import NoticeGenerator
 
+# determine_legal_basis() reports the jurisdiction, not the body that hears a
+# complaint under it. This is the same mapping escalate_to_regulator() uses.
+ESCALATION_AUTHORITY = {
+    "dpdp": "Data Protection Board of India (DPBI)",
+    "gdpr": "Lead Supervisory Authority (GDPR Art. 77)",
+    "ccpa": "California Privacy Protection Agency (CPPA)",
+}
+
 
 @dataclass
 class SwarmResult:
@@ -195,27 +203,35 @@ class LegalCounselAgent:
             basis = self.tools["determine_legal_basis"](exposure_id=eid)
             jurisdiction = basis.get("jurisdiction", "dpdp")
 
-            # 2. Check for statutory exemptions (court records, MCA filings, credit bureaus)
+            # 2. Check whether an erasure right exists at all.
+            #
+            # This used to test only for "court"/"judicial"/"statutory_register"
+            # in legal_class, plus a "statutory_right" key that
+            # determine_legal_basis has never returned. So a statutory
+            # publication (legal_class "statutory_publication"), a
+            # retention-bound record ("dpdp_limited") and an unattributed
+            # dark-web dump all fell through: plan_removal then returned
+            # "not_removable", which neither branch below handles, and they
+            # vanished from the dossier entirely — neither actioned nor
+            # reported as exempt. erasure_available is the field that actually
+            # answers the question.
             legal_class = basis.get("legal_class", "")
-            is_exempt = (
-                basis.get("statutory_right") == "exempt"
-                or "court" in legal_class
-                or "judicial" in legal_class
-                or "statutory_register" in legal_class
-            )
+            is_exempt = basis.get("erasure_available") is False
 
             if is_exempt:
                 exempt_records.append({
                     "exposure_id": eid,
                     "source": source_name,
-                    "statute": basis.get("statute_cited", "Statutory Exemption"),
-                    "reason": basis.get("legal_basis", "Exempt public record"),
+                    "statute": basis.get("statute") or "Statutory exemption",
+                    "legal_class": legal_class,
+                    "reason": basis.get("legal_basis", "No erasure right against this source."),
                     "recommended_action": basis.get("recommended_action", "Monitor; statutory erasure does not apply."),
                 })
                 self.ctx.emit(
                     "legal_counsel", "refuse",
-                    f"⚖️ Legal Counsel: Statutory erasure is inapplicable for {source_name} ({basis.get('statute_cited')}) "
-                    f"— exempt public or judicial archive.",
+                    f"⚖️ Legal Counsel: No erasure right against {source_name} "
+                    f"({legal_class or basis.get('legal_class') or 'unattributed source'}) — "
+                    f"recommended action: {basis.get('recommended_action', 'monitor')}.",
                     tool_output={"source": source_name, "reason": basis.get("legal_basis")},
                 )
                 continue
@@ -224,14 +240,20 @@ class LegalCounselAgent:
             plan = self.tools["plan_removal"](exposure_id=eid)
             method = plan.get("method")
 
+            # determine_legal_basis() returns "statute" and "deadline_days".
+            # Reading "statute_cited"/"response_deadline_days" — keys it has
+            # never returned — put a literal None statute into the dossier and
+            # pinned every deadline to the 30-day default, so a GDPR or CCPA
+            # exposure was reported under the wrong statutory clock.
             legal_assessments.append({
                 "exposure_id": eid,
                 "source": source_name,
                 "jurisdiction": jurisdiction,
-                "statute": basis.get("statute_cited"),
+                "statute": basis.get("statute"),
                 "method": method,
-                "deadline_days": basis.get("response_deadline_days", 30),
-                "escalation_body": basis.get("escalation_authority"),
+                "deadline_days": basis.get("deadline_days", 30),
+                "escalation_body": ESCALATION_AUTHORITY.get(
+                    jurisdiction, "Competent supervisory authority"),
             })
 
             # 4. Draft notice if statutory notice is required
@@ -256,7 +278,7 @@ class LegalCounselAgent:
         self.ctx.emit(
             "legal_counsel", "report",
             f"⚖️ Legal Counsel Agent: Completed statutory analysis. Drafted {len(drafted_notices)} bespoke notice(s); "
-            f"identified {len(exempt_records)} legally exempt record(s).",
+            f"identified {len(exempt_records)} record(s) against which no erasure right exists.",
             tool_output=report,
         )
         return report
@@ -340,10 +362,26 @@ class RemediationAgent:
         removed = []
         pending = []
         escalated = []
+        not_sent = []
+        unverifiable = []
 
         for rid in request_ids:
             sub = self.tools["submit_erasure_request"](rid)
             if sub.get("status") != "submitted":
+                # Nothing was transmitted — no SMTP configured, an addressee the
+                # mailer refused as unverified, or a send failure. Record it as
+                # not sent rather than dropping it: the caller counted every
+                # requested id as "dispatched" and told the user notices had
+                # gone out when none had.
+                who = sub.get("broker") or sub.get("service") or rid
+                not_sent.append(who)
+                self.ctx.emit(
+                    "remediation", "dispatch",
+                    f"🛡️ Remediation Agent: {who} — NOT transmitted "
+                    f"({sub.get('dispatch_status') or sub.get('status') or 'blocked'}). "
+                    f"The drafted notice is exported for you to send yourself.",
+                    status="error",
+                )
                 continue
             broker = sub.get("broker", "")
 
@@ -363,6 +401,21 @@ class RemediationAgent:
                         f"🛡️ Remediation Agent: Independent verification CONFIRMED: data erased at {broker}.",
                         status="ok",
                     )
+                elif v.get("verifiable") is False:
+                    # There is nothing to re-query: a breach or paste record
+                    # cannot be un-published. Treating that as a failed
+                    # verification escalated the controller to a regulator, and
+                    # told the user it "failed to verify erasure", on no
+                    # evidence whatsoever.
+                    unverifiable.append(broker)
+                    pending.append(broker)
+                    self.ctx.emit(
+                        "remediation", "verify",
+                        f"🛡️ Remediation Agent: {broker} — removal cannot be independently "
+                        f"verified ({v.get('message', '')}). No removal is claimed and no "
+                        f"non-compliance is alleged.",
+                        status="ok",
+                    )
                 else:
                     esc = self.tools["escalate_to_regulator"](rid)
                     escalated.append(f"{broker} → {esc.get('authority')}")
@@ -374,8 +427,12 @@ class RemediationAgent:
                     )
 
         return {
-            "dispatched_count": len(request_ids),
+            # What actually went out, not what was asked for.
+            "dispatched_count": len(request_ids) - len(not_sent),
+            "requested_count": len(request_ids),
+            "not_sent": not_sent,
             "verified_removed": removed,
+            "unverifiable": unverifiable,
             "escalated": escalated,
             "pending": pending,
         }

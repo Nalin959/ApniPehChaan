@@ -420,13 +420,25 @@ def _match_playbook(*names: str) -> tuple[dict | None, str]:
         for pb in pbs:
             if needle in (pb["id"].lower(), pb["service"].lower()):
                 return pb, "high"
+    # A substring needle must be long enough to mean something. Unbounded, a
+    # one- or two-character name matched inside some playbook's service string
+    # and returned it at "medium" confidence: "X" resolved to CIBIL / Experian /
+    # Equifax and so answered not_removable — "there is no way out of this, it
+    # is a licensed credit record" — for a service nobody identified. "a" gave
+    # Truecaller, "i" gave Naukri, "in" gave IndiaMART. Four characters is the
+    # floor because the shortest playbook id here is five ("devto", "flickr"),
+    # so nothing legitimate is lost and every exact match above still wins first.
     for needle in tokens + norms:
+        if len(needle) < 4:
+            continue
         for pb in pbs:
-            if needle and (needle in pb["service"].lower() or pb["id"].lower() == needle):
+            if needle in pb["service"].lower() or pb["id"].lower() == needle:
                 return pb, "medium"
     # Last resort: the playbook id appears inside the supplied name, which is
     # how "Naukri.com job portal" finds "naukri".
     for needle in tokens:
+        if len(needle) < 4:
+            continue
         for pb in pbs:
             if len(pb["id"]) >= 4 and pb["id"].lower() in needle:
                 return pb, "medium"

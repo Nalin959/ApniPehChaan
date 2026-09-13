@@ -311,8 +311,16 @@ class BrokerNetwork:
                 clauses.append("REPLACE(REPLACE(phone,' ',''),'+','') LIKE ?")
                 params.append(f"%{digits}")
         if name:
-            clauses.append("LOWER(name)=?")
+            # A name is not unique to a person, and the clauses here are OR-ed, so
+            # matching on the name alone returned every record seeded for anyone
+            # who shares it — two people called "Rahul Sharma" saw each other's
+            # broker records as their own. Records are keyed by subject_key, which
+            # is derived from the email when there is one, so requiring the key to
+            # agree keeps the name usable as a lookup without letting it attribute
+            # across identities.
+            clauses.append("(LOWER(name)=? AND subject_key=?)")
             params.append(name.strip().lower())
+            params.append(subject_key(name, email))
         if not clauses:
             return []
 

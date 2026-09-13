@@ -12,9 +12,9 @@ import sys
 from datetime import datetime
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -36,6 +36,7 @@ from backend.pii.risk_calculator import RiskCalculator
 from backend.remediation.notice_generator import NoticeGenerator
 from backend.remediation.audit_crypto import AuditTrail
 from backend.remediation.statutory_tracker import StatutoryTracker
+from backend.agent.supabase_memory import SupabaseUnavailable
 
 # ─── Global Instances ──────────────────────────────────────────────────────────
 
@@ -113,13 +114,35 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# allow_credentials must stay False. Starlette cannot honour "*" together with
+# credentials (the Fetch spec forbids it), so it silently switches to echoing
+# the caller's Origin back with Access-Control-Allow-Credentials: true —
+# verified: a request from https://evil.example carrying a cookie came back
+# with "Access-Control-Allow-Origin: https://evil.example". That is a strictly
+# more permissive policy than the wildcard it looks like. Nothing here
+# authenticates with cookies or an Authorization header, so no caller needs
+# credentialed CORS.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# The cloud store answering 5xx (or not answering) is a dependency outage, not
+# a bug in the request: it used to escape urllib as HTTPError and surface as an
+# opaque HTTP 500, e.g. POST /api/agent/scan dying on a Supabase 504.
+@app.exception_handler(SupabaseUnavailable)
+async def _storage_unavailable(request: Request, exc: SupabaseUnavailable):
+    return JSONResponse(
+        status_code=503,
+        content={"error": "storage_unavailable",
+                 "detail": "The persistence backend is unreachable. Nothing was recorded; "
+                           "retry shortly.",
+                 "cause": str(exc)},
+    )
 
 # Mount frontend static files
 if os.path.isdir(FRONTEND_DIR):
@@ -235,6 +258,87 @@ async def dataset_summary():
     }
 
 
+# ─── Scanning helpers ─────────────────────────────────────────────────────────
+
+def _breach_entity_type(data_class: str) -> str:
+    """
+    Map a HIBP breach data class onto the PII entity type it actually is.
+
+    A leaked password used to be reported here as entity_type "CREDIT_CARD",
+    with the comment "elevate severity". It did not even do that — the risk
+    calculator weights PASSWORD at 9.0 and CREDIT_CARD at 8.5 — but it did put
+    "CREDIT_CARD" into risk_assessment.exposures_by_severity and trip the
+    recommendation "URGENT: Credit card numbers detected in breach data.
+    Contact your bank immediately to block and reissue affected cards" for a
+    user whose card was never in the breach. Report what leaked.
+    """
+    dc = (data_class or "").lower()
+    # Order matters: "Email addresses", "IP addresses" and "Physical addresses"
+    # all contain "address", and the old chain resolved all three to ADDRESS.
+    for needles, entity in (
+        (("password",), "PASSWORD"),
+        (("auth token", "session token"), "AUTH_TOKEN"),
+        (("security question", "security answer"), "SECURITY_ANSWER"),
+        (("email",), "EMAIL"),
+        (("ip address",), "IP_ADDRESS"),
+        (("phone", "mobile"), "PHONE_IN"),
+        (("physical address", "geographic location", "home address"), "ADDRESS"),
+        (("date of birth", "dates of birth", "age group"), "DATE_OF_BIRTH"),
+        (("credit card", "payment card"), "CREDIT_CARD"),
+        (("bank account",), "BANK_ACCOUNT"),
+        (("passport",), "PASSPORT"),
+        (("government issued id", "national id"), "GOVERNMENT_ID"),
+        (("social security",), "SSN"),
+        (("private message", "chat log"), "PRIVATE_MESSAGE"),
+        (("income", "salar"), "INCOME"),
+        (("employer", "job title"), "EMPLOYER"),
+        (("vehicle", "licence plate", "license plate"), "VEHICLE"),
+        (("username", "screen name"), "USERNAME"),
+        (("name", "salutation"), "NAME"),
+    ):
+        if any(n in dc for n in needles):
+            return entity
+    # Anything unrecognised keeps its own label and so carries the risk
+    # calculator's neutral default weight. Falling back to "EMAIL" asserted
+    # that an email address had leaked for classes like "Genders",
+    # "Purchases" and "Browser user agent details" — 170 distinct data
+    # classes in the catalogue all reported as the same exposure.
+    return (data_class or "UNKNOWN").strip().upper().replace(" ", "_") or "UNKNOWN"
+
+
+# The legacy /api/scan/* and /ws/scan endpoints read
+# data/synthetic_pastes/pastes_corpus.json, which download_datasets.py
+# GENERATES: invented people with invented Aadhaar, PAN and account numbers.
+# Whatever attribution rule the scanner applies, a record that was fabricated
+# by a generator was never about this user, so it cannot be one of their
+# exposures. This layer used to fold every entity out of every "matching"
+# record straight into the user's exposure list with source_type
+# "dark_web_paste" — strangers' invented identifiers presented as the user's
+# confirmed dark-web leaks, and fed into the risk score and the audit receipt.
+#
+# The endpoints stay (they are documented and their dataset counts are used by
+# /api/status), but they no longer attribute anything from this corpus. The
+# live agent path — /api/agent/scan and /ws/agent — is untouched.
+SYNTHETIC_PASTE_DISCLOSURE = (
+    "The bundled paste corpus under data/synthetic_pastes/ is generated test data, "
+    "not a real leak archive. Records from it are never attributed to a user, "
+    "never scored, and never written to the audit trail. Use the Privacy Agent "
+    "(/api/agent/scan) for real, evidence-backed discovery."
+)
+
+
+def _non_attributing_paste_result(result: dict) -> dict:
+    """Keep the corpus statistics; drop every attributed match."""
+    return {
+        "status": "synthetic_corpus_not_attributed",
+        "matches": [],
+        "attributed": False,
+        "disclosure": SYNTHETIC_PASTE_DISCLOSURE,
+        "corpus_records_scanned": (result or {}).get("stats", {}).get("total_pastes_checked",
+                                                                     paste_scanner.get_paste_count()),
+    }
+
+
 # ─── Routes: Scanning ─────────────────────────────────────────────────────────
 
 @app.post("/api/scan/full")
@@ -256,39 +360,22 @@ async def full_scan(req: ScanRequest):
     # Run all scans
     hibp_results = hibp_scanner.scan(req.email, req.name)
     broker_results = broker_scanner.scan(req.name, req.email, req.phone, req.city)
-    paste_results = paste_scanner.scan(user_profile)
+    paste_results = _non_attributing_paste_result(paste_scanner.scan(user_profile))
 
     # Aggregate exposures for risk calculation
     exposures = []
 
     for breach in hibp_results.get("breaches", []):
         for dc in breach.get("data_classes", []):
-            dc_lower = dc.lower()
-            etype = "EMAIL"
-            if "password" in dc_lower:
-                etype = "CREDIT_CARD"  # elevate severity
-            elif "phone" in dc_lower:
-                etype = "PHONE_IN"
-            elif "address" in dc_lower:
-                etype = "ADDRESS"
-            elif "name" in dc_lower:
-                etype = "NAME"
-
             exposures.append({
-                "entity_type": etype,
+                "entity_type": _breach_entity_type(dc),
                 "source_type": "hibp_verified",
                 "date_found": breach.get("breach_date"),
                 "value": f"[from {breach.get('name', 'unknown breach')}]",
             })
 
-    for match in paste_results.get("matches", []):
-        for entity in match.get("entities_found", []):
-            exposures.append({
-                "entity_type": entity.get("entity_type", "UNKNOWN"),
-                "source_type": "dark_web_paste",
-                "date_found": match.get("date_found"),
-                "value": entity.get("value", ""),
-            })
+    # Nothing from the synthetic paste corpus enters `exposures`: see
+    # SYNTHETIC_PASTE_DISCLOSURE above.
 
     # Calculate risk
     broker_matches = broker_results.get("stats", {}).get("high_risk_matches", 0)
@@ -299,7 +386,7 @@ async def full_scan(req: ScanRequest):
     receipt = audit_trail.add("FULL_SCAN_COMPLETED", {
         "user_email_hash": __import__('hashlib').sha256(req.email.encode()).hexdigest()[:16] if req.email else "none",
         "breaches_found": len(hibp_results.get("breaches", [])),
-        "paste_matches": len(paste_results.get("matches", [])),
+        "paste_matches": 0,
         "broker_matches": broker_matches,
         "risk_score": risk_assessment.overall_score,
     })
@@ -314,11 +401,12 @@ async def full_scan(req: ScanRequest):
         "audit_receipt": receipt.to_dict(),
         "summary": {
             "total_breaches": len(hibp_results.get("breaches", [])),
-            "total_paste_matches": len(paste_results.get("matches", [])),
+            "total_paste_matches": 0,
             "total_broker_matches": broker_matches,
             "risk_score": risk_assessment.overall_score,
             "risk_level": risk_assessment.risk_level,
         },
+        "disclosure": SYNTHETIC_PASTE_DISCLOSURE,
     }
 
 
@@ -344,8 +432,8 @@ async def scan_brokers(req: ScanRequest):
 async def scan_pastes(req: ScanRequest):
     """Scan dark-web paste corpus only."""
     user_profile = {"name": req.name, "email": req.email, "phone": req.phone, "aadhaar": req.aadhaar, "pan": req.pan}
-    result = paste_scanner.scan(user_profile)
-    receipt = audit_trail.add("PASTE_SCAN", {"matches_found": result.get("stats", {}).get("matches_found", 0)})
+    result = _non_attributing_paste_result(paste_scanner.scan(user_profile))
+    receipt = audit_trail.add("PASTE_SCAN", {"matches_found": 0, "corpus": "synthetic"})
     result["audit_receipt"] = receipt.to_dict()
     return result
 
@@ -465,7 +553,9 @@ async def get_jurisdictions():
 @app.post("/api/legal/generate")
 async def generate_notice(req: NoticeRequest):
     """Generate a statutory legal erasure notice."""
-    result = notice_generator.generate(
+    # ai_tailored=True makes a blocking LLM call inside notice_generator.
+    result = await asyncio.to_thread(
+        notice_generator.generate,
         jurisdiction=req.jurisdiction,
         user_name=req.user_name,
         user_email=req.user_email,
@@ -600,7 +690,15 @@ RULES:
             messages.append({"role": role, "content": content})
     messages.append({"role": "user", "content": user_msg})
 
-    llm_res, model_used = get_llm_completion(
+    # Every LLM call below goes out through the SYNCHRONOUS OpenAI/Anthropic
+    # clients, and get_llm_completion walks a list of providers x candidate models,
+    # each a full blocking round-trip. Called directly from an `async def` that
+    # froze the whole event loop for the duration — one chat message stalled every
+    # other request on the server, the live /ws/agent trace included, and a
+    # rate-limited key turned that into tens of seconds. They run on a worker
+    # thread now.
+    llm_res, model_used = await asyncio.to_thread(
+        get_llm_completion,
         messages=messages,
         max_tokens=1400,
         temperature=0.2,
@@ -609,7 +707,8 @@ RULES:
     if not llm_res:
         # Graceful fallback: generate notice or provide statutory answer
         if any(w in user_msg.lower() for w in ["draft", "notice", "generate", "write", "create", "letter", "demand"]):
-            gen = notice_generator.generate(
+            gen = await asyncio.to_thread(
+                notice_generator.generate,
                 jurisdiction=req.jurisdiction,
                 user_name=user_name,
                 user_email=user_email,
@@ -869,32 +968,32 @@ async def websocket_scan(websocket: WebSocket):
 
                 await send_step("paste_start", f"Scanning dark-web paste corpus ({paste_scanner.get_paste_count()} entries)...", 60)
                 await asyncio.sleep(0.5)
-                paste_results = paste_scanner.scan(profile)
-                paste_matches = len(paste_results.get("matches", []))
-                await send_step("paste_done", f"Dark-web scan complete: {paste_matches} leak matches", 75)
+                paste_results = _non_attributing_paste_result(paste_scanner.scan(profile))
+                paste_matches = 0
+                await send_step("paste_done",
+                                "Dark-web corpus is synthetic test data — no matches attributed", 75)
                 await asyncio.sleep(0.3)
 
                 await send_step("risk_calc", "Computing Privacy Risk Score...", 80)
                 await asyncio.sleep(0.3)
 
                 # Aggregate exposures
+                # Identical classification to POST /api/scan/full. This loop
+                # used to label EVERY data class "EMAIL", so the same profile
+                # scored differently over the socket than over REST, and a
+                # breach of passwords and addresses was reported as three
+                # separate email exposures.
                 exposures = []
                 for breach in hibp_results.get("breaches", []):
                     for dc in breach.get("data_classes", []):
                         exposures.append({
-                            "entity_type": "EMAIL",
+                            "entity_type": _breach_entity_type(dc),
                             "source_type": "hibp_verified",
                             "date_found": breach.get("breach_date"),
                             "value": f"[{breach.get('name', '')}]",
                         })
-                for match in paste_results.get("matches", []):
-                    for entity in match.get("entities_found", []):
-                        exposures.append({
-                            "entity_type": entity.get("entity_type", "UNKNOWN"),
-                            "source_type": "dark_web_paste",
-                            "date_found": match.get("date_found"),
-                            "value": entity.get("value", ""),
-                        })
+                # The synthetic paste corpus contributes nothing — see
+                # SYNTHETIC_PASTE_DISCLOSURE.
 
                 risk = risk_calculator.calculate(exposures, broker_matches, broker_results.get("stats", {}).get("total_brokers_checked", 0))
 
@@ -924,12 +1023,23 @@ async def websocket_scan(websocket: WebSocket):
                             "risk_score": risk.overall_score,
                             "risk_level": risk.risk_level,
                         },
+                        "disclosure": SYNTHETIC_PASTE_DISCLOSURE,
                     },
                 })
 
     except WebSocketDisconnect:
         ws_manager.disconnect(websocket)
-    except Exception as e:
+    except Exception as exc:
+        # Say why before hanging up. Swallowing this closed the socket in
+        # mid-scan with no frame at all, so the client could not tell a crash
+        # apart from a network drop and sat on a progress bar for ever.
+        try:
+            await websocket.send_json({
+                "type": "error",
+                "message": f"Scan failed: {type(exc).__name__}: {exc}",
+            })
+        except Exception:
+            pass
         ws_manager.disconnect(websocket)
 
 
@@ -957,6 +1067,7 @@ if __name__ == "__main__":
 # ══════════════════════════════════════════════════════════════════════════════
 
 import asyncio as _asyncio
+import queue as _queue
 import threading as _threading
 
 from backend.agent.memory import get_memory
@@ -1030,6 +1141,45 @@ def _profile_of(req: AgentScanRequest) -> dict:
             "search_guessed_handles": bool(req.search_guessed_handles),
             "pan": req.pan, "aadhaar": req.aadhaar, "passport": req.passport,
             "card_last4": req.card_last4}
+
+
+# Anything that can identify a person to search for. A request carrying none
+# of them has nothing to scan: it used to run the whole pipeline anyway and
+# mint an "anonymous" user row (on the cloud backend, a production row) whose
+# results belonged to no one and were then served to the next caller of
+# /api/agent/latest.
+_IDENTIFIER_FIELDS = ("email", "phone", "name", "declared_accounts", "known_usernames",
+                      "alt_emails", "alt_phones", "upi_id", "websites",
+                      "pan", "aadhaar", "passport", "card_last4")
+
+
+def _require_identifier(req: "AgentScanRequest") -> None:
+    if not any(str(getattr(req, f, "") or "").strip() for f in _IDENTIFIER_FIELDS):
+        raise HTTPException(
+            status_code=400,
+            detail=("At least one identifier is required — an email, phone, name, "
+                    "declared account or known username. There is nothing to search for."),
+        )
+
+
+def _owned_request_ids(user_id: str, request_ids: list[str]) -> None:
+    """
+    Refuse to dispatch a notice drafted for somebody else.
+
+    /api/agent/approve took request_ids on trust, and /api/agent/latest hands
+    the most recent user's request ids to any caller — so anyone could read an
+    id there and then have a statutory erasure notice served in that person's
+    name by approving it under their own profile. Approval has to be approval
+    BY the data principal the notice is for.
+    """
+    for rid in request_ids:
+        row = _memory.get_request(rid)
+        if not row:
+            raise HTTPException(status_code=404, detail=f"Unknown request {rid}.")
+        if row.get("user_id") != user_id:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Request {rid} was drafted for a different data principal.")
 
 
 def _dashboard_state(user_id: str) -> dict:
@@ -1319,7 +1469,8 @@ async def agent_threat_surface(user_id: str):
     )
     tools = build_tools(ctx)
     agent = ForensicsAgent(ctx, tools)
-    return agent._analyze_threat_intelligence(profile, exposures)
+    # Also an LLM round-trip; same reason as above.
+    return await asyncio.to_thread(agent._analyze_threat_intelligence, profile, exposures)
 
 
 @app.get("/api/agent/threat-surface")
@@ -1433,7 +1584,15 @@ async def agent_chat(req: AgentChatRequest):
             chat_messages.append({"role": h.role, "content": h.content})
     chat_messages.append({"role": "user", "content": user_msg})
 
-    reply, model_used = get_llm_completion(
+    # Every LLM call below goes out through the SYNCHRONOUS OpenAI/Anthropic
+    # clients, and get_llm_completion walks a list of providers x candidate models,
+    # each a full blocking round-trip. Called directly from an `async def` that
+    # froze the whole event loop for the duration — one chat message stalled every
+    # other request on the server, the live /ws/agent trace included, and a
+    # rate-limited key turned that into tens of seconds. They run on a worker
+    # thread now.
+    reply, model_used = await asyncio.to_thread(
+        get_llm_completion,
         messages=chat_messages,
         max_tokens=800,
         temperature=0.3,
@@ -1456,7 +1615,8 @@ async def agent_chat(req: AgentChatRequest):
                 if h.content and h.role in ("user", "assistant"):
                     claude_msgs.append({"role": h.role, "content": h.content})
             claude_msgs.append({"role": "user", "content": user_msg})
-            resp = client.messages.create(
+            resp = await asyncio.to_thread(
+                client.messages.create,
                 model="claude-3-5-sonnet-20241022",
                 max_tokens=600,
                 system=system_prompt,
@@ -1494,6 +1654,7 @@ async def agent_chat(req: AgentChatRequest):
 @app.post("/api/agent/scan")
 async def agent_scan(req: AgentScanRequest):
     """Phase 1 — discover, assess, decide, draft. Dispatches nothing."""
+    _require_identifier(req)
     profile = _profile_of(req)
     stream = EventStream()
     result = await _asyncio.to_thread(run_discovery, profile, stream)
@@ -1512,7 +1673,9 @@ async def agent_approve(req: AgentApproveRequest):
     """Phase 2 — the user approved; dispatch, follow up, verify, escalate."""
     if not req.request_ids:
         raise HTTPException(status_code=400, detail="No request_ids supplied.")
+    _require_identifier(req)
     profile = _profile_of(req)
+    _owned_request_ids(_memory.upsert_user(profile), req.request_ids)
     stream = EventStream()
     result = await _asyncio.to_thread(run_remediation, profile, req.request_ids, stream)
     return {
@@ -1528,6 +1691,9 @@ async def agent_approve(req: AgentApproveRequest):
 @app.post("/api/agent/reset")
 async def agent_reset(req: AgentScanRequest):
     """Wipe this identity so a demo can be re-run from a clean slate."""
+    if not (req.name or "").strip() and not (req.email or "").strip():
+        raise HTTPException(status_code=400,
+                            detail="A name or email is required to identify what to reset.")
     removed = _network.reset_subject(req.name, req.email)
     user_id = _memory.upsert_user(_profile_of(req))
     _memory.reset_user(user_id)
@@ -1551,14 +1717,30 @@ async def _pump(websocket: WebSocket, fn, *args):
     thread = _threading.Thread(target=work, daemon=True)
     thread.start()
 
-    loop = _asyncio.get_running_loop()
+    # Drained by polling rather than loop.run_in_executor(None, stream.q.get).
+    # That parked a thread of the DEFAULT executor on a blocking get for the
+    # whole run — and asyncio.to_thread, which POST /api/agent/scan uses, draws
+    # from that same pool (max_workers = min(32, cpu+4)). Enough concurrent
+    # live runs and every REST scan queued behind sockets that were doing
+    # nothing but waiting. Polling holds no pool thread, and noticing a dead
+    # worker means a phase that dies without closing its stream no longer hangs
+    # the socket for ever.
     while True:
-        event = await loop.run_in_executor(None, stream.q.get)
+        try:
+            event = stream.q.get_nowait()
+        except _queue.Empty:
+            if not thread.is_alive():
+                break
+            await _asyncio.sleep(0.02)
+            continue
         if event is None:
             break
         await websocket.send_json(event)
 
-    await loop.run_in_executor(None, thread.join)
+    # close() happens just before the phase returns, so the result may not be
+    # assigned yet when the sentinel arrives.
+    while thread.is_alive():
+        await _asyncio.sleep(0.01)
     return holder.get("result"), holder.get("error")
 
 
@@ -1575,16 +1757,42 @@ async def websocket_agent(websocket: WebSocket):
     try:
         while True:
             data = await websocket.receive_json()
+            # A frame that is not an object, or carries "profile": null, used
+            # to raise AttributeError out of the handler and kill the socket
+            # with no explanation. Client input is not to be trusted to be the
+            # shape the happy path assumes.
+            if not isinstance(data, dict):
+                await websocket.send_json({"type": "error",
+                                           "message": "Expected a JSON object frame."})
+                continue
             action = data.get("action")
-            profile = data.get("profile", {})
+            profile = data.get("profile") or {}
+            if not isinstance(profile, dict):
+                await websocket.send_json({"type": "error",
+                                           "message": "'profile' must be a JSON object."})
+                continue
+            profile = dict(profile)
             profile.setdefault("country", "IN")
 
             if action == "scan":
+                if not any(str(profile.get(f) or "").strip() for f in _IDENTIFIER_FIELDS):
+                    await websocket.send_json({
+                        "type": "error",
+                        "message": ("At least one identifier is required — an email, phone, "
+                                    "name, declared account or known username.")})
+                    continue
                 result, err = await _pump(websocket, run_discovery, profile)
             elif action == "approve":
-                ids = data.get("request_ids", [])
-                if not ids:
+                ids = data.get("request_ids") or []
+                if not isinstance(ids, list) or not ids:
                     await websocket.send_json({"type": "error", "message": "No request_ids supplied."})
+                    continue
+                # Same gate as POST /api/agent/approve: a notice is only
+                # dispatched by the data principal it was drafted for.
+                try:
+                    _owned_request_ids(_memory.upsert_user(profile), ids)
+                except HTTPException as exc:
+                    await websocket.send_json({"type": "error", "message": exc.detail})
                     continue
                 result, err = await _pump(websocket, run_remediation, profile, ids)
             else:
@@ -1610,8 +1818,21 @@ async def websocket_agent(websocket: WebSocket):
             })
 
     except WebSocketDisconnect:
+        # A clean client-side close. Nothing to report back to a socket that
+        # is already gone.
         ws_manager.disconnect(websocket)
-    except Exception:
+    except Exception as exc:
+        # Anything else — a storage outage mid-run, a planner blowing up — is
+        # something the user needs told. This used to close the socket in
+        # silence, so the UI could not distinguish a crash from a dropped
+        # connection.
+        try:
+            await websocket.send_json({
+                "type": "error",
+                "message": f"Agent run failed: {type(exc).__name__}: {exc}",
+            })
+        except Exception:
+            pass
         ws_manager.disconnect(websocket)
 
 

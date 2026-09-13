@@ -432,6 +432,21 @@ def _engine_ddg(query: str, engine: _Engine) -> list[tuple[str, str]]:
     # us know: click here"), not a search with no results on it.
     if out and all("duckduckgo.com" in u for u, _ in out):
         raise _Refused(f"{engine.url} served its anomaly page")
+
+    # Nothing parsed at all. That was returned as an empty list, and an empty
+    # list from an authoritative engine is the one thing that turns a query into
+    # "searched the web, found nothing" — so an empty body, a maintenance page,
+    # a JS anti-bot challenge or a layout change all reported the open web as
+    # CLEAN, with `complete: true` and "All N search(es) completed".
+    #
+    # A result page has anchors on it: its results when it has any, and its own
+    # navigation when it does not (which the anomaly check above then catches).
+    # A body with no anchors whatsoever is not a result page, so this engine has
+    # not answered the question. The sibling parsers already hold this line —
+    # seznam requires its `data-e-a` instrumentation and bing its `<rss` — and
+    # this is the same check, which was simply missing here.
+    if not out:
+        raise _Refused(f"{engine.url} did not serve a parseable result page")
     return out
 
 

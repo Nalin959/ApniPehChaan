@@ -93,7 +93,10 @@ PROVIDERS = {
 #
 # So results are compacted before they enter the transcript: the model needs to
 # know WHAT was found and the ids to act on, not every field of every record.
-MAX_RESULT_CHARS = 700
+# 300, not 700: a second definition further down silently shadowed this one, so
+# 300 is the value that has actually been running. Kept as-is to avoid a
+# behaviour change; the duplicate below is removed.
+MAX_RESULT_CHARS = 300
 
 _JSON_TYPES = {str: "string", int: "integer", float: "number", bool: "boolean",
                list: "array", dict: "object"}
@@ -230,8 +233,6 @@ def _schema_for(fn, brief: bool = False) -> dict:
     }
 
 
-MAX_RESULT_CHARS = 300
-
 def _compact(result) -> str:
     """
     Shrink a tool result to what the planner actually needs to decide the next step.
@@ -336,7 +337,18 @@ def run(ctx, tools: dict, system: str, goal: str, stream, max_steps: int = 25) -
 
     for _ in range(max_steps):
         resp = None
-        for candidate in list(models_to_try):
+        # The models still to try THIS step. It was `for candidate in
+        # list(models_to_try)` — a snapshot — so the failover below could
+        # rebuild models_to_try for a different provider and the loop would
+        # carry on down the old provider's list regardless. Since the Gemini
+        # branch only fires on the LAST Gemini model, the snapshot was always
+        # exhausted at that point: the run emitted "switching to backup planner
+        # (Groq)", made no Groq request at all, fell out with resp None, broke
+        # the step loop and returned an empty plan. Popping from a live list
+        # lets a provider switch actually take effect.
+        pending = list(models_to_try)
+        while pending:
+            candidate = pending.pop(0)
             for attempt in range(3):
                 try:
                     resp = client.chat.completions.create(
@@ -388,6 +400,10 @@ def run(ctx, tools: dict, system: str, goal: str, stream, max_steps: int = 25) -
                         client = OpenAI(api_key=os.environ[spec["key_env"]], base_url=spec["base_url"])
                         active_model = model_for("groq")
                         models_to_try = [active_model] + [m for m in PROVIDERS["groq"].get("fallback_models", []) if m != active_model]
+                        # Retry against the backup's OWN models. Without this
+                        # the next request went to the Groq endpoint carrying a
+                        # Gemini model name.
+                        pending = list(models_to_try)
                         break
 
                     # A model that cannot produce a usable tool call after three

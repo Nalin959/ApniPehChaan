@@ -261,8 +261,16 @@ def get_fiduciary_contact(name_or_id: str) -> dict:
     # the shared token "india".
     if clean in KNOWN_FIDUCIARIES:
         return dict(KNOWN_FIDUCIARIES[clean], contact_tier="curated", dpo_email_is_guess=False)
+    # The length floor has to apply to BOTH sides. It was on the key only, so
+    # `clean in key` was unguarded — and the empty string is a substring of
+    # every key. Any name with no alphanumerics in it at all ("###", "...",
+    # " - ") therefore resolved to the longest entry in the directory and came
+    # back as a CURATED contact with dpo_email_is_guess=False, which is the one
+    # flag that lets the mailer dispatch unattended. A breach source called
+    # "###" served Matrimony.com's grievance officer an erasure notice carrying
+    # a stranger's name, email and phone.
     for key in sorted(KNOWN_FIDUCIARIES, key=len, reverse=True):
-        if len(key) >= 5 and (key in clean or clean in key):
+        if len(clean) >= 5 and len(key) >= 5 and (key in clean or clean in key):
             return dict(KNOWN_FIDUCIARIES[key], contact_tier="curated", dpo_email_is_guess=False)
 
     raw_name = (name_or_id or "").strip()
@@ -286,6 +294,10 @@ def get_fiduciary_contact(name_or_id: str) -> dict:
     # to it unattended: backend/remediation/mailer.py refuses a recipient whose
     # tier is a guess unless explicitly overridden.
     domain_slug = re.sub(r"[^a-zA-Z0-9]", "", raw_name.lower())
+    # Nothing to build a guess out of. "###" produced privacy@.com — an address
+    # that is not merely wrong but malformed. Unresolved is the honest answer.
+    if not domain_slug:
+        return {}
     return {
         "company_name": f"{raw_name} Data Fiduciary",
         "brand": raw_name,

@@ -8,8 +8,26 @@ and manages request state transitions.
 
 from datetime import datetime, timedelta
 from dataclasses import dataclass, field
+import math
 import uuid
 import hashlib
+
+
+def _parse(stamp: str, fallback: datetime) -> datetime:
+    """Read a stored ISO timestamp as a naive local datetime.
+
+    Two things this guards. A stamp that round-tripped through a timestamptz
+    column comes back carrying an offset, and subtracting an aware datetime
+    from a naive one raises TypeError — which would take out every endpoint
+    that renders a tracked request, not just the arithmetic. And a malformed
+    stamp raises ValueError from fromisoformat for the same blast radius. Both
+    fall back to a supplied default rather than propagating.
+    """
+    try:
+        dt = datetime.fromisoformat(str(stamp))
+    except (TypeError, ValueError):
+        return fallback
+    return dt.replace(tzinfo=None) if dt.tzinfo is not None else dt
 
 
 @dataclass
@@ -37,10 +55,36 @@ class ErasureRequest:
 
     def to_dict(self) -> dict:
         now = datetime.now()
-        deadline_dt = datetime.fromisoformat(self.deadline) if self.deadline else now
-        days_remaining = max(0, (deadline_dt - now).days) if self.deadline else 0
-        days_elapsed = (now - datetime.fromisoformat(self.created_at)).days if self.created_at else 0
+        deadline_dt = _parse(self.deadline, now) if self.deadline else now
+        # timedelta.days TRUNCATES, and every deadline here is set to a whole
+        # number of days after a moment that has already passed, so the remainder
+        # is 29 days 23:59:59 from the instant the request is created — and a
+        # notice served seconds ago reported "29 days remaining" on a 30-day
+        # statutory clock (44 on CCPA's 45). Worse at the other end: with twelve
+        # hours still to run it reported 0 while is_overdue was still False, so
+        # the UI said the clock had expired when it had not. A partly-elapsed day
+        # is a day the controller still has, so the remainder rounds up.
+        if self.deadline:
+            remaining = (deadline_dt - now).total_seconds()
+            days_remaining = max(0, math.ceil(remaining / 86400.0))
+        else:
+            days_remaining = 0
+        days_elapsed = (now - _parse(self.created_at, now)).days if self.created_at else 0
         progress_pct = min(100, (days_elapsed / self.deadline_days * 100)) if self.deadline_days else 0
+
+        # Milestone dates are fixed at creation and their `status` was too, so a
+        # request 20 days old still reported Day 7 and Day 14 as "pending". The
+        # stored status is left alone deliberately — flipping a "First follow-up
+        # reminder" to "completed" would claim a reminder was sent, and nothing
+        # here sends one — but whether the date has been REACHED is a fact, and
+        # it is now reported so a consumer need not recompute it.
+        milestones = []
+        for ms in (self.milestones or []):
+            ms_dt = _parse(ms.get("date", ""), now) if isinstance(ms, dict) else now
+            entry = dict(ms) if isinstance(ms, dict) else {"date": "", "label": str(ms)}
+            entry["reached"] = now >= ms_dt
+            entry["days_until"] = math.ceil((ms_dt - now).total_seconds() / 86400.0)
+            milestones.append(entry)
 
         return {
             "request_id": self.request_id,
@@ -61,7 +105,7 @@ class ErasureRequest:
             "days_remaining": days_remaining,
             "days_elapsed": days_elapsed,
             "progress_pct": round(progress_pct, 1),
-            "milestones": self.milestones,
+            "milestones": milestones,
             "notes": self.notes,
             "is_overdue": now > deadline_dt if self.deadline else False,
         }
@@ -199,7 +243,7 @@ class StatutoryTracker:
         overdue = []
         for req in self._requests.values():
             if req.deadline and req.status not in ("completed", "escalated"):
-                deadline_dt = datetime.fromisoformat(req.deadline)
+                deadline_dt = _parse(req.deadline, now)
                 if now > deadline_dt:
                     overdue.append(req.to_dict())
         return overdue

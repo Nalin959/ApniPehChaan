@@ -165,6 +165,16 @@ CURATED: dict[str, dict] = {
         # (grievanceredressalofficer@paytmbank.com, nodalofficer@paytmbank.com).
         # It is not folded in here: serving the wallet entity's officer with a
         # notice about bank records addresses the wrong controller.
+        #
+        # The note below stated that rule but nothing enforced it, and the token
+        # matcher does not read prose: "Paytm Payments Bank" contains the token
+        # "paytm", so it matched THIS entry and came back as One97's grievance
+        # officer at tier `curated`, is_verified True, safe_to_send_unattended
+        # True — a notice about bank records cleared for unattended dispatch to
+        # the wrong legal person. `distinct_entities` makes the rule machine-
+        # readable so the matcher obeys it.
+        "distinct_entities": ("paytm payments bank", "paytm bank", "paytmbank",
+                              "paytm payments bank limited", "ppbl"),
         "note": ("Paytm Payments Bank Ltd is a separate data fiduciary with its own "
                  "grievance and principal nodal officers. Notices about bank account "
                  "data must be addressed to that entity, not to One97."),
@@ -492,6 +502,25 @@ def _match_keys(text: str) -> set[str]:
     return {k for k in keys if len(k) >= 3}
 
 
+def _names_distinct_entity(service: str, spec: dict) -> str:
+    """Does `service` name a DIFFERENT legal person that this entry matched anyway?
+
+    Token matching cannot see corporate structure. A subsidiary or an affiliate
+    usually shares the parent's brand token, so it matches the parent's entry and
+    inherits the parent's officer — and an erasure notice served on the wrong
+    legal person is not served at all, whatever the tier says about it.
+
+    Returns the matched phrase, or "" when the service is the entry's own entity.
+    """
+    s = re.sub(r"[^a-z0-9]+", " ", (service or "").lower()).strip()
+    if not s:
+        return ""
+    for phrase in spec.get("distinct_entities", ()):  # already normalised, lowercase
+        if phrase in s:
+            return phrase
+    return ""
+
+
 def _lookup_curated(service: str, domain: str) -> tuple[str, dict] | None:
     keys = _match_keys(service)
     for slug, spec in CURATED.items():
@@ -641,6 +670,25 @@ def resolve_officer(service: str, domain: str = "", *,
         res.self_serve_url = spec.get("self_serve_url", "") or SELF_SERVE_FIRST.get(slug, "")
         if spec.get("note"):
             res.note = spec["note"]
+        distinct = _names_distinct_entity(service, spec)
+        if distinct:
+            # Matched the parent's entry, but the caller named a different legal
+            # person. No address is asserted: the parent's officer is the wrong
+            # addressee and guessing one at the parent's domain is worse.
+            res.warnings.append(
+                f"{service} matched the directory entry for "
+                f"{res.company_name or slug}, but it is a SEPARATE legal entity with its "
+                f"own statutory officer. No address is asserted for it here — serving "
+                f"{res.company_name or slug}'s officer would address the wrong controller "
+                f"and would not start the statutory clock against the right one. Find that "
+                f"entity's own published grievance contact (DPDP Act 2023 s.13(3) requires "
+                f"it to publish one).")
+            res.company_name = ""
+            res.postal = ""
+            res.self_serve_url = ""
+            res.domain = ""
+            spec = {}
+            matched_spec = {"country": "IN"}
         for off in spec.get("officers", []):
             candidates.append(OfficerAddress(
                 email=off["email"],
