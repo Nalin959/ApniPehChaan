@@ -133,18 +133,38 @@ MANDATORY NOTICE STRUCTURE:
 4. Cessation of all processing, marketing, profiling, and data broker syndicate dissemination.
 5. Statutory Duty to Confirm: Demand written confirmation of erasure within {days} calendar days ({deadline_str}).
 6. Formal Notice of Regulatory Escalation: Explicitly cite {escalation_body} ({escalation_section}) and statutory penalties for non-compliance (e.g., up to ₹250 crore under DPDP Act 2023 Schedule or €20M / 4% global turnover under GDPR Art. 83).
-7. Formal Closing and Signature Block for {user_name or 'Data Principal'}.
+7. Reservation of Rights and complete formal Signature Block for {user_name or 'Data Principal'}.
 
-Generate only the complete, ready-to-send formal legal notice in clean Markdown format."""
+Generate only the complete, ready-to-send formal legal notice in clean Markdown format. Be legally precise and concise (under 750 words). IMPORTANT: You MUST generate the complete notice all the way to the final closing signature block. Never stop mid-sentence or omit the closing signature block."""
 
-        return get_llm_completion(
+        ai_text, model_used = get_llm_completion(
             messages=[
                 {"role": "system", "content": system_msg},
                 {"role": "user", "content": user_prompt},
             ],
-            max_tokens=1400,
+            max_tokens=2800,
             temperature=0.15,
         )
+
+        if ai_text:
+            ai_text = ai_text.strip()
+            # Ensure the closing signature block is never truncated or omitted
+            lower_tail = ai_text[-350:].lower()
+            has_closing = any(sig in lower_tail for sig in ["sincerely", "faithfully", "signature", "data principal", "complainant"])
+            if not has_closing:
+                if ai_text.rstrip().endswith("This notice"):
+                    ai_text = ai_text.rstrip()[:-len("This notice")].rstrip()
+                ai_text += f"\n\n#### **7. RESERVATION OF RIGHTS & CONCLUSION**\n\n" \
+                           f"This notice is issued without prejudice to any other rights, powers, privileges, or statutory remedies available to the Data Principal under the {statute} or applicable law.\n\n" \
+                           f"Failure, refusal, or unwarranted delay in complying with this statutory demand within the stipulated {days}-day window ({deadline_str}) shall immediately trigger formal complaint escalation to the {escalation_body} ({escalation_section}) for statutory inquiry and penal proceedings.\n\n" \
+                           f"**Yours faithfully,**\n\n" \
+                           f"**{user_name or 'Data Principal'}**  \n" \
+                           f"Data Principal & Complainant  \n" \
+                           f"Email: {user_email or '[On Record]'}  \n" \
+                           f"Reference ID: {reference_id}  \n" \
+                           f"Cryptographic Hash: `{receipt_hash}`\n"
+
+        return ai_text, model_used
 
     def generate(
         self,

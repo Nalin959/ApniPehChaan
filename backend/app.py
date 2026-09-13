@@ -149,6 +149,19 @@ class NoticeRequest(BaseModel):
     ai_tailored: bool = True
     exposure_context: str = ""
 
+class LegalChatRequest(BaseModel):
+    message: str
+    history: list[dict] = []
+    jurisdiction: str = "dpdp"
+    company_name: str = ""
+    company_email: str = ""
+    company_address: str = ""
+    user_name: str = ""
+    user_email: str = ""
+    user_phone: str = ""
+    detected_pii: str = ""
+    current_notice: str = ""
+
 class TrackRequest(BaseModel):
     jurisdiction: str = "dpdp"
     company_name: str = ""
@@ -475,6 +488,175 @@ async def generate_notice(req: NoticeRequest):
         })
 
     return result
+
+
+@app.post("/api/legal/chat")
+async def legal_chat(req: LegalChatRequest):
+    """
+    Interactive Legal Counsel Chatbot for Statutory Notice Studio.
+    Grounds legal drafting, amends notices, cites penalty schedules, and drafts formal notices.
+    """
+    user_msg = (req.message or "").strip()
+    if not user_msg:
+        raise HTTPException(status_code=400, detail="Message cannot be empty")
+
+    from backend.agent.openai_compat_planner import get_llm_completion
+    from backend.remediation.notice_generator import JURISDICTIONS
+    import re
+    import hashlib
+    from datetime import datetime, timedelta
+
+    jurisdiction_info = JURISDICTIONS.get(req.jurisdiction.lower(), JURISDICTIONS["dpdp"])
+    statute_name = jurisdiction_info.get("name", "Digital Personal Data Protection Act, 2023")
+    statute_cite = jurisdiction_info.get("statute", "Sections 12 & 13, DPDP Act 2023")
+    escalation_body = jurisdiction_info.get("escalation_body", "Data Protection Board of India (DPBI)")
+    default_deadline = jurisdiction_info.get("response_deadline_days", 30)
+
+    user_name = req.user_name.strip() or "Data Principal"
+    user_email = req.user_email.strip() or "[User Email on Record]"
+    user_phone = req.user_phone.strip() or "[User Phone on Record]"
+    company_name = req.company_name.strip() or "[Target Data Fiduciary / Company]"
+    company_email = req.company_email.strip() or "[Privacy / Grievance Officer Email]"
+
+    system_prompt = f"""You are the Senior Statutory Legal Counsel and Automated Notice Drafting Specialist at SovereignPrivacy AI.
+You assist users in understanding data protection legislation and drafting legally airtight, binding data erasure and privacy compliance notices.
+
+PRIMARY STATUTORY FRAMEWORKS:
+1. India: Digital Personal Data Protection (DPDP) Act, 2023
+   - Section 12: Right to correction and erasure of personal data.
+   - Section 13: Right of grievance redressal (mandatory response within reasonable/prescribed period).
+   - Section 33 & Schedule: Penalties up to ₹250 Crores for significant breaches / non-compliance, enforced by the Data Protection Board of India (DPBI).
+2. European Union: General Data Protection Regulation (GDPR)
+   - Article 17: Right to erasure ('Right to be Forgotten').
+   - Article 19: Notification obligation regarding erasure.
+   - Article 83: Administrative fines up to €20,000,000 or 4% of worldwide annual turnover.
+3. California: California Consumer Privacy Act / CPRA (Cal. Civ. Code § 1798.105 / § 1798.120).
+
+CURRENT CONTEXT:
+- Active Jurisdiction: {req.jurisdiction.upper()} ({statute_name})
+- Statutory Citation: {statute_cite}
+- Regulatory Escalation Authority: {escalation_body}
+- Target Company / Data Fiduciary: {company_name}
+- Privacy Officer Email: {company_email}
+- User (Data Principal): {user_name} (Email: {user_email}, Phone: {user_phone})
+- Detected PII / Scope of Erasure: {req.detected_pii or 'Compromised personal data including contact information and identifiers'}
+- Current Notice in Editor: {f'Present ({len(req.current_notice)} characters)' if req.current_notice else 'None'}
+
+RULES:
+1. If the user asks to DRAFT, AMEND, TIGHTEN, REWRITE, ADD CLAUSES, or SHORTEN DEADLINES for the notice:
+   - Provide a concise legal briefing (1-2 short paragraphs) in Markdown explaining the statutory strategy applied.
+   - Output the COMPLETE, formal, professional statutory notice text enclosed strictly between:
+<<<START_NOTICE>>>
+[Complete formal statutory notice here, including Date, Reference ID, Addressee, Governing Legal Grounds, Specific PII to Erase, Third-Party Processor Audit demand, Written Confirmation Timeline, and Penalties for Non-Compliance]
+<<<END_NOTICE>>>
+2. If the user asks a STATUTORY QUESTION or seeks legal counsel:
+   - Answer directly and authoritatively in clear Markdown.
+   - Cite specific statutory sections, rights, and regulatory penalty amounts.
+   - Explain how they can enforce compliance through SovereignPrivacy AI.
+3. Maintain an authoritative, commanding legal tone protecting the fundamental privacy rights of the data principal.
+"""
+
+    messages = [{"role": "system", "content": system_prompt}]
+    for h in (req.history or [])[-6:]:
+        role = h.get("role")
+        content = h.get("content")
+        if role in ("user", "assistant") and content:
+            messages.append({"role": role, "content": content})
+    messages.append({"role": "user", "content": user_msg})
+
+    llm_res, model_used = get_llm_completion(
+        messages=messages,
+        max_tokens=1400,
+        temperature=0.2,
+    )
+
+    if not llm_res:
+        # Graceful fallback: generate notice or provide statutory answer
+        if any(w in user_msg.lower() for w in ["draft", "notice", "generate", "write", "create", "letter", "demand"]):
+            gen = notice_generator.generate(
+                jurisdiction=req.jurisdiction,
+                user_name=user_name,
+                user_email=user_email,
+                user_phone=user_phone,
+                company_name=company_name,
+                company_address=req.company_address,
+                detected_pii_summary=req.detected_pii,
+                ai_tailored=False,
+            )
+            notice_txt = gen.get("notice_text", "")
+            return {
+                "reply": f"I have generated a formal statutory erasure notice under **{statute_cite}** addressed to **{company_name}**. You can review and apply it directly to your notice preview.",
+                "has_notice": True,
+                "notice_text": notice_txt,
+                "reference_id": gen.get("reference_id"),
+                "receipt_hash": gen.get("receipt_hash"),
+                "response_deadline_days": gen.get("response_deadline_days", default_deadline),
+                "response_deadline": gen.get("response_deadline"),
+                "jurisdiction": req.jurisdiction,
+                "company_name": company_name,
+                "model": "deterministic_counsel_engine",
+                "suggested_prompts": [
+                    "Add ₹250 Cr DPDP penalty warning",
+                    "Reduce deadline to 7 business days",
+                    "Demand third-party processor erasure confirmation"
+                ]
+            }
+        else:
+            return {
+                "reply": f"Under **{statute_cite}**, data fiduciaries must comply with erasure requests within **{default_deadline} days**. Failure to comply can be escalated to the **{escalation_body}** with statutory penalties up to ₹250 Crores under Schedule 1 of the DPDP Act 2023.",
+                "has_notice": False,
+                "model": "deterministic_counsel_engine",
+                "suggested_prompts": [
+                    f"Draft statutory notice for {company_name}",
+                    "What are the penalties under Section 33?",
+                    "How do I file a complaint with DPBI?"
+                ]
+            }
+
+    # Check for notice delimiters in LLM response
+    has_notice = False
+    notice_text = ""
+    clean_reply = llm_res
+
+    match = re.search(r"<<<START_NOTICE>>>\s*(.*?)\s*<<<END_NOTICE>>>", llm_res, re.DOTALL)
+    if match:
+        has_notice = True
+        notice_text = match.group(1).strip()
+        # Clean reply removes the delimited block
+        clean_reply = (llm_res[:match.start()] + "\n" + llm_res[match.end():]).strip()
+        if not clean_reply:
+            clean_reply = f"I have drafted the tailored statutory erasure demand for **{company_name}** citing **{statute_cite}**. You can review and apply it directly to your live notice editor."
+
+    ref_id = f"SP-{req.jurisdiction.upper()}-{datetime.utcnow().strftime('%Y%m%d')}-{hashlib.sha256((company_name + user_msg).encode()).hexdigest()[:8].upper()}"
+    receipt_hash = hashlib.sha256(notice_text.encode('utf-8')).hexdigest() if notice_text else ""
+    deadline_date = (datetime.utcnow() + timedelta(days=default_deadline)).strftime('%Y-%m-%d')
+
+    if has_notice:
+        audit_trail.add("LEGAL_CHATBOT_DRAFT", {
+            "reference_id": ref_id,
+            "company": company_name,
+            "jurisdiction": req.jurisdiction,
+            "model": model_used
+        })
+
+    return {
+        "reply": clean_reply,
+        "has_notice": has_notice,
+        "notice_text": notice_text,
+        "reference_id": ref_id,
+        "receipt_hash": receipt_hash,
+        "response_deadline_days": default_deadline,
+        "response_deadline": deadline_date,
+        "jurisdiction": req.jurisdiction,
+        "company_name": company_name,
+        "model": model_used,
+        "suggested_prompts": [
+            "Add ₹250 Cr DPDP penalty warning" if req.jurisdiction == "dpdp" else "Cite GDPR Article 83 maximum fines",
+            "Reduce deadline to 7 business days",
+            "Demand sub-processor and cloud backup purge",
+            "Switch to GDPR Article 17" if req.jurisdiction != "gdpr" else "Switch to DPDP Act 2023"
+        ]
+    }
 
 
 @app.post("/api/legal/dispatch")
@@ -1178,45 +1360,28 @@ async def agent_chat(req: AgentChatRequest):
         + grounding
     )
 
-    # 1. Try OpenAI-compatible provider (e.g. Groq with openai/gpt-oss-120b)
-    from backend.agent.openai_compat_planner import configured_all, PROVIDERS, model_for
-    # Walk EVERY configured provider, not just the first. A free tier runs out
-    # — Gemini's is twenty requests a day — and stopping at the first one meant
-    # a working Groq key in the same .env was never tried. The user then saw
-    # the canned fallback text under a header claiming a model was active.
+    # 1. Primary: Gemini (with Groq as automatic backup)
+    from backend.agent.openai_compat_planner import get_llm_completion
     llm_errors: list[str] = []
-    for provider in configured_all():
-        try:
-            from openai import OpenAI
-            spec = PROVIDERS[provider]
-            model = model_for(provider)
-            client = OpenAI(api_key=os.environ[spec["key_env"]], base_url=spec["base_url"])
 
-            chat_messages = [{"role": "system", "content": system_prompt}]
-            for h in (req.history or [])[-6:]:
-                if h.content and h.role in ("user", "assistant"):
-                    chat_messages.append({"role": h.role, "content": h.content})
-            chat_messages.append({"role": "user", "content": user_msg})
+    chat_messages = [{"role": "system", "content": system_prompt}]
+    for h in (req.history or [])[-6:]:
+        if h.content and h.role in ("user", "assistant"):
+            chat_messages.append({"role": h.role, "content": h.content})
+    chat_messages.append({"role": "user", "content": user_msg})
 
-            resp = client.chat.completions.create(
-                model=model,
-                messages=chat_messages,
-                temperature=0.3,
-                max_tokens=600,
-            )
-            reply = (resp.choices[0].message.content or "").strip()
-            if reply:
-                return {
-                    "reply": reply,
-                    "model": f"{model} ({provider})",
-                    "suggested_actions": _get_chat_suggestions(tab, user_msg)
-                }
-        except Exception as exc:
-            # Never swallow this silently. A hidden failure here is why the
-            # assistant answered from a canned script while the UI said a model
-            # was running, and nothing anywhere said otherwise.
-            llm_errors.append(f"{provider}: {type(exc).__name__}: {str(exc)[:160]}")
-            continue
+    reply, model_used = get_llm_completion(
+        messages=chat_messages,
+        max_tokens=800,
+        temperature=0.3,
+        preferred_provider="gemini",
+    )
+    if reply:
+        return {
+            "reply": reply,
+            "model": model_used,
+            "suggested_actions": _get_chat_suggestions(tab, user_msg)
+        }
 
     # 2. Try Anthropic if configured
     if os.environ.get("ANTHROPIC_API_KEY"):

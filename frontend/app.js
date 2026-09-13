@@ -39,6 +39,14 @@ async function restoreLatestAgentState() {
             renderAgentExposures({ exposures: [] });
         }
     } catch(e) {}
+
+    // Hydrate Threat Surface Matrix
+    try {
+        fetch('/api/agent/threat-surface')
+            .then(r => r.json())
+            .then(renderThreatSurface)
+            .catch(() => {});
+    } catch(e) {}
 }
 
 // ═══ Particle Background ════════════════════════════════════════════════════
@@ -692,24 +700,97 @@ function initExposureFilters() {
 }
 
 // ═══ Legal Remediation ══════════════════════════════════════════════════════
+let legalChatHistory = [];
+
 function initLegalForm() {
-    // Jurisdiction selector
+    // Mode switcher: Chatbot vs Manual Form
+    const modeChatBtn = document.getElementById('btn-mode-legal-chat');
+    const modeFormBtn = document.getElementById('btn-mode-legal-form');
+    const chatPane = document.getElementById('legal-chat-pane');
+    const formPane = document.getElementById('legal-form-pane');
+
+    if (modeChatBtn && modeFormBtn) {
+        modeChatBtn.addEventListener('click', () => {
+            modeChatBtn.classList.add('active');
+            modeFormBtn.classList.remove('active');
+            if (chatPane) chatPane.style.display = '';
+            if (formPane) formPane.style.display = 'none';
+        });
+        modeFormBtn.addEventListener('click', () => {
+            modeFormBtn.classList.add('active');
+            modeChatBtn.classList.remove('active');
+            if (chatPane) chatPane.style.display = 'none';
+            if (formPane) formPane.style.display = '';
+        });
+    }
+
+    function updateLegalChatContext() {
+        const comp = document.getElementById('legal-company')?.value || 'Data Fiduciary';
+        const compDisp = document.getElementById('legal-chat-company-display');
+        if (compDisp) compDisp.textContent = comp;
+
+        const statDisp = document.getElementById('legal-chat-statute-display');
+        if (statDisp) {
+            const j = state.selectedJurisdiction || 'dpdp';
+            const jMap = {
+                dpdp: 'DPDP Act 2023 s.12/13',
+                gdpr: 'GDPR Article 17',
+                ccpa: 'CCPA § 1798.105'
+            };
+            statDisp.textContent = jMap[j] || j.toUpperCase();
+        }
+    }
+
+    // Jurisdiction selector (syncs across both chat pane and form pane)
     document.querySelectorAll('.jurisdiction-btn').forEach(btn => {
         btn.addEventListener('click', () => {
-            document.querySelectorAll('.jurisdiction-btn').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            state.selectedJurisdiction = btn.dataset.jurisdiction;
+            const jur = btn.dataset.jurisdiction;
+            state.selectedJurisdiction = jur;
+            document.querySelectorAll('.jurisdiction-btn').forEach(b => {
+                b.classList.toggle('active', b.dataset.jurisdiction === jur);
+            });
+            updateLegalChatContext();
         });
     });
 
-    // Form submission
-    document.getElementById('legal-form').addEventListener('submit', async (e) => {
+    document.getElementById('legal-company')?.addEventListener('input', updateLegalChatContext);
+
+    // Quick prompt chips in Chatbot
+    document.querySelectorAll('.legal-chat-chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+            const prompt = chip.dataset.prompt;
+            sendLegalChatMessage(prompt);
+        });
+    });
+
+    // Chat form submission & Enter-key handling
+    const chatForm = document.getElementById('legal-chat-form');
+    const chatInput = document.getElementById('legal-chat-input');
+    if (chatForm && chatInput) {
+        chatForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const text = chatInput.value.trim();
+            if (text) {
+                chatInput.value = '';
+                sendLegalChatMessage(text);
+            }
+        });
+        chatInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                chatForm.dispatchEvent(new Event('submit'));
+            }
+        });
+    }
+
+    // Manual Form submission
+    document.getElementById('legal-form')?.addEventListener('submit', async (e) => {
         e.preventDefault();
         await generateNotice();
     });
 
     // Copy button
-    document.getElementById('btn-copy-notice').addEventListener('click', () => {
+    document.getElementById('btn-copy-notice')?.addEventListener('click', () => {
         const preview = document.getElementById('notice-preview-content');
         const liveText = (preview.innerText || preview.textContent || '').trim();
         if (liveText) {
@@ -719,10 +800,144 @@ function initLegalForm() {
         }
     });
 
+    // Download button
+    const dlBtn = document.getElementById('btn-download-notice');
+    if (dlBtn) {
+        dlBtn.addEventListener('click', () => {
+            downloadNotice();
+        });
+    }
+
     // Dispatch button
-    document.getElementById('btn-dispatch-notice').addEventListener('click', async () => {
+    document.getElementById('btn-dispatch-notice')?.addEventListener('click', async () => {
         await dispatchNotice();
     });
+
+    updateLegalChatContext();
+}
+
+async function sendLegalChatMessage(text) {
+    if (!text || !text.trim()) return;
+    const msgContainer = document.getElementById('legal-chat-messages');
+    if (!msgContainer) return;
+
+    // Append user message
+    const userMsgEl = document.createElement('div');
+    userMsgEl.className = 'legal-chat-msg user';
+    userMsgEl.innerHTML = `<div class="legal-chat-bubble"><p>${agEsc(text)}</p></div>`;
+    msgContainer.appendChild(userMsgEl);
+    legalChatHistory.push({ role: 'user', content: text });
+
+    // Append typing indicator
+    const typingEl = document.createElement('div');
+    typingEl.className = 'legal-chat-msg bot';
+    typingEl.id = 'legal-chat-typing';
+    typingEl.innerHTML = `<div class="legal-chat-bubble"><span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span> <i>Drafting formal statutory notice with Gemini…</i></div>`;
+    msgContainer.appendChild(typingEl);
+    msgContainer.scrollTop = msgContainer.scrollHeight;
+
+    const userProfile = getSavedProfile();
+    const payload = {
+        message: text,
+        history: legalChatHistory.slice(-6),
+        jurisdiction: state.selectedJurisdiction || 'dpdp',
+        company_name: document.getElementById('legal-company')?.value || '',
+        company_email: document.getElementById('legal-company-email')?.value || '',
+        company_address: document.getElementById('legal-company-address')?.value || '',
+        user_name: userProfile.name || '',
+        user_email: userProfile.email || '',
+        user_phone: userProfile.phone || '',
+        detected_pii: document.getElementById('legal-pii-summary')?.value || '',
+        current_notice: state.generatedNotice?.notice_text || ''
+    };
+
+    try {
+        const resp = await fetch('/api/legal/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const data = await resp.json();
+        typingEl.remove();
+
+        // Update model badge
+        if (data.model) {
+            const badge = document.getElementById('legal-chat-model-badge');
+            if (badge) {
+                const mLower = data.model.toLowerCase();
+                if (mLower.includes('gemini')) {
+                    badge.textContent = `✨ ${data.model} Active`;
+                } else if (mLower.includes('groq')) {
+                    badge.textContent = `⚡ Groq Backup (${data.model})`;
+                } else {
+                    badge.textContent = `✨ ${data.model}`;
+                }
+            }
+        }
+
+        // Append bot message
+        const botMsgEl = document.createElement('div');
+        botMsgEl.className = 'legal-chat-msg bot';
+
+        let html = `<div class="legal-chat-bubble">${renderMarkdown(data.reply || '')}`;
+        if (data.has_notice && data.notice_text) {
+            html += `
+                <div class="legal-chat-actions">
+                    <button type="button" class="legal-chat-action-btn" id="btn-apply-chat-notice">
+                        <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+                        Applied to Notice Preview
+                    </button>
+                    <button type="button" class="legal-chat-action-btn" id="btn-copy-chat-notice">
+                        <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14"><path d="M8 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z"/><path d="M6 3a2 2 0 00-2 2v11a2 2 0 002 2h8a2 2 0 002-2V5a2 2 0 00-2-2 3 3 0 01-3 3H9a3 3 0 01-3-3z"/></svg>
+                        Copy Notice
+                    </button>
+                </div>
+            `;
+        }
+        html += `</div>`;
+        botMsgEl.innerHTML = html;
+        msgContainer.appendChild(botMsgEl);
+        msgContainer.scrollTop = msgContainer.scrollHeight;
+
+        legalChatHistory.push({ role: 'assistant', content: data.reply || '' });
+
+        // Automatically update Notice Preview if notice was formulated
+        if (data.has_notice && data.notice_text) {
+            state.generatedNotice = {
+                status: 'generated',
+                reference_id: data.reference_id,
+                jurisdiction: data.jurisdiction,
+                jurisdiction_name: data.jurisdiction.toUpperCase(),
+                jurisdiction_short: data.jurisdiction.toUpperCase(),
+                notice_text: data.notice_text,
+                ai_generated: true,
+                ai_model: data.model,
+                response_deadline: data.response_deadline,
+                response_deadline_days: data.response_deadline_days,
+                receipt_hash: data.receipt_hash,
+                sender: { name: userProfile.name, email: userProfile.email },
+                recipient: { company_name: data.company_name || document.getElementById('legal-company')?.value || 'Data Fiduciary' }
+            };
+            renderNoticePreview(state.generatedNotice);
+            showToast('Statutory notice updated in preview!', 'success');
+
+            botMsgEl.querySelector('#btn-apply-chat-notice')?.addEventListener('click', () => {
+                renderNoticePreview(state.generatedNotice);
+                showToast('Notice refreshed in editor preview.', 'info');
+            });
+            botMsgEl.querySelector('#btn-copy-chat-notice')?.addEventListener('click', () => {
+                navigator.clipboard.writeText(data.notice_text).then(() => {
+                    showToast('Notice copied to clipboard!', 'success');
+                });
+            });
+        }
+    } catch(err) {
+        typingEl.remove();
+        const errEl = document.createElement('div');
+        errEl.className = 'legal-chat-msg bot';
+        errEl.innerHTML = `<div class="legal-chat-bubble"><p style="color: #ef4444;">Connection error: ${agEsc(err.message)}</p></div>`;
+        msgContainer.appendChild(errEl);
+    }
 }
 
 async function generateNotice() {
@@ -996,6 +1211,8 @@ function renderNoticePreview(data) {
 
     // Show action buttons
     document.getElementById('btn-copy-notice').style.display = '';
+    const dlNoticeBtn = document.getElementById('btn-download-notice');
+    if (dlNoticeBtn) dlNoticeBtn.style.display = '';
     document.getElementById('btn-dispatch-notice').style.display = '';
 
     // Show AI badge if notice was generated via LLM
@@ -1016,6 +1233,31 @@ function renderNoticePreview(data) {
     document.getElementById('receipt-hash').textContent = data.receipt_hash;
     document.getElementById('receipt-deadline').textContent =
         `${data.response_deadline_days} days (${new Date(data.response_deadline).toLocaleDateString()})`;
+}
+
+function downloadNotice() {
+    const preview = document.getElementById('notice-preview-content');
+    const liveText = (preview?.innerText || preview?.textContent || '').trim();
+    if (!liveText) {
+        showToast('No notice text to download.', 'warning');
+        return;
+    }
+    const data = state.generatedNotice || {};
+    const ref = data.reference_id || 'STATUTORY_NOTICE';
+    const rawCompany = data.recipient?.company_name || document.getElementById('legal-company')?.value || 'Controller';
+    const company = rawCompany.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const filename = `Notice_${company}_${ref}.txt`;
+
+    const blob = new Blob([liveText], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast(`Notice downloaded as ${filename}`, 'success');
 }
 
 async function dispatchNotice() {
@@ -1574,48 +1816,61 @@ function traceAdd(agent, message, status) {
 }
 
 function renderThreatSurface(data) {
-    const container = document.getElementById('threat-surface-container');
-    const grid = document.getElementById('threat-vectors-grid');
-    const gradeEl = document.getElementById('threat-surface-grade');
-    if (!container || !grid) return;
+    const targets = [
+        {
+            container: document.getElementById('threat-surface-container'),
+            grid: document.getElementById('threat-vectors-grid'),
+            gradeEl: document.getElementById('threat-surface-grade'),
+        },
+        {
+            container: document.getElementById('dashboard-threat-surface'),
+            grid: document.getElementById('dashboard-threat-grid'),
+            gradeEl: document.getElementById('dashboard-threat-grade'),
+        },
+    ];
 
     if (!data) {
-        container.hidden = true;
+        targets.forEach(t => { if (t.container) t.container.hidden = true; });
         return;
     }
 
     const vectors = data.threat_vectors || data.vectors || [];
     if (!vectors.length) {
-        container.hidden = true;
+        targets.forEach(t => { if (t.container) t.container.hidden = true; });
         return;
     }
 
     const grade = (data.overall_surface_grade || 'MODERATE').toUpperCase();
-    if (gradeEl) {
-        gradeEl.textContent = grade;
-        gradeEl.className = 'threat-surface-grade ' + grade;
-    }
 
-    grid.innerHTML = '';
-    vectors.forEach(v => {
-        const card = document.createElement('div');
-        card.className = 'threat-vector-card';
-        const sev = (v.severity || 'medium').toLowerCase();
-        const sources = (v.affected_sources || []).join(', ');
+    targets.forEach(t => {
+        if (!t.container || !t.grid) return;
 
-        card.innerHTML = `
-            <div class="threat-vector-top">
-                <div class="threat-vector-name">${agEsc(v.vector || 'Compound Threat Vector')}</div>
-                <span class="threat-vector-sev ${sev}">${sev}</span>
-            </div>
-            ${sources ? `<div class="threat-vector-sources">Correlated Sources: <span>${agEsc(sources)}</span></div>` : ''}
-            <div class="threat-vector-model">${agEsc(v.adversary_playbook || v.threat_model || 'Adversary leverages correlated credentials and contact telemetry across services.')}</div>
-            <div class="threat-vector-fix"><strong>Shield Action:</strong> ${agEsc(v.blue_team_mitigation || v.mitigation || 'Rotate credentials immediately and configure hardware 2FA.')}</div>
-        `;
-        grid.appendChild(card);
+        if (t.gradeEl) {
+            t.gradeEl.textContent = grade;
+            t.gradeEl.className = 'threat-surface-grade ' + grade;
+        }
+
+        t.grid.innerHTML = '';
+        vectors.forEach(v => {
+            const card = document.createElement('div');
+            card.className = 'threat-vector-card';
+            const sev = (v.severity || 'medium').toLowerCase();
+            const sources = (v.affected_sources || []).join(', ');
+
+            card.innerHTML = `
+                <div class="threat-vector-top">
+                    <div class="threat-vector-name">${agEsc(v.vector || 'Compound Threat Vector')}</div>
+                    <span class="threat-vector-sev ${sev}">${sev}</span>
+                </div>
+                ${sources ? `<div class="threat-vector-sources">Correlated Sources: <span>${agEsc(sources)}</span></div>` : ''}
+                <div class="threat-vector-model">${agEsc(v.adversary_playbook || v.threat_model || 'Adversary leverages correlated credentials and contact telemetry across services.')}</div>
+                <div class="threat-vector-fix"><strong>Shield Action:</strong> ${agEsc(v.blue_team_mitigation || v.mitigation || 'Rotate credentials immediately and configure hardware 2FA.')}</div>
+            `;
+            t.grid.appendChild(card);
+        });
+
+        t.container.hidden = false;
     });
-
-    container.hidden = false;
 }
 
 function traceReasoning(text) {
@@ -1880,6 +2135,14 @@ function syncAgentToExposuresAndDashboard(msg) {
     if (window.RightsAdvisor) {
         window.RightsAdvisor.updateContextStats();
     }
+
+    // Sync Threat Surface Matrix across Dashboard & Agent
+    const userId = msg.user_id || (st && st.user_id);
+    const threatUrl = userId ? `/api/agent/threat-surface/${encodeURIComponent(userId)}` : '/api/agent/threat-surface';
+    fetch(threatUrl)
+        .then(r => r.json())
+        .then(renderThreatSurface)
+        .catch(() => {});
 }
 
 function updateDashboardFromAgent(st, riskScore) {
@@ -2579,12 +2842,15 @@ const RightsAdvisor = {
             const data = await resp.json();
             const tag = document.getElementById('advisor-model-tag');
             if (tag) {
-                if (data.planner === 'openai_compat') {
-                    tag.innerHTML = `<span class="status-dot online"></span> Groq · GPT-OSS Active`;
+                const mod = (data.model || '').toLowerCase();
+                if (mod.includes('gemini') || data.llm_active) {
+                    tag.innerHTML = `<span class="status-dot online"></span> ✨ Gemini Active (Groq Backup)`;
+                } else if (mod.includes('groq')) {
+                    tag.innerHTML = `<span class="status-dot online"></span> ⚡ Groq Active (Gemini Backup)`;
                 } else if (data.planner === 'anthropic') {
                     tag.innerHTML = `<span class="status-dot online"></span> Claude 3.5 Active`;
                 } else {
-                    tag.innerHTML = `<span class="status-dot online"></span> AI Sovereign Engine`;
+                    tag.innerHTML = `<span class="status-dot online"></span> Deterministic Engine`;
                 }
             }
         } catch(e) {}
@@ -2728,6 +2994,18 @@ const RightsAdvisor = {
 
             const data = await resp.json();
             typingEl.remove();
+
+            if (data.model) {
+                const tag = document.getElementById('advisor-model-tag');
+                if (tag) {
+                    const mLower = data.model.toLowerCase();
+                    if (mLower.includes('gemini')) {
+                        tag.innerHTML = `<span class="status-dot online"></span> ✨ Gemini Active (Groq Backup)`;
+                    } else if (mLower.includes('groq')) {
+                        tag.innerHTML = `<span class="status-dot online"></span> ⚡ Groq Backup Active`;
+                    }
+                }
+            }
 
             if (data.reply) {
                 this.history.push({ role: 'assistant', content: data.reply });

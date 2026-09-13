@@ -113,32 +113,36 @@ ESSENTIAL_TOOLS = (
 
 
 def configured() -> str | None:
-    """Which OpenAI-compatible provider has a key, if any."""
+    """Which OpenAI-compatible provider is active (Gemini primary, Groq backup)."""
     pinned = (os.environ.get("OPENAI_COMPAT_PROVIDER") or os.environ.get("SOVEREIGN_PLANNER") or "").strip().lower()
     if pinned in PROVIDERS and os.environ.get(PROVIDERS[pinned]["key_env"]):
         return pinned
-    for name, spec in PROVIDERS.items():
-        if os.environ.get(spec["key_env"]):
-            return name
-    return None
+    all_conf = configured_all()
+    return all_conf[0] if all_conf else None
 
 
 def configured_all() -> list[str]:
     """
     Every provider with a key, best first.
-
-    configured() returns only ONE. When that one is rate-limited — and a free
-    tier is rate-limited often; Gemini's is twenty requests — anything built on
-    configured() alone simply fails, even with a second working key sitting in
-    the same .env. Callers that can retry should walk this list instead.
+    Enforces Gemini as primary reasoning engine with Groq as high-speed backup.
     """
     pinned = (os.environ.get("OPENAI_COMPAT_PROVIDER")
               or os.environ.get("SOVEREIGN_PLANNER") or "").strip().lower()
     names = [n for n in PROVIDERS if os.environ.get(PROVIDERS[n]["key_env"])]
-    if pinned in names:
-        names.remove(pinned)
-        names.insert(0, pinned)
-    return names
+    # Gemini first, Groq second, followed by others
+    ordered = []
+    if "gemini" in names:
+        ordered.append("gemini")
+    if "groq" in names:
+        ordered.append("groq")
+    for n in names:
+        if n not in ordered:
+            ordered.append(n)
+
+    if pinned in ordered:
+        ordered.remove(pinned)
+        ordered.insert(0, pinned)
+    return ordered
 
 
 def available() -> bool:
@@ -154,7 +158,7 @@ def get_llm_completion(
     messages: list[dict],
     max_tokens: int = 1200,
     temperature: float = 0.2,
-    preferred_provider: str | None = None,
+    preferred_provider: str | None = "gemini",
 ) -> tuple[str | None, str | None]:
     """
     Query configured LLM providers (Gemini, Groq, etc.) with automatic failover.
