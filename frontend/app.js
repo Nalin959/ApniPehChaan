@@ -1471,7 +1471,6 @@ function agProfile() {
         country: agEl('ag-country').value,
         declared_accounts: (agEl('ag-declared')?.value || '').trim(),
         password: (agEl('ag-password')?.value || ''),
-        sandbox: false,
         known_usernames: (agEl('ag-usernames')?.value || '').trim(),
         alt_emails: (agEl('ag-altemails')?.value || '').trim(),
         alt_phones: (agEl('ag-altphones')?.value || '').trim(),

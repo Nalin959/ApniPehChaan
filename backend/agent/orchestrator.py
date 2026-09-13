@@ -181,7 +181,7 @@ def _run_mandatory_discovery(ctx: ToolContext, tools: dict) -> dict:
     out["web"] = tools["search_open_web"]()
     out["declared"] = tools["declare_known_accounts"](ctx.profile.get("declared_accounts", ""))
     out["brokers"] = tools["search_data_brokers"]()
-    out["pastes"] = tools["search_paste_dumps"]() if ctx.sandbox else {"exposures": []}
+    out["pastes"] = {"exposures": []}
     out["registry"] = tools["browse_indian_registry"]()
     out["risk"] = tools["assess_exposure_risk"]()
     return out
@@ -238,7 +238,6 @@ def _run_deterministic_discovery(ctx: ToolContext, tools: dict) -> str:
     n_verified = len(breaches.get("verified_exposures", []))
     n_found = len(accounts.get("found", []))
     n_declared = len(declared.get("declared", []))
-    n_sandbox = len(brokers.get("removable_records", []))
     n_unchecked = len(breaches.get("not_checked", []))
     n_idhits = len(idmatch.get("hits", []))
     summary = (
@@ -260,7 +259,6 @@ def _run_deterministic_discovery(ctx: ToolContext, tools: dict) -> str:
         + f"Found {n_found} live account(s) by searching {accounts.get('sites_checked', 0)} sites, "
         f"{n_verified} verified breach/profile exposure(s)"
         + (f", {n_declared} you declared" if n_declared else "")
-        + (f", {n_sandbox} sandbox record(s)" if n_sandbox else "")
         + f". {n_unchecked} check(s) could not run and nothing was guessed. "
         f"Privacy Risk Score {risk['overall_score']} ({risk['risk_level']}). "
         + (f"{len(self_serve)} can be removed yourself in minutes — no legal notice needed "
@@ -372,7 +370,7 @@ def _prepare(profile: dict, stream: EventStream, auto_approve: bool):
         memory=memory, network=get_network(), user_id=user_id, run_id=run_id,
         profile=profile, emit=_make_emitter(memory, user_id, run_id, stream),
         auto_approve=auto_approve,
-        sandbox=bool(profile.get("sandbox", False)),
+        sandbox=False,
     )
     return memory, ctx, build_tools(ctx), mode
 
