@@ -2187,3 +2187,67 @@ body {
     cursor: not-allowed;
     transform: none;
 }
+
+/* ── Multi-Value Input Groups ─────────────────────────────────────────── */
+.multi-input-group {
+    display: flex; flex-direction: column; gap: 6px; width: 100%;
+}
+.multi-tags {
+    display: flex; flex-wrap: wrap; gap: 6px; min-height: 0;
+}
+.multi-tags:empty { display: none; }
+.multi-tag {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: rgba(99, 102, 241, 0.12); border: 1px solid rgba(99, 102, 241, 0.28);
+    border-radius: 999px; padding: 3px 8px 3px 10px;
+    font-size: 0.78rem; color: var(--text-accent);
+    font-family: var(--font-mono); line-height: 1.4;
+    animation: tagIn 0.2s ease;
+}
+@keyframes tagIn { from { opacity: 0; transform: scale(0.85); } to { opacity: 1; transform: scale(1); } }
+.multi-tag-remove {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 16px; height: 16px; border: none; background: none;
+    color: var(--text-tertiary); font-size: 13px; font-weight: 700;
+    cursor: pointer; border-radius: 50%; padding: 0; line-height: 1;
+    transition: color 0.15s, background 0.15s;
+}
+.multi-tag-remove:hover {
+    color: var(--accent-danger); background: rgba(239, 68, 68, 0.12);
+}
+.multi-input-row {
+    display: flex; gap: 6px; align-items: stretch; width: 100%;
+}
+.multi-input-row input { flex: 1; min-width: 0; }
+.multi-add-btn {
+    display: flex; align-items: center; justify-content: center;
+    width: 38px; flex-shrink: 0;
+    background: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99, 102, 241, 0.25);
+    border-radius: var(--radius-sm); color: var(--accent-primary);
+    font-size: 1.3rem; font-weight: 700; cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, transform 0.1s;
+}
+.multi-add-btn:hover {
+    background: rgba(99, 102, 241, 0.2); border-color: rgba(99, 102, 241, 0.4);
+    transform: scale(1.05);
+}
+.multi-add-btn:active { transform: scale(0.95); }
+
+/* ── Password Visibility Toggle ────────────────────────────────────── */
+.password-input-wrap {
+    position: relative; display: flex; align-items: stretch; width: 100%;
+}
+.password-input-wrap input {
+    flex: 1; padding-right: 42px;
+}
+.password-toggle {
+    position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
+    display: flex; align-items: center; justify-content: center;
+    width: 34px; height: 34px; border: none; background: none;
+    color: var(--text-tertiary); cursor: pointer; border-radius: var(--radius-sm);
+    transition: color 0.15s, background 0.15s;
+}
+.password-toggle:hover {
+    color: var(--text-primary); background: rgba(99, 102, 241, 0.1);
+}
+.password-toggle.active { color: var(--accent-primary); }

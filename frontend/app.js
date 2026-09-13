@@ -636,6 +636,10 @@ window.confirmCandidateCard = async function(exposureId, isMine, btn) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ ...profile, exposure_id: exposureId, is_mine: isMine }),
         });
+        if (!resp.ok) {
+            const errBody = await resp.json().catch(() => ({}));
+            throw new Error(errBody.detail || `Server error (${resp.status})`);
+        }
         const data = await resp.json();
         if (card) {
             if (!isMine) {
@@ -1466,7 +1470,7 @@ function agProfile() {
     return {
         name: agEl('ag-name').value.trim(),
         email: agEl('ag-email').value.trim(),
-        phone: agEl('ag-phone').value.trim(),
+        phone: getMultiValues('ag-phone').join(', '),
         city: agEl('ag-city').value.trim(),
         country: agEl('ag-country').value,
         declared_accounts: (agEl('ag-declared')?.value || '').trim(),
@@ -1475,8 +1479,8 @@ function agProfile() {
         alt_emails: (agEl('ag-altemails')?.value || '').trim(),
         alt_phones: (agEl('ag-altphones')?.value || '').trim(),
         date_of_birth: (agEl('ag-dob')?.value || '').trim(),
-        upi_id: (agEl('ag-upi')?.value || '').trim(),
-        websites: (agEl('ag-websites')?.value || '').trim(),
+        upi_id: getMultiValues('ag-upi').join(', '),
+        websites: getMultiValues('ag-websites').join(', '),
         search_guessed_handles: agEl('ag-guess') ? agEl('ag-guess').checked : true,
         aadhaar: (agEl('ag-aadhaar')?.value || '').trim(),
         pan: (agEl('ag-pan')?.value || '').trim(),
@@ -2156,6 +2160,8 @@ document.addEventListener('DOMContentLoaded', () => {
     agEl('ag-run').addEventListener('click', agentRun);
     agEl('ag-approve').addEventListener('click', agentApprove);
     agEl('ag-reset').addEventListener('click', agentReset);
+    initMultiInputs();
+    initPasswordToggle();
 });
 
 /* ── Candidates: matched a handle, nothing ties them to you ───────────────── */
@@ -2200,6 +2206,126 @@ function renderCandidates(st) {
     });
 }
 
+/* ── Multi-Value Input Helpers (Phone, UPI, Websites) ────────────────── */
+
+/**
+ * Stores multi-values per group. Key = input id prefix (e.g. 'ag-phone'),
+ * value = array of added strings.
+ */
+const _multiValues = {};
+
+function initMultiInputs() {
+    const groups = ['ag-phone', 'ag-upi', 'ag-websites'];
+
+    groups.forEach(groupId => {
+        _multiValues[groupId] = [];
+        const input = document.getElementById(groupId);
+        const addBtn = document.querySelector(`.multi-add-btn[data-group="${groupId}"]`);
+
+        if (!input) return;
+
+        // Add on button click
+        if (addBtn) {
+            addBtn.addEventListener('click', () => {
+                const val = input.value.trim();
+                if (val) {
+                    addMultiTag(groupId, val);
+                    input.value = '';
+                    input.focus();
+                }
+            });
+        }
+
+        // Add on Enter key
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const val = input.value.trim();
+                if (val) {
+                    addMultiTag(groupId, val);
+                    input.value = '';
+                }
+            }
+        });
+    });
+}
+
+function addMultiTag(groupId, value) {
+    if (!value || _multiValues[groupId].includes(value)) return;
+    _multiValues[groupId].push(value);
+
+    const tagsContainer = document.getElementById(groupId + '-tags');
+    if (!tagsContainer) return;
+
+    const tag = document.createElement('span');
+    tag.className = 'multi-tag';
+    tag.dataset.value = value;
+
+    const text = document.createElement('span');
+    text.textContent = value;
+
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.className = 'multi-tag-remove';
+    removeBtn.textContent = '×';
+    removeBtn.title = 'Remove';
+    removeBtn.addEventListener('click', () => {
+        removeMultiTag(groupId, value, tag);
+    });
+
+    tag.append(text, removeBtn);
+    tagsContainer.appendChild(tag);
+}
+
+function removeMultiTag(groupId, value, tagEl) {
+    const idx = _multiValues[groupId].indexOf(value);
+    if (idx !== -1) _multiValues[groupId].splice(idx, 1);
+    if (tagEl) {
+        tagEl.style.transition = 'all 0.2s ease';
+        tagEl.style.opacity = '0';
+        tagEl.style.transform = 'scale(0.8)';
+        setTimeout(() => tagEl.remove(), 200);
+    }
+}
+
+/**
+ * Collect all values for a multi-input group: the already-added tags
+ * plus whatever is currently typed in the input field.
+ */
+function getMultiValues(groupId) {
+    const vals = [...(_multiValues[groupId] || [])];
+    const input = document.getElementById(groupId);
+    if (input) {
+        const current = input.value.trim();
+        if (current && !vals.includes(current)) vals.push(current);
+    }
+    return vals;
+}
+
+/* ── Password Visibility Toggle ──────────────────────────────────────── */
+
+function initPasswordToggle() {
+    const toggle = document.getElementById('ag-password-toggle');
+    const input = document.getElementById('ag-password');
+    if (!toggle || !input) return;
+
+    toggle.addEventListener('click', () => {
+        const isPassword = input.type === 'password';
+        input.type = isPassword ? 'text' : 'password';
+        toggle.classList.toggle('active', isPassword);
+        toggle.title = isPassword ? 'Hide password' : 'Show password';
+
+        // Swap eye icons
+        const eyeOpen = toggle.querySelector('.eye-open');
+        const eyeClosed = toggle.querySelector('.eye-closed');
+        if (eyeOpen && eyeClosed) {
+            eyeOpen.style.display = isPassword ? 'none' : '';
+            eyeClosed.style.display = isPassword ? '' : 'none';
+        }
+    });
+}
+
+
 async function confirmCandidate(exposureId, isMine, btn) {
     const row = agEl('cand-' + exposureId);
     try {
@@ -2207,6 +2333,10 @@ async function confirmCandidate(exposureId, isMine, btn) {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ ...agProfile(), exposure_id: exposureId, is_mine: isMine }),
         });
+        if (!resp.ok) {
+            const errBody = await resp.json().catch(() => ({}));
+            throw new Error(errBody.detail || `Server error (${resp.status})`);
+        }
         const data = await resp.json();
         if (row) {
             row.querySelectorAll('.cand-btn').forEach(x => { x.disabled = true; x.classList.add('done'); });
@@ -2242,8 +2372,11 @@ async function confirmCandidate(exposureId, isMine, btn) {
         if (data && data.state) {
             syncAgentToExposuresAndDashboard({ state: data.state });
         }
+        showToast(isMine ? 'Confirmed as yours' : 'Marked as not yours', 'success');
     } catch (e) {
-        if (row) row.querySelector('.cand-why').textContent = 'Could not save that. Try again.';
+        console.error('Confirm candidate error:', e);
+        if (row) row.querySelector('.cand-why').textContent = 'Could not save: ' + (e.message || 'network error. Try again.');
+        showToast('Could not save: ' + (e.message || 'Unknown error'), 'error');
     }
 }
 

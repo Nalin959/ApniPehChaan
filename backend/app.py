@@ -729,9 +729,6 @@ class AgentScanRequest(BaseModel):
     declared_accounts: str = ""
     # Optional. Checked k-anonymously — only a 5-char SHA-1 prefix is sent.
     password: str = ""
-    # Opt-in demo environment. OFF by default: it plants synthetic records,
-    # which must never be mistaken for real findings.
-    sandbox: bool = False
 
     # ── Optional corroborating identifiers ──
     # All optional. Each one lets more candidate profiles be resolved in either
@@ -776,7 +773,6 @@ def _profile_of(req: AgentScanRequest) -> dict:
     return {"name": req.name, "email": req.email, "phone": req.phone,
             "city": req.city, "country": req.country or "IN",
             "declared_accounts": req.declared_accounts, "password": req.password,
-            "sandbox": False,
             "alt_emails": req.alt_emails, "alt_phones": req.alt_phones,
             "known_usernames": req.known_usernames, "date_of_birth": req.date_of_birth,
             "upi_id": req.upi_id, "websites": req.websites,
