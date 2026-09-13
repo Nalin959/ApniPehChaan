@@ -27,8 +27,8 @@ PROVIDERS = {
     "gemini": {
         "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
         "key_env": "GEMINI_API_KEY",
-        "default_model": "gemini-3.8-flash",
-        "fallback_models": ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-3.7-flash"],
+        "default_model": "gemini-3.5-flash-lite",
+        "fallback_models": ["gemini-3.6-flash", "gemini-3.1-flash-lite", "gemini-3.8-flash", "gemini-3.7-flash"],
         "signup": "https://aistudio.google.com/apikey",
         "note": "Primary reasoning planner driven by Google Gemini.",
     },
@@ -93,7 +93,10 @@ PROVIDERS = {
 #
 # So results are compacted before they enter the transcript: the model needs to
 # know WHAT was found and the ids to act on, not every field of every record.
-MAX_RESULT_CHARS = 700
+# 300, not 700: a second definition further down silently shadowed this one, so
+# 300 is the value that has actually been running. Kept as-is to avoid a
+# behaviour change; the duplicate below is removed.
+MAX_RESULT_CHARS = 300
 
 _JSON_TYPES = {str: "string", int: "integer", float: "number", bool: "boolean",
                list: "array", dict: "object"}
@@ -113,32 +116,37 @@ ESSENTIAL_TOOLS = (
 
 
 def configured() -> str | None:
-    """Which OpenAI-compatible provider has a key, if any."""
-    pinned = (os.environ.get("OPENAI_COMPAT_PROVIDER") or os.environ.get("SOVEREIGN_PLANNER") or "").strip().lower()
+    """Which OpenAI-compatible provider is active (Gemini primary, Groq backup)."""
+    pinned = (os.environ.get("OPENAI_COMPAT_PROVIDER") or os.environ.get("APNIPEHCHAAN_PLANNER") or os.environ.get("SOVEREIGN_PLANNER") or "").strip().lower()
     if pinned in PROVIDERS and os.environ.get(PROVIDERS[pinned]["key_env"]):
         return pinned
-    for name, spec in PROVIDERS.items():
-        if os.environ.get(spec["key_env"]):
-            return name
-    return None
+    all_conf = configured_all()
+    return all_conf[0] if all_conf else None
 
 
 def configured_all() -> list[str]:
     """
     Every provider with a key, best first.
-
-    configured() returns only ONE. When that one is rate-limited — and a free
-    tier is rate-limited often; Gemini's is twenty requests — anything built on
-    configured() alone simply fails, even with a second working key sitting in
-    the same .env. Callers that can retry should walk this list instead.
+    Enforces Gemini as primary reasoning engine with Groq as high-speed backup.
     """
     pinned = (os.environ.get("OPENAI_COMPAT_PROVIDER")
+              or os.environ.get("APNIPEHCHAAN_PLANNER")
               or os.environ.get("SOVEREIGN_PLANNER") or "").strip().lower()
     names = [n for n in PROVIDERS if os.environ.get(PROVIDERS[n]["key_env"])]
-    if pinned in names:
-        names.remove(pinned)
-        names.insert(0, pinned)
-    return names
+    # Gemini first, Groq second, followed by others
+    ordered = []
+    if "gemini" in names:
+        ordered.append("gemini")
+    if "groq" in names:
+        ordered.append("groq")
+    for n in names:
+        if n not in ordered:
+            ordered.append(n)
+
+    if pinned in ordered:
+        ordered.remove(pinned)
+        ordered.insert(0, pinned)
+    return ordered
 
 
 def available() -> bool:
@@ -148,6 +156,51 @@ def available() -> bool:
 def model_for(provider: str) -> str:
     return (os.environ.get("OPENAI_COMPAT_MODEL")
             or PROVIDERS[provider]["default_model"])
+
+
+def get_llm_completion(
+    messages: list[dict],
+    max_tokens: int = 1200,
+    temperature: float = 0.2,
+    preferred_provider: str | None = "gemini",
+) -> tuple[str | None, str | None]:
+    """
+    Query configured LLM providers (Gemini, Groq, etc.) with automatic failover.
+    Returns (completion_text, provider_and_model_used) or (None, None).
+    """
+    from openai import OpenAI
+
+    providers_to_try = configured_all()
+    if preferred_provider and preferred_provider in providers_to_try:
+        providers_to_try.remove(preferred_provider)
+        providers_to_try.insert(0, preferred_provider)
+
+    for prov in providers_to_try:
+        spec = PROVIDERS[prov]
+        primary_model = model_for(prov)
+        candidates = [primary_model] + [m for m in spec.get("fallback_models", []) if m != primary_model]
+
+        for cand in candidates:
+            try:
+                client = OpenAI(api_key=os.environ[spec["key_env"]], base_url=spec["base_url"])
+                effective_tokens = max(max_tokens, 800) if "gpt-oss" in cand else max_tokens
+                resp = client.chat.completions.create(
+                    model=cand,
+                    messages=messages,
+                    max_tokens=effective_tokens,
+                    temperature=temperature,
+                )
+                msg = resp.choices[0].message
+                content = (msg.content or "").strip()
+                if not content and getattr(msg, "reasoning", None):
+                    content = str(msg.reasoning).strip()
+                if content:
+                    return content, f"{cand} ({prov})"
+            except Exception:
+                continue
+
+    return None, None
+
 
 
 def _schema_for(fn, brief: bool = False) -> dict:
@@ -179,8 +232,6 @@ def _schema_for(fn, brief: bool = False) -> dict:
         },
     }
 
-
-MAX_RESULT_CHARS = 300
 
 def _compact(result) -> str:
     """
@@ -286,7 +337,18 @@ def run(ctx, tools: dict, system: str, goal: str, stream, max_steps: int = 25) -
 
     for _ in range(max_steps):
         resp = None
-        for candidate in list(models_to_try):
+        # The models still to try THIS step. It was `for candidate in
+        # list(models_to_try)` — a snapshot — so the failover below could
+        # rebuild models_to_try for a different provider and the loop would
+        # carry on down the old provider's list regardless. Since the Gemini
+        # branch only fires on the LAST Gemini model, the snapshot was always
+        # exhausted at that point: the run emitted "switching to backup planner
+        # (Groq)", made no Groq request at all, fell out with resp None, broke
+        # the step loop and returned an empty plan. Popping from a live list
+        # lets a provider switch actually take effect.
+        pending = list(models_to_try)
+        while pending:
+            candidate = pending.pop(0)
             for attempt in range(3):
                 try:
                     resp = client.chat.completions.create(
@@ -338,6 +400,10 @@ def run(ctx, tools: dict, system: str, goal: str, stream, max_steps: int = 25) -
                         client = OpenAI(api_key=os.environ[spec["key_env"]], base_url=spec["base_url"])
                         active_model = model_for("groq")
                         models_to_try = [active_model] + [m for m in PROVIDERS["groq"].get("fallback_models", []) if m != active_model]
+                        # Retry against the backup's OWN models. Without this
+                        # the next request went to the Groq endpoint carrying a
+                        # Gemini model name.
+                        pending = list(models_to_try)
                         break
 
                     # A model that cannot produce a usable tool call after three

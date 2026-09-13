@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-test_system.py — SovereignPrivacy AI Automated Test Suite.
+test_system.py — ApniPehChaan Automated Test Suite.
 
 Tests all core components:
   1. Dataset integrity validation
@@ -1537,9 +1537,147 @@ def test_fiduciary_and_threat_surface():
         fast_tools = dict(tools)
         fast_tools["search_open_web"] = lambda: {"confirmed": [], "search_degraded": False, "pages_fetched": 0}
         fast_tools["browse_indian_registry"] = lambda: {"total_scanned": 0, "categories": {}}
+        # match_unique_identifiers queries real leak corpora (ProxyNova, LeakCheck)
+        # over the network; stub it for the same isolation reason as the two above.
+        fast_tools["match_unique_identifiers"] = lambda: {
+            "searched": [], "supplied": [], "invalid": [], "hits": [],
+            "corpus_checks_run": [], "corpus_unavailable": [],
+            "corpus_complete": False, "not_checked": []}
         d_summary = _run_deterministic_discovery(ctx, fast_tools)
         test("Deterministic discovery includes threat surface intelligence", "Threat surface analysis" in d_summary)
         test("Deterministic discovery captures attack vectors in summary", "attack vector" in d_summary)
+
+
+def test_regressions_2026_09_13():
+    """
+    Regression tests for defects found and fixed in the 2026-09-13 audit.
+
+    Each one was PROVEN present before it was fixed, with the reproduction
+    recorded in the comment. They exist so the same defect cannot return
+    quietly — every one of them is a case where the product told the user
+    something untrue about their own data.
+    """
+    section("16. Regression — 2026-09-13 audit")
+
+    # ── 1. Name-only attribution ─────────────────────────────────────────────
+    # PasteScanner matched on any >=3-char component of the user's legal name,
+    # substring-matched anywhere in a paste. The demo persona "Prabhat Sharma"
+    # with a deliberately invalid email and no phone returned 3 matches, reason
+    # "Name component 'sharma' found in content", surfacing OTHER fictional
+    # people's identifiers as the user's own exposure.
+    from backend.scanners.paste_scanner import PasteScanner
+    ps = PasteScanner()
+    for label, nm in (("demo persona", "Prabhat Sharma"), ("common corpus name", "Aarav Patel")):
+        r = ps.scan({"name": nm, "email": "nonexistent-unique-zzz@example.invalid",
+                     "phone": "", "aadhaar": "", "pan": ""})
+        got = len(r.get("matches", []))
+        test(f"Paste scan does not attribute on legal name alone ({label})",
+             got == 0, f"{nm!r} produced {got} match(es)")
+
+    # The fix must not simply disable the scanner: an exact unique identifier
+    # that really is present must still match.
+    with open(os.path.join(PROJECT_ROOT, "data", "synthetic_pastes",
+                           "pastes_corpus.json")) as f:
+        corpus = json.load(f)
+    import re as _re
+    corpus_email = None
+    for rec in corpus:
+        hit = _re.search(r"[\w.+-]+@[\w.-]+\.\w+", rec.get("content", "") or "")
+        if hit:
+            corpus_email = hit.group(0)
+            break
+    if corpus_email:
+        r = ps.scan({"name": "", "email": corpus_email, "phone": "",
+                     "aadhaar": "", "pan": ""})
+        test("An exact email present in the corpus is still matched",
+             len(r.get("matches", [])) >= 1,
+             f"{corpus_email} produced no match — the scanner over-corrected")
+
+    # ── 2. Email PROVIDER coincidence reported as a confirmed breach ─────────
+    # The only match condition was breach_domain == the user's own mail domain,
+    # so someone@yahoo.com was reported as exposed in the Yahoo breach at
+    # severity "critical". The cached file is HIBP's breach CATALOGUE — company
+    # metadata holding zero email addresses — so it can confirm nothing.
+    from backend.scanners.hibp_scanner import HIBPScanner
+    hs = HIBPScanner()
+    for addr in ("someone@yahoo.com", "nobody@163.com", "person@mail.ru"):
+        r = hs.scan(addr, "Some Name")
+        test(f"Email provider coincidence is not a confirmed breach ({addr})",
+             len(r.get("breaches", [])) == 0,
+             f"got {len(r.get('breaches', []))} attributed breach(es)")
+
+    # ── 3. Synthetic corpus presented as verified real exposure ──────────────
+    # match_unique_identifiers searched data/synthetic_pastes/ — randomly
+    # GENERATED records for fictional people — and recorded hits as
+    # evidence_class "verified" / severity "critical", telling the user the
+    # match was "proof this record concerns you". It now queries REAL corpora
+    # (ProxyNova combination lists, LeakCheck) instead. Reporting zero hits for
+    # an identifier nothing can search would be equally wrong, because it reads
+    # as a completed clean search — it must report as unchecked.
+    import inspect as _inspect
+    from backend.agent import tools as _tools_mod
+    test("The synthetic corpus is no longer consulted for attribution",
+         "synthetic_pastes" not in _inspect.getsource(
+             _tools_mod.build_tools).split("def search_paste_dumps")[0],
+         "match_unique_identifiers still reads the synthetic corpus")
+
+    import tempfile as _tf
+    from backend.agent.tools import build_tools, ToolContext
+    from backend.agent.memory import Memory
+    with _tf.TemporaryDirectory() as d:
+        mem = Memory(os.path.join(d, "reg.db"))
+        # Aadhaar only: no free corpus indexes it, so this stays offline.
+        prof = {"name": "T", "aadhaar": "234567890124", "country": "IN"}
+        uid = mem.upsert_user(prof)
+        ctx = ToolContext(memory=mem, network=None, user_id=uid,
+                          run_id=mem.start_run(uid, "reg"), profile=prof,
+                          emit=lambda *a, **k: None)
+        res = build_tools(ctx)["match_unique_identifiers"]()
+        test("An identifier no corpus indexes is reported unchecked, not clean",
+             any(n.get("kind") == "aadhaar" for n in res.get("not_checked", []))
+             and res.get("corpus_complete") is False,
+             f"not_checked={res.get('not_checked')} "
+             f"corpus_complete={res.get('corpus_complete')}")
+        test("An unsearchable identifier records no exposure",
+             len(res.get("hits", [])) == 0 and len(mem.get_exposures(uid)) == 0,
+             f"hits={len(res.get('hits', []))}")
+
+    # ── 4. Info-stealer routed to "monitor" as an unattributed dump ──────────
+    # source_type "infostealer" had no branch in determine_legal_basis and fell
+    # into the catch-all, so malware that ran on the principal's own device and
+    # took their live credential store was reported as an "unattributed dump"
+    # with the advice to monitor for republication.
+    with _tf.TemporaryDirectory() as d:
+        mem = Memory(os.path.join(d, "reg2.db"))
+        prof = {"name": "T", "email": "t-zzz@example.invalid", "country": "IN"}
+        uid = mem.upsert_user(prof)
+        rid = mem.start_run(uid, "reg")
+        ctx = ToolContext(memory=mem, network=None, user_id=uid, run_id=rid,
+                          profile=prof, emit=lambda *a, **k: None)
+        eid, _ = mem.record_exposure(uid, rid, {
+            "source_type": "infostealer", "source_name": "Info-stealer malware infection",
+            "source_id": "infostealer:reg", "record_id": "",
+            "data_found": ["email", "password"], "detail": {},
+            "match_confidence": 1.0, "match_tier": "exact",
+            "severity": "critical", "risk_score": 90.0})
+        r = build_tools(ctx)["determine_legal_basis"](eid)
+        basis = (r.get("legal_basis") or "").lower()
+        action = str(r.get("recommended_action") or r.get("action") or "")
+        test("Info-stealer is not described as an unattributed dump",
+             "unattributed dump" not in basis, f"basis: {basis[:80]}")
+        test("Info-stealer recommends securing credentials, not passive monitoring",
+             action == "secure_accounts", f"action={action}")
+
+    # ── 5. Dispatch withheld from the discovery planner ──────────────────────
+    # orchestrator computed a judgement-only tool set and then threw it away,
+    # handing the swarm the full tool dict. The demo deck states the opposite:
+    # "submit_erasure_request is absent from the discovery toolset entirely".
+    import inspect as _inspect
+    from backend.agent import orchestrator as _orch
+    src = _inspect.getsource(_orch.run_discovery)
+    test("Discovery swarm is constructed with the restricted tool set",
+         "MultiAgentSwarm(ctx, phase_tools)" in src,
+         "run_discovery no longer passes phase_tools to MultiAgentSwarm")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1548,7 +1686,7 @@ def test_fiduciary_and_threat_surface():
 
 if __name__ == "__main__":
     print(f"\n{BOLD}{'═' * 60}{RESET}")
-    print(f"{BOLD}  SovereignPrivacy AI — Automated Test Suite{RESET}")
+    print(f"{BOLD}  ApniPehChaan — Automated Test Suite{RESET}")
     print(f"{BOLD}{'═' * 60}{RESET}")
 
     start = time.time()
@@ -1568,6 +1706,7 @@ if __name__ == "__main__":
     test_free_intel()
     test_site_roster()
     test_fiduciary_and_threat_surface()
+    test_regressions_2026_09_13()
 
     elapsed = time.time() - start
 

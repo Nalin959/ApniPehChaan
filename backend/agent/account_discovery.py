@@ -112,6 +112,11 @@ class AccountHit:
     collision_risk: str = ""
     collision_note: str = ""
     handle_source: str = ""   # declared | email_local | upi_local | name_derived
+    # "checked"     the site gave a definite answer (200 = a profile, 404 = none)
+    # "unreachable" nothing was learned — rate limited, blocked, timed out
+    # `exists is False` means something different in each case, and collapsing
+    # them is what let a throttled sweep report a clean sheet.
+    check_state: str = "checked"
 
     def to_dict(self):
         return asdict(self)
@@ -141,10 +146,18 @@ def _check_one(site: str, spec: dict, username: str) -> tuple[AccountHit, str]:
         status = None
 
     # Only a clean 200 counts as found. Anything else — 404, a block, a timeout —
-    # is reported as "not found", never as a maybe.
+    # is reported as "not found", never as a maybe. That is the right call for
+    # ATTRIBUTION, but it is not the whole answer: a 404 means the site looked
+    # and there is no such profile, while a 429, a 403 or a timeout means the
+    # site never answered. Both produce exists=False, so a sweep in which every
+    # site rate-limited was indistinguishable from a sweep that found nothing —
+    # and discover_accounts reported "26 sites checked" either way. The state is
+    # recorded so the caller can tell a clean sheet from a blind one.
+    definite = status in (200, 404, 410)
     return AccountHit(site=site, category=spec["category"], username=username, url=url,
                       http_status=status, exists=(status == 200),
-                      checked_at=_now(), reproduce=reproduce), body
+                      checked_at=_now(), reproduce=reproduce,
+                      check_state="checked" if definite else "unreachable"), body
 
 
 def derive_usernames(profile: dict, include_guessed: bool = True) -> list[tuple[str, str]]:
@@ -267,6 +280,8 @@ def discover_accounts(profile: dict, usernames: list[tuple[str, str]] | None = N
                     if h.exists and (
                         ident.scoped_handles().get(h.site.lower()) == h.username.lower())}
 
+    unreachable = [h for h, _ in results if h.check_state == "unreachable"]
+
     attributed, candidates = [], []
     for hit, body in results:
         if not hit.exists:
@@ -303,6 +318,18 @@ def discover_accounts(profile: dict, usernames: list[tuple[str, str]] | None = N
         "guessed_handles_searched": include_guessed,
         "sites_checked": len(SITES),
         "checks_performed": len(jobs),
+        # Checks that were made but never answered. Without this a throttled or
+        # blocked sweep returned an empty `attributed` list that read exactly
+        # like a clean one.
+        "checks_unreachable": len(unreachable),
+        "unreachable_sites": sorted({h.site for h in unreachable}),
+        "complete": not unreachable,
+        "coverage_note": (
+            f"{len(unreachable)} of {len(jobs)} profile check(s) could not be completed "
+            f"(rate limited, blocked or unreachable) — those sites were NOT checked, and "
+            f"this is not a clean result for them. Re-run to complete the sweep."
+            if unreachable else
+            f"All {len(jobs)} profile check(s) completed."),
         "attributed": attributed,
         "candidates": candidates,
         "excluded": EXCLUDED,

@@ -152,7 +152,11 @@ class RiskCalculator:
             pressure += weight * cred * recency
             entity_counts[etype] = entity_counts.get(etype, 0) + 1
             source_counts[stype] = source_counts.get(stype, 0) + 1
-            sources_seen.add(f"{stype}:{exp.get('value', '')[:24]}")
+            # str(... or "") rather than .get("value", ""): a key that is PRESENT
+            # and None returns None, and None[:24] is a TypeError that takes the
+            # whole scan down. Exposure dicts are assembled by several callers and
+            # a missing value is a normal shape, not an error worth crashing on.
+            sources_seen.add(f"{stype}:{str(exp.get('value') or '')[:24]}")
 
         # Core: what is exposed, how credible the source, how fresh (0-75).
         core_score = 75.0 * (1.0 - math.exp(-pressure / 15.0))
@@ -263,7 +267,18 @@ class RiskCalculator:
         if "PHONE_IN" in entity_counts:
             recs.append("🟡 HIGH: Your phone number is exposed. Be vigilant against phishing calls/SMS. Consider enabling DND and call screening.")
         if broker_matches > 0:
-            recs.append(f"🟠 MEDIUM: Your data appears on {broker_matches} data broker sites. Use the Legal Remediation Studio to send automated deletion requests.")
+            # "Your data appears on N sites" was an assertion of fact, and it was
+            # not one. broker_scanner queries no broker — it cannot, they are behind
+            # CAPTCHAs — it scores each broker's CATEGORY against which identity
+            # fields the user supplied. Supplying a name alone yields 432 "high
+            # risk matches" for any name at all, including one no person has, so
+            # the sentence told every user their data had been found in 432 places
+            # that were never asked. The count is a scope estimate and now says so.
+            recs.append(f"🟠 MEDIUM: {broker_matches} data broker categories are likely to hold "
+                        f"a profile on someone with your details — an estimate from each broker's "
+                        f"category and the identifiers you supplied, not a confirmed hit: these "
+                        f"sites were not queried. Use the Legal Remediation Studio to send "
+                        f"deletion requests to the ones that matter.")
         if score >= 60:
             recs.append("📋 File a formal data erasure request under DPDP Act 2023 (Section 12) with each data holder using the one-click Legal Notice Generator.")
         if score >= 40:

@@ -17,7 +17,7 @@ forbidding it is three paragraphs up the system prompt.
 
 Usage:
     .venv/bin/python benchmark_planner.py                # whatever .env selects
-    SOVEREIGN_PLANNER=groq .venv/bin/python benchmark_planner.py
+    APNIPEHCHAAN_PLANNER=groq .venv/bin/python benchmark_planner.py
     OPENAI_COMPAT_MODEL=llama-3.3-70b-versatile .venv/bin/python benchmark_planner.py
 """
 
@@ -26,6 +26,14 @@ import sys
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+# Pin the benchmark to the LOCAL SQLite database before anything can select a
+# backend. main() deletes rows for the benchmark user, and .env normally carries
+# SUPABASE_URL/SUPABASE_KEY — which made get_memory() return the cloud adapter,
+# so a local benchmark run was issuing DELETEs against the PRODUCTION database.
+# Set APNIPEHCHAAN_FORCE_SQLITE=0 explicitly if you really want the cloud copy.
+os.environ.setdefault("APNIPEHCHAAN_FORCE_SQLITE", "1")
+
 from backend.agent.env import load_env                     # noqa: E402
 load_env()
 

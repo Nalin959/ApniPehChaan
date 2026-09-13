@@ -139,8 +139,13 @@ class BrokerScanner:
                 # Count categories
                 categories_found[category] = categories_found.get(category, 0) + 1
 
-        # Sort by exposure likelihood descending
-        matches.sort(key=lambda x: (-x["exposure_likelihood"], x["removal_difficulty"]))
+        # Sort by exposure likelihood descending, then easiest removal first.
+        # The tie-break used the difficulty STRING, which sorts alphabetically —
+        # Easy, Hard, Medium — so the ones needing a legal notice were ranked
+        # above the ones needing an email, the opposite of the intended order.
+        _difficulty_rank = {"Easy": 0, "Medium": 1, "Hard": 2}
+        matches.sort(key=lambda x: (-x["exposure_likelihood"],
+                                    _difficulty_rank.get(x["removal_difficulty"], 3)))
 
         # Stats
         high_risk = [m for m in matches if m["exposure_likelihood"] >= 0.70]
@@ -160,6 +165,17 @@ class BrokerScanner:
             "matches": matches[:100],  # Top 100
             "high_risk": high_risk[:20],
             "stats": stats,
+            # Said plainly in the payload, not only in the docstring. No broker
+            # here was queried — they sit behind rate limits and CAPTCHAs — so
+            # every number above is a scope estimate from the broker's CATEGORY
+            # and which identity fields the user supplied. Downstream copy must
+            # not render it as "your data was found on N sites".
+            "basis": "estimated_from_category",
+            "confirmed": False,
+            "note": ("No broker was queried. Each broker is scored from its category and the "
+                     "identity fields supplied, so these are candidates to check and opt out "
+                     "of, not confirmed hits. A name is a weak signal on its own: any name "
+                     "produces the same people-search estimate."),
         }
 
     def get_broker_count(self) -> int:

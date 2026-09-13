@@ -186,6 +186,32 @@ class Verifier:
             (user_id, kind, value, self._hash(code, salt), salt, utcnow(), expires))
 
         delivered, dev_code = self._deliver(kind, value, code, channel)
+
+        # A CONFIGURED channel that failed to send is an error, not dev mode.
+        # This fell through to the dev_mode branch below, which handed the
+        # one-time code straight back to whoever asked for it — while telling
+        # them "No SMTP channel is configured", which was false — and
+        # submit_code then graded the result from the CURRENT configuration and
+        # recorded method="otp_email", attribution_grade=True. So with SMTP
+        # configured but temporarily down (a throttled free tier, a timeout,
+        # rotated credentials), anyone could obtain verified status for an
+        # address they do not own, and attribution_grade() would then list it
+        # among the identifiers strong enough to attribute accounts to them.
+        # That is exactly the failure this module exists to gate.
+        #
+        # The pending code is destroyed as well, so nothing can be submitted
+        # against it afterwards.
+        if not delivered and channel in ("smtp", "sms"):
+            self._exec("DELETE FROM pending_codes WHERE user_id=? AND kind=? AND value=?",
+                       (user_id, kind, value))
+            return {
+                "status": "send_failed", "kind": kind, "value": value, "channel": channel,
+                "message": (
+                    f"A {'mail' if kind == 'email' else 'message'} channel is configured but the "
+                    f"code could not be delivered to {value}. No code was issued, and nothing is "
+                    f"verified. Check the channel's credentials and try again."),
+            }
+
         out = {
             "status": "sent" if delivered else "dev_mode",
             "kind": kind, "value": value, "channel": channel,
@@ -211,7 +237,7 @@ class Verifier:
                 import smtplib
                 from email.message import EmailMessage
                 msg = EmailMessage()
-                msg["Subject"] = "Your SovereignPrivacy verification code"
+                msg["Subject"] = "Your ApniPehChaan verification code"
                 msg["From"] = os.environ.get("SMTP_FROM", os.environ["SMTP_USER"])
                 msg["To"] = value
                 msg.set_content(

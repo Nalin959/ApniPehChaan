@@ -1,4 +1,4 @@
-# SovereignPrivacy AI — Dependencies
+# ApniPehChaan — Dependencies
 
 # Web layer
 fastapi>=0.100.0

@@ -197,6 +197,13 @@ def _severity_of(fields: list[str]) -> str:
 
 _INDIA_BREACH_RE = re.compile(r"\b(india|indian)\b|\.in\b", re.I)
 
+# One written-down number, separators and all: digits joined by at most two
+# spacing characters. Real identifiers are written "+91 98765 43210" or
+# "2341 2345 4416", so the separators must be absorbed — but JSON's own
+# punctuation (", : " [ ] { }) is deliberately outside the class, so two
+# unrelated fields can never be spliced into one "identifier".
+_NUMERIC_RUN_RE = re.compile(r"\d(?:[\s\-().+]{0,2}\d)*")
+
 
 def _looks_indian(breach: dict) -> bool:
     blob = " ".join(str(breach.get(k) or "") for k in ("name", "title", "domain", "description"))
@@ -251,9 +258,22 @@ def find_source(slug_or_name: str) -> dict | None:
     for src in load_indian_sources():
         if needle in (src["id"].lower(), src["name"].lower()):
             return src
-    for src in load_indian_sources():
-        if needle and needle in src["name"].lower():
-            return src
+    # The fuzzy pass needs a length floor. Unbounded, `needle in name` let a
+    # one-character token resolve to a real fiduciary with a real legal class:
+    # find_source("x") returned CIBIL (dpdp_limited), find_source("t") returned
+    # Truecaller, find_source("reg") returned the Central KYC Registry. That
+    # matters because determine_legal_basis derives its statute from this
+    # lookup — `source_id.split(":", 1)[1]` on an id like "infostealer:t"
+    # yields a stub token, and the bogus legal_class then OUTRANKS the
+    # source_type branch, so an info-stealer infection was assessed as a
+    # credit-bureau record ("dispute_or_correct"). The shortest real id is 5
+    # chars and the shortest real name 6, so a 4-char floor loses no genuine
+    # lookup; exact id/name matches are handled above and are unaffected.
+    MIN_FUZZY_NEEDLE = 4
+    if len(needle) >= MIN_FUZZY_NEEDLE:
+        for src in load_indian_sources():
+            if needle in src["name"].lower():
+                return src
     return None
 
 
@@ -359,6 +379,11 @@ def build_tools(ctx: ToolContext) -> dict[str, Callable]:
             phone = ""
         if phone and phone[0] not in "6789":
             phone = ""
+        # If a number WAS supplied and none of that could make a mobile out of
+        # it, the phone corpora are simply never queried. That has to be said:
+        # silently skipping the check makes an unparsed number look like a
+        # number that was checked and came back clean.
+        phone_unparsed = bool(raw_phone) and not phone
 
         # DECLARED handles only.
         #
@@ -392,8 +417,20 @@ def build_tools(ctx: ToolContext) -> dict[str, Callable]:
         def _safe(fn, *a):
             try:
                 return fn(*a)
-            except Exception:
-                return None
+            except Exception as exc:
+                # Dropping the check entirely would make a timeout or a refused
+                # connection indistinguishable from "this source holds nothing
+                # on you". Return an explicit "unavailable" instead, so it is
+                # counted and shown as a check that could not run.
+                return extra_sources.Finding(
+                    check=getattr(fn, "__name__", "extra_source").replace("check_", ""),
+                    target=(str(a[0]) if a else ""),
+                    endpoint="", queried_at=utcnow(), http_status=None,
+                    result="unavailable",
+                    proof=f"{type(exc).__name__}: {exc}",
+                    interpretation=("The source could not be reached, so it proves nothing. "
+                                    "This is NOT a clean result."),
+                    reproduce="")
 
         extra = []
         if email:
@@ -406,10 +443,29 @@ def build_tools(ctx: ToolContext) -> dict[str, Callable]:
                       _safe(extra_sources.check_infostealer_by_username, h)]
         checks += [e for e in extra if e is not None]
 
-        recorded, not_checked = [], []
+        recorded, not_checked, unavailable = [], [], []
+        if phone_unparsed:
+            not_checked.append({
+                "check": "leakcheck_public (phone)", "result": "not_checked",
+                "http_status": None,
+                "why": (f"The number supplied does not resolve to a 10-digit Indian mobile, so "
+                        f"it was NOT searched. Truncating it would search an identifier "
+                        f"belonging to somebody else. Re-enter it as a 10-digit mobile "
+                        f"(optionally +91-prefixed) to have it checked."),
+            })
         for ev in checks:
-            if ev.result == "not_checked":
-                not_checked.append({"check": ev.check, "why": ev.interpretation})
+            # A check that could not run is NOT a clean check. "unavailable"
+            # (HTTP 429, a timeout, a 5xx) used to fall straight through the
+            # `!= "hit"` guard below and vanish, so a scan in which every
+            # corpus rate-limited us reported "0 exposure(s), 0 check(s)
+            # unavailable" — indistinguishable from a genuinely clear result.
+            if ev.result in ("not_checked", "unavailable"):
+                entry = {"check": ev.check, "result": ev.result,
+                         "http_status": getattr(ev, "http_status", None),
+                         "why": ev.interpretation or ev.proof}
+                not_checked.append(entry)
+                if ev.result == "unavailable":
+                    unavailable.append(entry)
                 continue
             if ev.result != "hit":
                 continue
@@ -544,18 +600,30 @@ def build_tools(ctx: ToolContext) -> dict[str, Callable]:
                                  "evidence_class": "verified", "is_new": is_new})
 
         domain_ev = next(c for c in checks if c.check == "email_domain_breached")
+        degraded = bool(unavailable)
         ctx.emit("discovery", "breach",
-                 f"Breach checks complete: {len(recorded)} VERIFIED exposure(s), "
-                 f"{len(not_checked)} check(s) unavailable.",
-                 tool_output={"verified": len(recorded), "not_checked": len(not_checked)})
+                 (f"Breach checks INCOMPLETE — {len(unavailable)} corpus/corpora could not be "
+                  f"reached ({', '.join(u['check'] for u in unavailable)}). "
+                  f"{len(recorded)} VERIFIED exposure(s) so far; a clean result CANNOT be "
+                  f"claimed until those checks complete."
+                  if degraded else
+                  f"Breach checks complete: {len(recorded)} VERIFIED exposure(s), "
+                  f"{len(not_checked)} check(s) unavailable."),
+                 status="error" if degraded else "ok",
+                 tool_output={"verified": len(recorded), "not_checked": len(not_checked),
+                              "unavailable": len(unavailable), "coverage_complete": not degraded})
 
         return {
             "verified_exposures": recorded,
             "checks_run": [c.to_dict() for c in checks],
             "not_checked": not_checked,
+            "unavailable": unavailable,
+            "coverage_complete": not degraded,
             "domain_context": domain_ev.to_dict(),
             "note": ("Only checks that returned a positive hit became exposures. Where a check "
-                     "could not run, that is reported as not_checked — no membership is guessed."),
+                     "could not run — nothing supplied, rate-limited, timed out — it is listed "
+                     "in not_checked. An unreachable source is never counted as a clear one, "
+                     "and no membership is guessed."),
         }
 
     def verify_password_exposure(password: str) -> dict:
@@ -734,6 +802,16 @@ def build_tools(ctx: ToolContext) -> dict[str, Callable]:
             ctx.profile, verified=graded,
             include_guessed=bool(search_guessed))
 
+        # What the user has ALREADY decided about each record, read before
+        # record_exposure() overwrites the row. Keyed the same way the memory
+        # layer keys an exposure: (source_id, record_id).
+        _existing_rows = ctx.memory.get_exposures(ctx.user_id)
+        _prior_by_key = {(e["source_id"], e["record_id"] or ""): e for e in _existing_rows}
+        # Statuses that only a human (or a dispatched request) can have set. A
+        # candidate in one of these has been ruled on and must not be re-parked.
+        _USER_SETTLED = ("exposed", "not_mine", "requested", "acknowledged",
+                         "removed", "reappeared")
+
         def _record(hit: dict, mine: bool):
             pb = find_playbook(hit["site"])
             att = hit.get("attribution", {})
@@ -767,11 +845,26 @@ def build_tools(ctx: ToolContext) -> dict[str, Callable]:
                 "evidence_class": "verified" if mine else "candidate",
                 "evidence": [ev],
             }
+            prior = _prior_by_key.get((exp["source_id"], exp["record_id"] or ""))
             exp_id, is_new = ctx.memory.record_exposure(ctx.user_id, ctx.run_id, exp)
             # A candidate is parked. It is kept out of the ledger, the risk
             # score and the removal plan until the user confirms it is theirs.
+            #
+            # But only a candidate the user has not already ruled on.
+            # record_exposure() preserves the row's status yet overwrites
+            # evidence_class and match_tier, so re-parking unconditionally
+            # silently undid confirm_account(): an account the user had
+            # confirmed dropped back out of the ledger and the risk score, and
+            # one they had rejected as "not mine" came back asking again.
             if not mine:
-                ctx.memory.set_exposure_status(exp_id, "unconfirmed")
+                if prior and prior.get("status") in _USER_SETTLED:
+                    ctx.memory.update_exposure(
+                        exp_id,
+                        evidence_class=prior.get("evidence_class") or "",
+                        match_tier=prior.get("match_tier") or "",
+                        severity=prior.get("severity") or "low")
+                else:
+                    ctx.memory.set_exposure_status(exp_id, "unconfirmed")
             return {"exposure_id": exp_id, "site": hit["site"], "username": hit["username"],
                     "url": hit["url"], "tier": att.get("tier"),
                     "collision_risk": hit.get("collision_risk"),
@@ -863,7 +956,16 @@ def build_tools(ctx: ToolContext) -> dict[str, Callable]:
         else:
             from backend.agent.fiduciary_directory import get_fiduciary_contact
             fiduciary = get_fiduciary_contact(exp["source_name"])
-            if fiduciary and fiduciary.get("self_serve_url"):
+            # Only a CURATED directory entry describes a route somebody looked
+            # up. The fallback entry synthesises its fields from the source's
+            # name — "Wattpad" yields https://www.wattpad.com/privacy — and
+            # flags itself contact_tier="synthesised" precisely so a caller does
+            # not treat it as researched. Acting on it did two wrong things at
+            # once: it handed the user an invented link, and, by returning
+            # method="self_serve", it suppressed the statutory notice that the
+            # legal branch below would otherwise have warranted.
+            if (fiduciary and fiduciary.get("self_serve_url")
+                    and fiduciary.get("contact_tier") == "curated"):
                 pb = {
                     "id": exp["source_name"].lower(),
                     "service": fiduciary.get("company_name", exp["source_name"]),
@@ -973,58 +1075,115 @@ def build_tools(ctx: ToolContext) -> dict[str, Callable]:
                  f"{', '.join(k for k, _ in checked)}…",
                  tool_name="match_unique_identifiers")
 
-        _pastes._load()
-        corpus = getattr(_pastes, "_pastes", []) or []
-        hits = []
+        # REAL leak corpora, not the shipped sample. The only paste corpus in
+        # the repo is data/synthetic_pastes/pastes_corpus.json — randomly
+        # GENERATED records for fictional people (data/download_datasets.py
+        # generate_synthetic_pastes). Searching that and calling a hit "proof
+        # this record concerns you" asserted something untrue about real
+        # people's data, so this tool now queries services that index actual
+        # dumps. Both are free and keyless, and both apply their own exact-match
+        # pass, so a substring coincidence cannot be reported as a match:
+        #   - ProxyNova combination lists: an address next to a PLAINTEXT
+        #     password. Worse than breach membership — nothing needs cracking.
+        #   - LeakCheck: breach membership for an email or a phone number.
+        #
+        # A third party going down must degrade to "could not check", never to
+        # "clear" — the same rule verify_breach_exposure follows.
+        def _safe_find(fn, *a):
+            try:
+                return fn(*a)
+            except Exception as exc:
+                return extra_sources.Finding(
+                    getattr(fn, "__name__", "leak_corpus"), str(a[0])[:40] if a else "",
+                    "", utcnow(), None, "unavailable",
+                    f"The check raised {type(exc).__name__}.",
+                    "COULD NOT CHECK — this is not a clean result.", "")
+
+        # No free corpus indexes these, so they must be reported as unchecked
+        # rather than quietly counted as searched and found nothing.
+        CORPUS_SEARCHABLE = {"email", "phone"}
+        _SEV = {"proxynova_combolist": "critical"}
+
+        hits, corpus_ran, corpus_unavailable, not_searchable = [], [], [], []
+
         for kind, value in checked:
-            needle = value.lower()
-            digits = "".join(c for c in value if c.isdigit())
-            for entry in corpus:
-                blob = json.dumps(entry, default=str).lower()
-                blob_digits = "".join(c for c in blob if c.isdigit())
-                found = (needle in blob) or (len(digits) >= 10 and digits in blob_digits)
-                if not found:
+            if kind not in CORPUS_SEARCHABLE:
+                not_searchable.append({
+                    "check": "leak_corpus", "kind": kind,
+                    "why": (f"No free leak corpus indexes {kind.upper()} values, so it "
+                            f"could not be searched. Absence of a finding here proves "
+                            f"nothing about your {kind.upper()}.")})
+                continue
+
+            if kind == "email":
+                findings = [_safe_find(extra_sources.check_proxynova_credentials, value),
+                            _safe_find(extra_sources.check_leakcheck, value, "email")]
+            else:
+                findings = [_safe_find(extra_sources.check_leakcheck, value, "phone")]
+
+            for f in findings:
+                corpus_ran.append(f.check)
+                if f.result == "unavailable":
+                    corpus_unavailable.append(f.check)
                     continue
-                title = entry.get("title") or entry.get("paste_id") or "leak dump"
-                ev = {
-                    "check": "unique_identifier_in_leak", "target": f"{kind}",
-                    "endpoint": f"(local corpus) {title}",
-                    "queried_at": utcnow(), "http_status": None, "result": "hit",
-                    "proof": f"Your {kind} appears verbatim in '{title}'.",
-                    "interpretation": (
-                        f"CONFIRMED: {kind} is unique to you, so a verbatim match is proof "
-                        f"this record concerns you — unlike a name match, which is not."),
-                    "reproduce": f"grep -i '{value[:4]}…' data/synthetic_pastes/pastes_corpus.json",
-                }
+                if f.result != "hit":
+                    continue
+
+                fields = [kind]
+                if f.check == "proxynova_combolist":
+                    fields.append("password")
                 exp = {
-                    "source_type": "paste", "source_name": title,
-                    "source_id": "leak:" + str(title), "record_id": kind,
-                    "data_found": [kind], "detail": {"identifier": kind, "source": title},
+                    "source_type": "paste", "source_name": f.check,
+                    "source_id": "leak:" + f.check + ":" + kind, "record_id": kind,
+                    "data_found": fields,
+                    "detail": {"identifier": kind, "source": f.check,
+                               "metadata": f.metadata},
                     "match_confidence": 1.0, "match_tier": "definite",
-                    "severity": "critical" if kind in ("aadhaar", "pan", "passport") else "high",
-                    "risk_score": 0.0,
-                    "evidence_class": "verified", "evidence": [ev],
+                    "severity": _SEV.get(f.check, "high"), "risk_score": 0.0,
+                    "evidence_class": "verified", "evidence": [f.to_dict()],
                 }
                 exp_id, is_new = ctx.memory.record_exposure(ctx.user_id, ctx.run_id, exp)
                 hits.append({"exposure_id": exp_id, "identifier": kind,
-                             "source": title, "is_new": is_new})
-                break   # one hit per identifier is enough to establish exposure
+                             "source": f.check, "is_new": is_new})
+
+        corpus_complete = bool(corpus_ran) and not corpus_unavailable
 
         for bad in invalid:
             ctx.emit("discovery", "identifiers",
                      f"{bad['kind'].upper()} rejected: {bad['why']}", status="error")
 
-        ctx.emit("discovery", "identifiers",
-                 f"Identifier search complete: {len(hits)} confirmed exposure(s) across "
-                 f"{len(corpus)} leak record(s).",
-                 tool_output={"hits": len(hits)})
+        if corpus_unavailable:
+            ctx.emit("discovery", "identifiers",
+                     f"Leak-corpus search INCOMPLETE — {len(corpus_unavailable)} of "
+                     f"{len(corpus_ran)} corpus check(s) could not be reached "
+                     f"({', '.join(sorted(set(corpus_unavailable)))}). "
+                     f"{len(hits)} confirmed exposure(s) from the checks that did run; "
+                     f"absence of a finding in the rest proves nothing.",
+                     status="error",
+                     tool_output={"hits": len(hits), "corpus_complete": False})
+        elif corpus_ran:
+            ctx.emit("discovery", "identifiers",
+                     f"Leak-corpus search complete: {len(hits)} confirmed exposure(s) "
+                     f"across {len(corpus_ran)} real corpus check(s) "
+                     f"({', '.join(sorted(set(corpus_ran)))}).",
+                     tool_output={"hits": len(hits), "corpus_complete": True})
+        else:
+            ctx.emit("discovery", "identifiers",
+                     "No identifier could be searched against a leak corpus — the free "
+                     "corpora index email addresses and phone numbers only. This is not "
+                     "a clean result for the identifiers that could not be searched.",
+                     status="error",
+                     tool_output={"hits": 0, "corpus_complete": False})
 
         return {
             "searched": [k for k, _ in checked],
             "supplied": supplied,
             "invalid": invalid,
             "hits": hits,
-            "corpus_size": len(corpus),
+            "corpus_checks_run": sorted(set(corpus_ran)),
+            "corpus_unavailable": sorted(set(corpus_unavailable)),
+            "corpus_complete": corpus_complete,
+            "not_checked": not_searchable,
             "where_each_helps": {
                 "email": "Identifier-keyed lookups (Gravatar, HIBP), leak matching, and "
                          "corroborating a profile page.",
@@ -1172,6 +1331,25 @@ def build_tools(ctx: ToolContext) -> dict[str, Callable]:
                      "and just as final as a statutory notice.")
             confidence = 0.92
 
+        elif exp["source_type"] == "open_web":
+            # search_open_web() records the DOMAIN as source_name and the exact
+            # URL as record_id, having fetched the page and found the identifier
+            # in it verbatim. Falling through to the catch-all below described
+            # that as "an unattributed dump with no identifiable controller" and
+            # marked it not_removable — so the strongest evidence the product
+            # produces was the one class it told the user it could do nothing
+            # about.
+            removable = True
+            action = "request_erasure"
+            basis = (f"A page served by {exp['source_name']} was fetched and the identifier "
+                     "found in it verbatim, so the publisher of that page is an identifiable "
+                     "controller processing this personal data: DPDP s.12 (and GDPR Art. 17 "
+                     "where it applies) reach it. Two carve-outs are worth confirming before "
+                     "serving — data published pursuant to a legal obligation is outside the "
+                     "Act by s.3(c)(ii), and journalistic publication is treated differently. "
+                     "Neither is assumed here.")
+            confidence = 0.80
+
         elif exp["source_type"] == "data_broker":
             removable = True
             action = "request_erasure"
@@ -1199,6 +1377,27 @@ def build_tools(ctx: ToolContext) -> dict[str, Callable]:
                          "close your account and completely erase personal data from active and backup systems, "
                          "accompanied by credential rotation.")
                 confidence = 0.92
+
+        elif exp["source_type"] == "infostealer":
+            # This used to land in the catch-all below, which called it an
+            # "unattributed dump" and told the user to MONITOR it. Both halves
+            # are wrong: nothing was published, and the credentials are known to
+            # an attacker right now, so passive monitoring is the one response
+            # that guarantees the compromise persists.
+            removable = False
+            action = "secure_accounts"
+            basis = ("Info-stealer malware ran on the data principal's OWN device and exfiltrated "
+                     "the browser credential store live. Nothing was published by a third party, "
+                     "so there is no controller for a DPDP s.12 notice to address — and equally, "
+                     "this is not something to monitor for republication: the credentials are "
+                     "already in an attacker's hands. The remedy is immediate rotation of every "
+                     "password saved in that browser (email first, then the SIM/telecom account, "
+                     "then banking and UPI), revocation of active sessions and auth tokens, and "
+                     "cleaning or rebuilding the infected machine BEFORE the new passwords are "
+                     "typed into it. Where a particular service's account was taken over as a "
+                     "result, an erasure or account-closure request against that service remains "
+                     "available on its own footing.")
+            confidence = 0.85
 
         else:
             removable = False
@@ -1246,7 +1445,8 @@ def build_tools(ctx: ToolContext) -> dict[str, Callable]:
             return {"error": f"No exposure {exposure_id}"}
 
         from backend.agent.fiduciary_directory import is_darkweb_dump, get_fiduciary_contact
-        if exp["source_type"] not in ("data_broker", "breach", "public_profile", "declared"):
+        if exp["source_type"] not in ("data_broker", "breach", "public_profile",
+                                      "declared", "open_web"):
             return {"error": "Erasure notices are only servable on an identified controller.",
                     "exposure_id": exposure_id}
         if exp["source_type"] == "breach" and (is_darkweb_dump(exp["source_name"]) or is_darkweb_dump(exp["source_id"])):
@@ -1308,6 +1508,8 @@ def build_tools(ctx: ToolContext) -> dict[str, Callable]:
             company_name=spec.get("company_name") or spec.get("operator") or spec.get("name", exp["source_name"]),
             company_address=spec.get("address") or spec.get("privacy_url", "Corporate Grievance Office"),
             detected_pii_summary=pii_summary,
+            ai_tailored=True,
+            exposure_context=f"Source: {exp.get('source_name')} ({exp.get('source_type')}). Discovered telemetry: {json.dumps(exp.get('detail') or {})[:200]}",
         )
         if gen.get("status") != "generated":
             return {"error": gen.get("message", "notice generation failed")}
@@ -1349,7 +1551,15 @@ def build_tools(ctx: ToolContext) -> dict[str, Callable]:
         if not exp:
             return {"error": "Exposure missing for this request."}
 
-        if not ctx.auto_approve and req["status"] == "awaiting_approval":
+        # Approval is carried by the RUN, not by the row. Gating on
+        # `req["status"] == "awaiting_approval"` left every other status open:
+        # a dispatch that was refused or failed leaves the request at
+        # "awaiting_send", and a second, unapproved call then sailed past this
+        # check and served the notice. ctx.auto_approve is set only by
+        # run_remediation(), which is only reached from /api/agent/approve with
+        # the request ids the user explicitly approved — so that, and nothing
+        # else, is what authorises an irreversible outward action.
+        if not ctx.auto_approve:
             ctx.emit("action", "approval",
                      f"Awaiting user approval to serve notice on {exp['source_name']}.",
                      tool_output={"request_id": request_id}, status="awaiting_approval")
@@ -1452,11 +1662,21 @@ def build_tools(ctx: ToolContext) -> dict[str, Callable]:
                 confirmation_id=od.get("message_id", "") or "")
             if od.get("status") == "sent":
                 ctx.memory.set_exposure_status(req["exposure_id"], "requested")
-            return {"request_id": request_id, "service": exp["source_name"],
-                    "dispatch": od, "officer": officer.to_dict(),
+            # "status"/"broker" are what every caller keys on (the sandbox
+            # branch below returns them). Omitting them here meant the real
+            # path — the only one that runs, since ctx.sandbox is always False
+            # — always read as "not submitted": the remediation loops in
+            # orchestrator.py and multi_agent_swarm.py skipped their follow-up,
+            # verification and escalation for every notice, silently.
+            sent = od.get("status") == "sent"
+            return {"status": "submitted" if sent else "not_sent",
+                    "request_id": request_id,
+                    "broker": exp["source_name"], "service": exp["source_name"],
+                    "dispatch": od, "dispatch_status": od.get("status"),
+                    "officer": officer.to_dict(),
                     "smtp": smtp_status(),
                     "note": ("A statutory notice was emailed to the controller's published "
-                             "grievance officer." if od.get("status") == "sent" else
+                             "grievance officer." if sent else
                              "Nothing was transmitted. The drafted notice is exported for you "
                              "to send from your own mail client.")}
 
@@ -1495,6 +1715,21 @@ def build_tools(ctx: ToolContext) -> dict[str, Callable]:
         ctx.emit("followup", "poll", f"Following up on request {req['reference_id']}…",
                  tool_name="check_request_status")
         res = ctx.network.check_status(req["confirmation_id"])
+        # A notice served by EMAIL has no pollable state machine here: its
+        # confirmation id is an SMTP Message-ID, which the broker network has
+        # never heard of. It answered {"status": "error"}, which mapped to "keep
+        # the current status" and was then emitted as "None -> submitted" while
+        # incrementing followup_count — a follow-up that never happened, logged
+        # against a controller that was never contacted.
+        if res.get("status") == "error":
+            ctx.emit("followup", "poll",
+                     f"No machine-readable status exists for request {req['reference_id']} "
+                     f"— {res.get('message')} It remains {req['status']}; the controller's "
+                     f"reply, if any, arrives in your own mailbox.",
+                     tool_output=res, status="error")
+            return {"request_id": request_id, "status": req["status"], "pollable": False,
+                    "followups": req["followup_count"] or 0,
+                    "note": res.get("message")}
         status_map = {"completed": "completed", "acknowledged": "acknowledged", "submitted": "submitted"}
         new_status = status_map.get(res.get("status", ""), req["status"])
 
@@ -1565,7 +1800,14 @@ def build_tools(ctx: ToolContext) -> dict[str, Callable]:
             "jurisdiction": req["jurisdiction"], "statute": req["statute"],
             "deadline_passed": bool(overdue), "deadline": deadline,
             "status": "escalated",
-            "grounds": "Controller failed to respond within the statutory period.",
+            # The grounds must match the facts. This asserted a blown statutory
+            # period unconditionally, including on a notice served minutes
+            # earlier whose own deadline_passed field said False.
+            "grounds": ("Controller failed to respond within the statutory period."
+                        if overdue else
+                        "Controller has not verifiably complied. The statutory period has not "
+                        "yet expired, so this is lodged as a pre-emptive complaint record, not "
+                        "as an allegation of a missed deadline."),
         }
 
     def search_open_web() -> dict:
@@ -1647,7 +1889,7 @@ def build_tools(ctx: ToolContext) -> dict[str, Callable]:
     def analyze_threat_surface() -> dict:
         """Perform cross-exposure correlation to map multi-vector attack surfaces:
         credential stuffing risk, spear-phishing exposure, and SIM swap vulnerability.
-        Generates an actionable Sovereign Privacy defense hardening matrix."""
+        Generates an actionable ApniPehChaan defense hardening matrix."""
         exposures = ctx.memory.get_exposures(ctx.user_id)
         p = ctx.profile
 

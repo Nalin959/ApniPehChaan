@@ -1,1 +1,1 @@
-"""Agentic layer for SovereignPrivacy AI."""
+"""Agentic layer for ApniPehChaan."""

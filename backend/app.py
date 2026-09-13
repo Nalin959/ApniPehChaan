@@ -1,5 +1,5 @@
 """
-app.py — SovereignPrivacy AI: FastAPI Backend Server.
+app.py — ApniPehChaan: FastAPI Backend Server.
 
 Main server providing REST API endpoints and WebSocket for real-time
 scan feed. Orchestrates all scanner, PII, and remediation modules.
@@ -12,9 +12,9 @@ import sys
 from datetime import datetime
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -36,6 +36,7 @@ from backend.pii.risk_calculator import RiskCalculator
 from backend.remediation.notice_generator import NoticeGenerator
 from backend.remediation.audit_crypto import AuditTrail
 from backend.remediation.statutory_tracker import StatutoryTracker
+from backend.agent.supabase_memory import SupabaseUnavailable
 
 # ─── Global Instances ──────────────────────────────────────────────────────────
 
@@ -85,7 +86,7 @@ FRONTEND_DIR = os.path.join(PROJECT_ROOT, "frontend")
 async def lifespan(app: FastAPI):
     # Startup
     print("=" * 60)
-    print("  SovereignPrivacy AI — Server Starting")
+    print("  ApniPehChaan — Server Starting")
     print("=" * 60)
     print(f"  Breaches loaded:   {hibp_scanner.get_breach_count()}")
     print(f"  Data brokers:      {broker_scanner.get_broker_count()}")
@@ -103,23 +104,45 @@ async def lifespan(app: FastAPI):
     print("=" * 60)
     yield
     # Shutdown
-    print("SovereignPrivacy AI — Server Stopped")
+    print("ApniPehChaan — Server Stopped")
 
 
 app = FastAPI(
-    title="SovereignPrivacy AI",
+    title="ApniPehChaan",
     description="Digital Identity & Sovereign Privacy Protection Agent",
     version="1.0.0",
     lifespan=lifespan,
 )
 
+# allow_credentials must stay False. Starlette cannot honour "*" together with
+# credentials (the Fetch spec forbids it), so it silently switches to echoing
+# the caller's Origin back with Access-Control-Allow-Credentials: true —
+# verified: a request from https://evil.example carrying a cookie came back
+# with "Access-Control-Allow-Origin: https://evil.example". That is a strictly
+# more permissive policy than the wildcard it looks like. Nothing here
+# authenticates with cookies or an Authorization header, so no caller needs
+# credentialed CORS.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# The cloud store answering 5xx (or not answering) is a dependency outage, not
+# a bug in the request: it used to escape urllib as HTTPError and surface as an
+# opaque HTTP 500, e.g. POST /api/agent/scan dying on a Supabase 504.
+@app.exception_handler(SupabaseUnavailable)
+async def _storage_unavailable(request: Request, exc: SupabaseUnavailable):
+    return JSONResponse(
+        status_code=503,
+        content={"error": "storage_unavailable",
+                 "detail": "The persistence backend is unreachable. Nothing was recorded; "
+                           "retry shortly.",
+                 "cause": str(exc)},
+    )
 
 # Mount frontend static files
 if os.path.isdir(FRONTEND_DIR):
@@ -146,6 +169,21 @@ class NoticeRequest(BaseModel):
     company_email: str = ""
     company_address: str = ""
     detected_pii_summary: str = ""
+    ai_tailored: bool = True
+    exposure_context: str = ""
+
+class LegalChatRequest(BaseModel):
+    message: str
+    history: list[dict] = []
+    jurisdiction: str = "dpdp"
+    company_name: str = ""
+    company_email: str = ""
+    company_address: str = ""
+    user_name: str = ""
+    user_email: str = ""
+    user_phone: str = ""
+    detected_pii: str = ""
+    current_notice: str = ""
 
 class TrackRequest(BaseModel):
     jurisdiction: str = "dpdp"
@@ -174,7 +212,7 @@ async def serve_frontend():
     if os.path.isfile(index_path):
         with open(index_path, "r") as f:
             return HTMLResponse(content=f.read())
-    return HTMLResponse(content="<h1>SovereignPrivacy AI</h1><p>Frontend not found. Place files in /frontend/</p>")
+    return HTMLResponse(content="<h1>ApniPehChaan</h1><p>Frontend not found. Place files in /frontend/</p>")
 
 
 # ─── Routes: System Info ──────────────────────────────────────────────────────
@@ -184,7 +222,7 @@ async def system_status():
     """Return system health and dataset statistics."""
     return {
         "status": "operational",
-        "agent": "SovereignPrivacy AI",
+        "agent": "ApniPehChaan",
         "version": "1.0.0",
         "timestamp": datetime.now().isoformat(),
         "datasets": {
@@ -220,6 +258,87 @@ async def dataset_summary():
     }
 
 
+# ─── Scanning helpers ─────────────────────────────────────────────────────────
+
+def _breach_entity_type(data_class: str) -> str:
+    """
+    Map a HIBP breach data class onto the PII entity type it actually is.
+
+    A leaked password used to be reported here as entity_type "CREDIT_CARD",
+    with the comment "elevate severity". It did not even do that — the risk
+    calculator weights PASSWORD at 9.0 and CREDIT_CARD at 8.5 — but it did put
+    "CREDIT_CARD" into risk_assessment.exposures_by_severity and trip the
+    recommendation "URGENT: Credit card numbers detected in breach data.
+    Contact your bank immediately to block and reissue affected cards" for a
+    user whose card was never in the breach. Report what leaked.
+    """
+    dc = (data_class or "").lower()
+    # Order matters: "Email addresses", "IP addresses" and "Physical addresses"
+    # all contain "address", and the old chain resolved all three to ADDRESS.
+    for needles, entity in (
+        (("password",), "PASSWORD"),
+        (("auth token", "session token"), "AUTH_TOKEN"),
+        (("security question", "security answer"), "SECURITY_ANSWER"),
+        (("email",), "EMAIL"),
+        (("ip address",), "IP_ADDRESS"),
+        (("phone", "mobile"), "PHONE_IN"),
+        (("physical address", "geographic location", "home address"), "ADDRESS"),
+        (("date of birth", "dates of birth", "age group"), "DATE_OF_BIRTH"),
+        (("credit card", "payment card"), "CREDIT_CARD"),
+        (("bank account",), "BANK_ACCOUNT"),
+        (("passport",), "PASSPORT"),
+        (("government issued id", "national id"), "GOVERNMENT_ID"),
+        (("social security",), "SSN"),
+        (("private message", "chat log"), "PRIVATE_MESSAGE"),
+        (("income", "salar"), "INCOME"),
+        (("employer", "job title"), "EMPLOYER"),
+        (("vehicle", "licence plate", "license plate"), "VEHICLE"),
+        (("username", "screen name"), "USERNAME"),
+        (("name", "salutation"), "NAME"),
+    ):
+        if any(n in dc for n in needles):
+            return entity
+    # Anything unrecognised keeps its own label and so carries the risk
+    # calculator's neutral default weight. Falling back to "EMAIL" asserted
+    # that an email address had leaked for classes like "Genders",
+    # "Purchases" and "Browser user agent details" — 170 distinct data
+    # classes in the catalogue all reported as the same exposure.
+    return (data_class or "UNKNOWN").strip().upper().replace(" ", "_") or "UNKNOWN"
+
+
+# The legacy /api/scan/* and /ws/scan endpoints read
+# data/synthetic_pastes/pastes_corpus.json, which download_datasets.py
+# GENERATES: invented people with invented Aadhaar, PAN and account numbers.
+# Whatever attribution rule the scanner applies, a record that was fabricated
+# by a generator was never about this user, so it cannot be one of their
+# exposures. This layer used to fold every entity out of every "matching"
+# record straight into the user's exposure list with source_type
+# "dark_web_paste" — strangers' invented identifiers presented as the user's
+# confirmed dark-web leaks, and fed into the risk score and the audit receipt.
+#
+# The endpoints stay (they are documented and their dataset counts are used by
+# /api/status), but they no longer attribute anything from this corpus. The
+# live agent path — /api/agent/scan and /ws/agent — is untouched.
+SYNTHETIC_PASTE_DISCLOSURE = (
+    "The bundled paste corpus under data/synthetic_pastes/ is generated test data, "
+    "not a real leak archive. Records from it are never attributed to a user, "
+    "never scored, and never written to the audit trail. Use the Privacy Agent "
+    "(/api/agent/scan) for real, evidence-backed discovery."
+)
+
+
+def _non_attributing_paste_result(result: dict) -> dict:
+    """Keep the corpus statistics; drop every attributed match."""
+    return {
+        "status": "synthetic_corpus_not_attributed",
+        "matches": [],
+        "attributed": False,
+        "disclosure": SYNTHETIC_PASTE_DISCLOSURE,
+        "corpus_records_scanned": (result or {}).get("stats", {}).get("total_pastes_checked",
+                                                                     paste_scanner.get_paste_count()),
+    }
+
+
 # ─── Routes: Scanning ─────────────────────────────────────────────────────────
 
 @app.post("/api/scan/full")
@@ -241,39 +360,22 @@ async def full_scan(req: ScanRequest):
     # Run all scans
     hibp_results = hibp_scanner.scan(req.email, req.name)
     broker_results = broker_scanner.scan(req.name, req.email, req.phone, req.city)
-    paste_results = paste_scanner.scan(user_profile)
+    paste_results = _non_attributing_paste_result(paste_scanner.scan(user_profile))
 
     # Aggregate exposures for risk calculation
     exposures = []
 
     for breach in hibp_results.get("breaches", []):
         for dc in breach.get("data_classes", []):
-            dc_lower = dc.lower()
-            etype = "EMAIL"
-            if "password" in dc_lower:
-                etype = "CREDIT_CARD"  # elevate severity
-            elif "phone" in dc_lower:
-                etype = "PHONE_IN"
-            elif "address" in dc_lower:
-                etype = "ADDRESS"
-            elif "name" in dc_lower:
-                etype = "NAME"
-
             exposures.append({
-                "entity_type": etype,
+                "entity_type": _breach_entity_type(dc),
                 "source_type": "hibp_verified",
                 "date_found": breach.get("breach_date"),
                 "value": f"[from {breach.get('name', 'unknown breach')}]",
             })
 
-    for match in paste_results.get("matches", []):
-        for entity in match.get("entities_found", []):
-            exposures.append({
-                "entity_type": entity.get("entity_type", "UNKNOWN"),
-                "source_type": "dark_web_paste",
-                "date_found": match.get("date_found"),
-                "value": entity.get("value", ""),
-            })
+    # Nothing from the synthetic paste corpus enters `exposures`: see
+    # SYNTHETIC_PASTE_DISCLOSURE above.
 
     # Calculate risk
     broker_matches = broker_results.get("stats", {}).get("high_risk_matches", 0)
@@ -284,7 +386,7 @@ async def full_scan(req: ScanRequest):
     receipt = audit_trail.add("FULL_SCAN_COMPLETED", {
         "user_email_hash": __import__('hashlib').sha256(req.email.encode()).hexdigest()[:16] if req.email else "none",
         "breaches_found": len(hibp_results.get("breaches", [])),
-        "paste_matches": len(paste_results.get("matches", [])),
+        "paste_matches": 0,
         "broker_matches": broker_matches,
         "risk_score": risk_assessment.overall_score,
     })
@@ -299,11 +401,12 @@ async def full_scan(req: ScanRequest):
         "audit_receipt": receipt.to_dict(),
         "summary": {
             "total_breaches": len(hibp_results.get("breaches", [])),
-            "total_paste_matches": len(paste_results.get("matches", [])),
+            "total_paste_matches": 0,
             "total_broker_matches": broker_matches,
             "risk_score": risk_assessment.overall_score,
             "risk_level": risk_assessment.risk_level,
         },
+        "disclosure": SYNTHETIC_PASTE_DISCLOSURE,
     }
 
 
@@ -329,8 +432,8 @@ async def scan_brokers(req: ScanRequest):
 async def scan_pastes(req: ScanRequest):
     """Scan dark-web paste corpus only."""
     user_profile = {"name": req.name, "email": req.email, "phone": req.phone, "aadhaar": req.aadhaar, "pan": req.pan}
-    result = paste_scanner.scan(user_profile)
-    receipt = audit_trail.add("PASTE_SCAN", {"matches_found": result.get("stats", {}).get("matches_found", 0)})
+    result = _non_attributing_paste_result(paste_scanner.scan(user_profile))
+    receipt = audit_trail.add("PASTE_SCAN", {"matches_found": 0, "corpus": "synthetic"})
     result["audit_receipt"] = receipt.to_dict()
     return result
 
@@ -450,7 +553,9 @@ async def get_jurisdictions():
 @app.post("/api/legal/generate")
 async def generate_notice(req: NoticeRequest):
     """Generate a statutory legal erasure notice."""
-    result = notice_generator.generate(
+    # ai_tailored=True makes a blocking LLM call inside notice_generator.
+    result = await asyncio.to_thread(
+        notice_generator.generate,
         jurisdiction=req.jurisdiction,
         user_name=req.user_name,
         user_email=req.user_email,
@@ -459,6 +564,8 @@ async def generate_notice(req: NoticeRequest):
         company_name=req.company_name,
         company_address=req.company_address,
         detected_pii_summary=req.detected_pii_summary,
+        ai_tailored=req.ai_tailored,
+        exposure_context=req.exposure_context,
     )
 
     if result.get("status") == "generated":
@@ -466,9 +573,252 @@ async def generate_notice(req: NoticeRequest):
             "reference_id": result.get("reference_id"),
             "jurisdiction": req.jurisdiction,
             "company": req.company_name,
+            "ai_generated": result.get("ai_generated", False),
+            "ai_model": result.get("ai_model"),
         })
 
     return result
+
+
+@app.post("/api/legal/chat")
+async def legal_chat(req: LegalChatRequest):
+    """
+    Interactive Legal Counsel Chatbot for Statutory Notice Studio.
+    Grounds legal drafting, amends notices, cites penalty schedules, and drafts formal notices.
+    Works dynamically for any unknown or user-specified company.
+    """
+    user_msg = (req.message or "").strip()
+    if not user_msg:
+        raise HTTPException(status_code=400, detail="Message cannot be empty")
+
+    from backend.agent.openai_compat_planner import get_llm_completion
+    from backend.remediation.notice_generator import JURISDICTIONS
+    import re
+    import hashlib
+    from datetime import datetime, timedelta
+
+    jurisdiction_info = JURISDICTIONS.get(req.jurisdiction.lower(), JURISDICTIONS["dpdp"])
+    statute_name = jurisdiction_info.get("name", "Digital Personal Data Protection Act, 2023")
+    statute_cite = jurisdiction_info.get("statute", "Sections 12 & 13, DPDP Act 2023")
+    escalation_body = jurisdiction_info.get("escalation_body", "Data Protection Board of India (DPBI)")
+    default_deadline = jurisdiction_info.get("response_deadline_days", 30)
+
+    user_name = req.user_name.strip() or "Data Principal"
+    user_email = req.user_email.strip() or "[User Email on Record]"
+    user_phone = req.user_phone.strip() or "[User Phone on Record]"
+    
+    company_name = req.company_name.strip()
+    company_email = req.company_email.strip()
+    company_address = req.company_address.strip()
+
+    # Dynamic company detection: extract ANY unknown or named company from user prompt
+    patterns = [
+        r"(?:change|switch|update|set)\s*(?:the)?\s*(?:target|company|fiduciary|entity)?\s*(?:name)?\s*(?:to|as)\s+([A-Za-z0-9\s\.\,\&\|\-\'\"]+)",
+        r"(?:target|company|fiduciary)\s*[:=]\s*([A-Za-z0-9\s\.\,\&\|\-\'\"]+)",
+        r"(?:draft|write|create|send|issue|generate)?\s*(?:a|an)?\s*(?:statutory)?\s*(?:notice|demand|letter)\s*(?:for|to|against|regarding)\s+([A-Za-z0-9\s\.\,\&\|\-\'\"]+?)(?:\s+(?:under|citing|demanding|with|for|in|based|\.|\n|$)|$)",
+        r"(?:notice|demand|erasure)\s*(?:for|to|against)\s+([A-Za-z0-9\s\.\,\&\|\-\'\"]+?)(?:\s+(?:under|citing|demanding|with|for|in|based|\.|\n|$)|$)",
+    ]
+    for pat in patterns:
+        m = re.search(pat, user_msg, re.IGNORECASE)
+        if m:
+            cand = m.group(1).strip(" \"'.,:;")
+            cand_lower = cand.lower()
+            stop_words = {"the company", "them", "data fiduciary", "this company", "notice", "me", "dpdp", "gdpr", "ccpa", "more legal terms", "legal terms", "penalties", "7 days", "immediate", "erasure"}
+            if cand and cand_lower not in stop_words and len(cand) >= 2:
+                company_name = cand
+                break
+
+    if not company_name or company_name == "[Target Data Fiduciary / Company]":
+        company_name = "Data Fiduciary"
+
+    company_email = company_email if company_email and company_email != "[Privacy / Grievance Officer Email]" else ""
+    company_address = company_address or ""
+
+    system_prompt = f"""You are the Senior Statutory Legal Counsel and Automated Notice Drafting Specialist at ApniPehChaan.
+You assist users in understanding data protection legislation and drafting legally airtight, binding data erasure and privacy compliance notices.
+
+PRIMARY STATUTORY FRAMEWORKS:
+1. India: Digital Personal Data Protection (DPDP) Act, 2023
+   - Section 12: Right to correction and erasure of personal data.
+   - Section 13: Right of grievance redressal (mandatory response within reasonable/prescribed period).
+   - Section 33 & Schedule: Penalties up to ₹250 Crores for significant breaches / non-compliance, enforced by the Data Protection Board of India (DPBI).
+2. European Union: General Data Protection Regulation (GDPR)
+   - Article 17: Right to erasure ('Right to be Forgotten').
+   - Article 19: Notification obligation regarding erasure.
+   - Article 83: Administrative fines up to €20,000,000 or 4% of worldwide annual turnover.
+3. California: California Consumer Privacy Act / CPRA (Cal. Civ. Code § 1798.105 / § 1798.120).
+
+CURRENT CONTEXT:
+- Active Jurisdiction: {req.jurisdiction.upper()} ({statute_name})
+- Statutory Citation: {statute_cite}
+- Regulatory Escalation Authority: {escalation_body}
+- Target Company / Data Fiduciary: {company_name}
+- Privacy Officer Email: {company_email}
+- User (Data Principal): {user_name} (Email: {user_email}, Phone: {user_phone})
+- Detected PII / Scope of Erasure: {req.detected_pii or 'Compromised personal data including contact information and identifiers'}
+- Current Notice in Editor: {f'Present ({len(req.current_notice)} characters)' if req.current_notice else 'None'}
+
+COMPANY DISCOVERY & INTEL:
+- Companies will often be arbitrary or unknown entities. Do not rely on fixed hardcoded rosters.
+- As the Statutory Counsel Agent, determine the entity's exact corporate name, appropriate Grievance Officer / DPO email (e.g. grievance@domain, privacy@domain, or dpo@domain), and registered office address.
+- At the very start of your reply, ALWAYS output a metadata block:
+<<<TARGET_META>>>
+COMPANY_NAME: [Official Corporate Entity Name]
+COMPANY_EMAIL: [Grievance / DPO Email]
+COMPANY_ADDRESS: [Corporate Headquarters / Grievance Redressal Office]
+<<<END_TARGET_META>>>
+
+RULES:
+1. If the user asks to DRAFT, AMEND, TIGHTEN, REWRITE, ADD CLAUSES, or SHORTEN DEADLINES for the notice:
+   - Provide a concise legal briefing (1-2 short paragraphs) in Markdown explaining the statutory strategy applied.
+   - Output the COMPLETE, formal, professional statutory notice text enclosed strictly between:
+<<<START_NOTICE>>>
+[Complete formal statutory notice here, including Date, Reference ID, Addressee, Governing Legal Grounds, Specific PII to Erase, Third-Party Processor Audit demand, Written Confirmation Timeline, and Penalties for Non-Compliance]
+<<<END_NOTICE>>>
+2. If the user asks a STATUTORY QUESTION or seeks legal counsel:
+   - Answer directly and authoritatively in clear Markdown.
+   - Cite specific statutory sections, rights, and regulatory penalty amounts.
+   - Explain how they can enforce compliance through ApniPehChaan.
+3. Maintain an authoritative, commanding legal tone protecting the fundamental privacy rights of the data principal.
+"""
+
+    messages = [{"role": "system", "content": system_prompt}]
+    for h in (req.history or [])[-6:]:
+        role = h.get("role")
+        content = h.get("content")
+        if role in ("user", "assistant") and content:
+            messages.append({"role": role, "content": content})
+    messages.append({"role": "user", "content": user_msg})
+
+    # Every LLM call below goes out through the SYNCHRONOUS OpenAI/Anthropic
+    # clients, and get_llm_completion walks a list of providers x candidate models,
+    # each a full blocking round-trip. Called directly from an `async def` that
+    # froze the whole event loop for the duration — one chat message stalled every
+    # other request on the server, the live /ws/agent trace included, and a
+    # rate-limited key turned that into tens of seconds. They run on a worker
+    # thread now.
+    llm_res, model_used = await asyncio.to_thread(
+        get_llm_completion,
+        messages=messages,
+        max_tokens=1400,
+        temperature=0.2,
+    )
+
+    if not llm_res:
+        # Graceful fallback: generate notice or provide statutory answer
+        if any(w in user_msg.lower() for w in ["draft", "notice", "generate", "write", "create", "letter", "demand"]):
+            gen = await asyncio.to_thread(
+                notice_generator.generate,
+                jurisdiction=req.jurisdiction,
+                user_name=user_name,
+                user_email=user_email,
+                user_phone=user_phone,
+                company_name=company_name,
+                company_address=company_address,
+                detected_pii_summary=req.detected_pii,
+                ai_tailored=False,
+            )
+            notice_txt = gen.get("notice_text", "")
+            return {
+                "reply": f"I have generated a formal statutory erasure notice under **{statute_cite}** addressed to **{company_name}**. You can review and apply it directly to your notice preview.",
+                "has_notice": True,
+                "notice_text": notice_txt,
+                "reference_id": gen.get("reference_id"),
+                "receipt_hash": gen.get("receipt_hash"),
+                "response_deadline_days": gen.get("response_deadline_days", default_deadline),
+                "response_deadline": gen.get("response_deadline"),
+                "jurisdiction": req.jurisdiction,
+                "company_name": company_name,
+                "company_email": company_email,
+                "company_address": company_address,
+                "model": "deterministic_counsel_engine",
+                "suggested_prompts": [
+                    "Add ₹250 Cr DPDP penalty warning",
+                    "Reduce deadline to 7 business days",
+                    "Demand third-party processor erasure confirmation"
+                ]
+            }
+        else:
+            return {
+                "reply": f"Under **{statute_cite}**, data fiduciaries must comply with erasure requests within **{default_deadline} days**. Failure to comply can be escalated to the **{escalation_body}** with statutory penalties up to ₹250 Crores under Schedule 1 of the DPDP Act 2023.",
+                "has_notice": False,
+                "company_name": company_name,
+                "company_email": company_email,
+                "company_address": company_address,
+                "model": "deterministic_counsel_engine",
+                "suggested_prompts": [
+                    f"Draft statutory notice for {company_name}",
+                    "What are the penalties under Section 33?",
+                    "How do I file a complaint with DPBI?"
+                ]
+            }
+
+    # Extract dynamic company metadata resolved by the AI agent
+    meta_match = re.search(r"<<<TARGET_META>>>\s*(.*?)\s*<<<END_TARGET_META>>>", llm_res, re.DOTALL)
+    if meta_match:
+        meta_block = meta_match.group(1)
+        llm_res = (llm_res[:meta_match.start()] + "\n" + llm_res[meta_match.end():]).strip()
+        for line in meta_block.splitlines():
+            line = line.strip()
+            if line.startswith("COMPANY_NAME:"):
+                val = line.split(":", 1)[1].strip()
+                if val and not val.startswith("[") and val.lower() != "data fiduciary":
+                    company_name = val
+            elif line.startswith("COMPANY_EMAIL:"):
+                val = line.split(":", 1)[1].strip()
+                if val and "@" in val and not val.startswith("["):
+                    company_email = val
+            elif line.startswith("COMPANY_ADDRESS:"):
+                val = line.split(":", 1)[1].strip()
+                if val and not val.startswith("["):
+                    company_address = val
+
+    # Check for notice delimiters in LLM response
+    has_notice = False
+    notice_text = ""
+    clean_reply = llm_res
+
+    match = re.search(r"<<<START_NOTICE>>>\s*(.*?)\s*<<<END_NOTICE>>>", llm_res, re.DOTALL)
+    if match:
+        has_notice = True
+        notice_text = match.group(1).strip()
+        # Clean reply removes the delimited block
+        clean_reply = (llm_res[:match.start()] + "\n" + llm_res[match.end():]).strip()
+        if not clean_reply:
+            clean_reply = f"I have drafted the tailored statutory erasure demand for **{company_name}** citing **{statute_cite}**. You can review and apply it directly to your live notice editor."
+
+    ref_id = f"SP-{req.jurisdiction.upper()}-{datetime.utcnow().strftime('%Y%m%d')}-{hashlib.sha256((company_name + user_msg).encode()).hexdigest()[:8].upper()}"
+    receipt_hash = hashlib.sha256(notice_text.encode('utf-8')).hexdigest() if notice_text else ""
+    deadline_date = (datetime.utcnow() + timedelta(days=default_deadline)).strftime('%Y-%m-%d')
+
+    if has_notice:
+        audit_trail.add("LEGAL_CHATBOT_DRAFT", {
+            "reference_id": ref_id,
+            "company": company_name,
+            "jurisdiction": req.jurisdiction,
+            "model": model_used
+        })
+
+    return {
+        "reply": clean_reply,
+        "has_notice": has_notice,
+        "notice_text": notice_text,
+        "reference_id": ref_id,
+        "receipt_hash": receipt_hash,
+        "response_deadline_days": default_deadline,
+        "response_deadline": deadline_date,
+        "jurisdiction": req.jurisdiction,
+        "company_name": company_name,
+        "company_email": company_email,
+        "company_address": company_address,
+        "model": model_used,
+        "suggested_prompts": [
+            "Add ₹250 Cr DPDP penalty warning" if req.jurisdiction == "dpdp" else "Cite GDPR Article 83 maximum fines",
+            "Reduce deadline to 7 business days",
+            "Demand sub-processor and cloud backup purge",
+            "Switch to GDPR Article 17" if req.jurisdiction != "gdpr" else "Switch to DPDP Act 2023"
+        ]
+    }
 
 
 @app.post("/api/legal/dispatch")
@@ -618,32 +968,32 @@ async def websocket_scan(websocket: WebSocket):
 
                 await send_step("paste_start", f"Scanning dark-web paste corpus ({paste_scanner.get_paste_count()} entries)...", 60)
                 await asyncio.sleep(0.5)
-                paste_results = paste_scanner.scan(profile)
-                paste_matches = len(paste_results.get("matches", []))
-                await send_step("paste_done", f"Dark-web scan complete: {paste_matches} leak matches", 75)
+                paste_results = _non_attributing_paste_result(paste_scanner.scan(profile))
+                paste_matches = 0
+                await send_step("paste_done",
+                                "Dark-web corpus is synthetic test data — no matches attributed", 75)
                 await asyncio.sleep(0.3)
 
                 await send_step("risk_calc", "Computing Privacy Risk Score...", 80)
                 await asyncio.sleep(0.3)
 
                 # Aggregate exposures
+                # Identical classification to POST /api/scan/full. This loop
+                # used to label EVERY data class "EMAIL", so the same profile
+                # scored differently over the socket than over REST, and a
+                # breach of passwords and addresses was reported as three
+                # separate email exposures.
                 exposures = []
                 for breach in hibp_results.get("breaches", []):
                     for dc in breach.get("data_classes", []):
                         exposures.append({
-                            "entity_type": "EMAIL",
+                            "entity_type": _breach_entity_type(dc),
                             "source_type": "hibp_verified",
                             "date_found": breach.get("breach_date"),
                             "value": f"[{breach.get('name', '')}]",
                         })
-                for match in paste_results.get("matches", []):
-                    for entity in match.get("entities_found", []):
-                        exposures.append({
-                            "entity_type": entity.get("entity_type", "UNKNOWN"),
-                            "source_type": "dark_web_paste",
-                            "date_found": match.get("date_found"),
-                            "value": entity.get("value", ""),
-                        })
+                # The synthetic paste corpus contributes nothing — see
+                # SYNTHETIC_PASTE_DISCLOSURE.
 
                 risk = risk_calculator.calculate(exposures, broker_matches, broker_results.get("stats", {}).get("total_brokers_checked", 0))
 
@@ -673,12 +1023,23 @@ async def websocket_scan(websocket: WebSocket):
                             "risk_score": risk.overall_score,
                             "risk_level": risk.risk_level,
                         },
+                        "disclosure": SYNTHETIC_PASTE_DISCLOSURE,
                     },
                 })
 
     except WebSocketDisconnect:
         ws_manager.disconnect(websocket)
-    except Exception as e:
+    except Exception as exc:
+        # Say why before hanging up. Swallowing this closed the socket in
+        # mid-scan with no frame at all, so the client could not tell a crash
+        # apart from a network drop and sat on a progress bar for ever.
+        try:
+            await websocket.send_json({
+                "type": "error",
+                "message": f"Scan failed: {type(exc).__name__}: {exc}",
+            })
+        except Exception:
+            pass
         ws_manager.disconnect(websocket)
 
 
@@ -706,6 +1067,7 @@ if __name__ == "__main__":
 # ══════════════════════════════════════════════════════════════════════════════
 
 import asyncio as _asyncio
+import queue as _queue
 import threading as _threading
 
 from backend.agent.memory import get_memory
@@ -728,10 +1090,10 @@ class AgentScanRequest(BaseModel):
     # valid grounds for a DPDP s.12 request, and needs no scraping.
     declared_accounts: str = ""
     # Optional. Checked k-anonymously — only a 5-char SHA-1 prefix is sent.
+    # `password` is the original single-value field; `passwords` carries every
+    # credential the user entered. Both are checked, de-duplicated.
     password: str = ""
-    # Opt-in demo environment. OFF by default: it plants synthetic records,
-    # which must never be mistaken for real findings.
-    sandbox: bool = False
+    passwords: list[str] = []
 
     # ── Optional corroborating identifiers ──
     # All optional. Each one lets more candidate profiles be resolved in either
@@ -772,17 +1134,66 @@ class AgentChatRequest(BaseModel):
     context: dict = Field(default_factory=dict)
 
 
+def _all_passwords(req: AgentScanRequest) -> list[str]:
+    """Every supplied credential, order preserved, de-duplicated. Empty strings
+    are dropped so a blank field cannot be checked as if it were a password."""
+    out: list[str] = []
+    for p in [req.password, *(req.passwords or [])]:
+        if p and p not in out:
+            out.append(p)
+    return out
+
+
 def _profile_of(req: AgentScanRequest) -> dict:
     return {"name": req.name, "email": req.email, "phone": req.phone,
             "city": req.city, "country": req.country or "IN",
             "declared_accounts": req.declared_accounts, "password": req.password,
-            "sandbox": False,
+            "passwords": _all_passwords(req),
             "alt_emails": req.alt_emails, "alt_phones": req.alt_phones,
             "known_usernames": req.known_usernames, "date_of_birth": req.date_of_birth,
             "upi_id": req.upi_id, "websites": req.websites,
             "search_guessed_handles": bool(req.search_guessed_handles),
             "pan": req.pan, "aadhaar": req.aadhaar, "passport": req.passport,
             "card_last4": req.card_last4}
+
+
+# Anything that can identify a person to search for. A request carrying none
+# of them has nothing to scan: it used to run the whole pipeline anyway and
+# mint an "anonymous" user row (on the cloud backend, a production row) whose
+# results belonged to no one and were then served to the next caller of
+# /api/agent/latest.
+_IDENTIFIER_FIELDS = ("email", "phone", "name", "declared_accounts", "known_usernames",
+                      "alt_emails", "alt_phones", "upi_id", "websites",
+                      "pan", "aadhaar", "passport", "card_last4")
+
+
+def _require_identifier(req: "AgentScanRequest") -> None:
+    if not any(str(getattr(req, f, "") or "").strip() for f in _IDENTIFIER_FIELDS):
+        raise HTTPException(
+            status_code=400,
+            detail=("At least one identifier is required — an email, phone, name, "
+                    "declared account or known username. There is nothing to search for."),
+        )
+
+
+def _owned_request_ids(user_id: str, request_ids: list[str]) -> None:
+    """
+    Refuse to dispatch a notice drafted for somebody else.
+
+    /api/agent/approve took request_ids on trust, and /api/agent/latest hands
+    the most recent user's request ids to any caller — so anyone could read an
+    id there and then have a statutory erasure notice served in that person's
+    name by approving it under their own profile. Approval has to be approval
+    BY the data principal the notice is for.
+    """
+    for rid in request_ids:
+        row = _memory.get_request(rid)
+        if not row:
+            raise HTTPException(status_code=404, detail=f"Unknown request {rid}.")
+        if row.get("user_id") != user_id:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Request {rid} was drafted for a different data principal.")
 
 
 def _dashboard_state(user_id: str) -> dict:
@@ -1019,7 +1430,7 @@ def _expert_privacy_reply(user_msg: str, tab: str, risk_score: float | None, exp
     if any(w in msg for w in ("truecaller", "naukri", "shaadi", "justdial", "self-serve", "self serve")):
         return (
             "### Self-Serve Removals vs Statutory Notices\n\n"
-            "A core rule of SovereignPrivacy AI: **A legal notice is the escalation, not the opening move.**\n\n"
+            "A core rule of ApniPehChaan: **A legal notice is the escalation, not the opening move.**\n\n"
             "- **Truecaller**: Direct unlisting form at `truecaller.com/unlisting` takes ~3 minutes and removes your number from public search.\n"
             "- **Naukri / Job Portals**: Profile deletion is directly available in Account Settings.\n"
             "- **Public Social Profiles**: Direct account deactivation or deletion avoids 30 days of waiting for a legal notice.\n\n"
@@ -1028,7 +1439,7 @@ def _expert_privacy_reply(user_msg: str, tab: str, risk_score: float | None, exp
     if any(w in msg for w in ("candidate", "username", "handle", "torvalds", "collision", "not mine")):
         return (
             "### Identity Attribution & Handle Collisions\n\n"
-            "Unlike simple scanners that assume any matching username belongs to you, SovereignPrivacy AI uses **strict attribution**:\n\n"
+            "Unlike simple scanners that assume any matching username belongs to you, ApniPehChaan uses **strict attribution**:\n\n"
             "- **Name collisions**: Usernames that match common names (like `@torvalds` or `@rahulsharma`) are shared by thousands across the web.\n"
             "- **Unconfirmed Candidates**: When an account is found with your searched handle, our agent parks it as an **unconfirmed candidate**.\n"
             "- **Your Control**: It is NOT counted in your risk score or removal plan until you click **'Yes, mine'**.\n"
@@ -1046,7 +1457,7 @@ def _expert_privacy_reply(user_msg: str, tab: str, risk_score: float | None, exp
         )
 
     return (
-        f"### SovereignPrivacy Rights Advisor\n\n"
+        f"### ApniPehChaan Rights Advisor\n\n"
         f"I am monitoring your privacy posture on the **{tab.replace('-', ' ').title()}** tab. "
         f"Currently, {exposure_count} exposures have been tracked.\n\n"
         f"**Actions you can take right now:**\n"
@@ -1058,20 +1469,35 @@ def _expert_privacy_reply(user_msg: str, tab: str, risk_score: float | None, exp
 
 
 
+@app.get("/api/agent/threat-surface/{user_id}")
+async def agent_threat_surface(user_id: str):
+    """Retrieve AI-correlated threat surface intelligence for a user."""
+    profile = _memory.get_user(user_id) or {}
+    exposures = [e for e in _memory.get_exposures(user_id) if e.get("status") != "not_mine"]
+    from backend.agent.multi_agent_swarm import ForensicsAgent
+    from backend.agent.tools import ToolContext, build_tools
+    from backend.mock_brokers.network import get_network
+    ctx = ToolContext(
+        memory=_memory, network=get_network(), user_id=user_id, run_id="",
+        profile=profile, emit=lambda *a, **kw: None, auto_approve=False
+    )
+    tools = build_tools(ctx)
+    agent = ForensicsAgent(ctx, tools)
+    # Also an LLM round-trip; same reason as above.
+    return await asyncio.to_thread(agent._analyze_threat_intelligence, profile, exposures)
+
+
+@app.get("/api/agent/threat-surface")
+async def agent_threat_surface_latest():
+    """Retrieve AI-correlated threat surface for the most recently active user."""
+    row = _memory._row("SELECT user_id FROM runs ORDER BY started_at DESC LIMIT 1")
+    if not row or not row.get("user_id"):
+        return {"overall_surface_grade": "MINIMAL", "threat_vectors": []}
+    return await agent_threat_surface(row["user_id"])
+
+
 def _chat_grounding(user_id: str | None = None) -> tuple[str, int]:
-    """
-    The user's ACTUAL findings, rendered for the assistant's system prompt.
-
-    Without this the assistant was told only a risk NUMBER and a COUNT, so the
-    most obvious question a user can ask — "which companies have my data?" —
-    could not be answered from evidence. What came back instead was a plausible
-    generic account of how a risk score is computed, listing contributors like
-    dark-web pastes and broker records that were not in this user's ledger at
-    all. That is exactly the fabrication this product exists to avoid, and it
-    was happening in the one component that talks directly to the user.
-
-    So the assistant is handed the real rows and told to answer only from them.
-    """
+    """Ground the Copilot on verified exposures, active notices, and threat vectors."""
     try:
         if not user_id:
             row = _memory._row("SELECT user_id FROM runs ORDER BY started_at DESC LIMIT 1")
@@ -1079,12 +1505,13 @@ def _chat_grounding(user_id: str | None = None) -> tuple[str, int]:
         if not user_id:
             return "", 0
         exposures = [e for e in _memory.get_exposures(user_id) if e.get("status") != "not_mine"]
+        requests = _memory.get_requests(user_id) if user_id else []
     except Exception:
         return "", 0
 
     if not exposures:
         return ("\nTHE USER'S ACTUAL FINDINGS: none recorded yet. No scan has produced an "
-                "exposure. Say so plainly rather than describing what a scan might find.\n"), 0
+                "exposure. Advise the user to deploy the Privacy Agent to discover their digital footprint.\n"), 0
 
     confirmed = [e for e in exposures if e.get("status") != "unconfirmed"]
     candidates = [e for e in exposures if e.get("status") == "unconfirmed"]
@@ -1101,9 +1528,17 @@ def _chat_grounding(user_id: str | None = None) -> tuple[str, int]:
     if len(confirmed) > 25:
         lines.append(f"  ...and {len(confirmed) - 25} more confirmed exposure(s).")
     if candidates:
-        lines.append(f"  {len(candidates)} UNCONFIRMED candidate(s) are held back pending the "
-                     f"user's confirmation and are NOT counted as theirs: "
+        lines.append(f"  {len(candidates)} UNCONFIRMED candidate(s) held back pending confirmation: "
                      + ", ".join(str(c.get("source_name")) for c in candidates[:8]))
+
+    if requests:
+        lines.append("\nACTIVE STATUTORY ERASURE NOTICES & COMPLIANCE DEADLINES:")
+        for r in requests[:6]:
+            lines.append(
+                f"  - Ref {r.get('reference_id')}: Controller={r.get('broker')} | "
+                f"Jurisdiction={str(r.get('jurisdiction')).upper()} | Status={r.get('status')} | "
+                f"Deadline={str(r.get('response_deadline', ''))[:10]}")
+
     lines.append(
         "  If asked something these rows do not answer, say you do not have it and suggest "
         "running a scan. Never name a company, a breach or a data type that is not listed "
@@ -1132,7 +1567,7 @@ async def agent_chat(req: AgentChatRequest):
         exposure_count = grounded_count
 
     system_prompt = (
-        "You are the SovereignPrivacy Rights Advisor — an expert privacy and statutory-rights assistant. "
+        "You are the ApniPehChaan Rights Advisor — an expert privacy and statutory-rights assistant. "
         "You help users identify personal data exposures, understand data privacy legislation (India DPDP Act 2023, EU GDPR, US CCPA), "
         "and assert their statutory rights to erasure, correction, and opt-out.\n\n"
         f"CURRENT SESSION CONTEXT:\n"
@@ -1153,45 +1588,36 @@ async def agent_chat(req: AgentChatRequest):
         + grounding
     )
 
-    # 1. Try OpenAI-compatible provider (e.g. Groq with openai/gpt-oss-120b)
-    from backend.agent.openai_compat_planner import configured_all, PROVIDERS, model_for
-    # Walk EVERY configured provider, not just the first. A free tier runs out
-    # — Gemini's is twenty requests a day — and stopping at the first one meant
-    # a working Groq key in the same .env was never tried. The user then saw
-    # the canned fallback text under a header claiming a model was active.
+    # 1. Primary: Gemini (with Groq as automatic backup)
+    from backend.agent.openai_compat_planner import get_llm_completion
     llm_errors: list[str] = []
-    for provider in configured_all():
-        try:
-            from openai import OpenAI
-            spec = PROVIDERS[provider]
-            model = model_for(provider)
-            client = OpenAI(api_key=os.environ[spec["key_env"]], base_url=spec["base_url"])
 
-            chat_messages = [{"role": "system", "content": system_prompt}]
-            for h in (req.history or [])[-6:]:
-                if h.content and h.role in ("user", "assistant"):
-                    chat_messages.append({"role": h.role, "content": h.content})
-            chat_messages.append({"role": "user", "content": user_msg})
+    chat_messages = [{"role": "system", "content": system_prompt}]
+    for h in (req.history or [])[-6:]:
+        if h.content and h.role in ("user", "assistant"):
+            chat_messages.append({"role": h.role, "content": h.content})
+    chat_messages.append({"role": "user", "content": user_msg})
 
-            resp = client.chat.completions.create(
-                model=model,
-                messages=chat_messages,
-                temperature=0.3,
-                max_tokens=600,
-            )
-            reply = (resp.choices[0].message.content or "").strip()
-            if reply:
-                return {
-                    "reply": reply,
-                    "model": f"{model} ({provider})",
-                    "suggested_actions": _get_chat_suggestions(tab, user_msg)
-                }
-        except Exception as exc:
-            # Never swallow this silently. A hidden failure here is why the
-            # assistant answered from a canned script while the UI said a model
-            # was running, and nothing anywhere said otherwise.
-            llm_errors.append(f"{provider}: {type(exc).__name__}: {str(exc)[:160]}")
-            continue
+    # Every LLM call below goes out through the SYNCHRONOUS OpenAI/Anthropic
+    # clients, and get_llm_completion walks a list of providers x candidate models,
+    # each a full blocking round-trip. Called directly from an `async def` that
+    # froze the whole event loop for the duration — one chat message stalled every
+    # other request on the server, the live /ws/agent trace included, and a
+    # rate-limited key turned that into tens of seconds. They run on a worker
+    # thread now.
+    reply, model_used = await asyncio.to_thread(
+        get_llm_completion,
+        messages=chat_messages,
+        max_tokens=800,
+        temperature=0.3,
+        preferred_provider="gemini",
+    )
+    if reply:
+        return {
+            "reply": reply,
+            "model": model_used,
+            "suggested_actions": _get_chat_suggestions(tab, user_msg)
+        }
 
     # 2. Try Anthropic if configured
     if os.environ.get("ANTHROPIC_API_KEY"):
@@ -1203,7 +1629,8 @@ async def agent_chat(req: AgentChatRequest):
                 if h.content and h.role in ("user", "assistant"):
                     claude_msgs.append({"role": h.role, "content": h.content})
             claude_msgs.append({"role": "user", "content": user_msg})
-            resp = client.messages.create(
+            resp = await asyncio.to_thread(
+                client.messages.create,
                 model="claude-3-5-sonnet-20241022",
                 max_tokens=600,
                 system=system_prompt,
@@ -1231,7 +1658,7 @@ async def agent_chat(req: AgentChatRequest):
                   "This reply is not grounded in your scan results.*")
     return {
         "reply": reply,
-        "model": "SovereignPrivacy knowledge base (no AI model available)",
+        "model": "ApniPehChaan knowledge base (no AI model available)",
         "llm_unavailable": bool(llm_errors),
         "llm_errors": llm_errors,
         "suggested_actions": _get_chat_suggestions(tab, user_msg)
@@ -1241,6 +1668,7 @@ async def agent_chat(req: AgentChatRequest):
 @app.post("/api/agent/scan")
 async def agent_scan(req: AgentScanRequest):
     """Phase 1 — discover, assess, decide, draft. Dispatches nothing."""
+    _require_identifier(req)
     profile = _profile_of(req)
     stream = EventStream()
     result = await _asyncio.to_thread(run_discovery, profile, stream)
@@ -1259,7 +1687,9 @@ async def agent_approve(req: AgentApproveRequest):
     """Phase 2 — the user approved; dispatch, follow up, verify, escalate."""
     if not req.request_ids:
         raise HTTPException(status_code=400, detail="No request_ids supplied.")
+    _require_identifier(req)
     profile = _profile_of(req)
+    _owned_request_ids(_memory.upsert_user(profile), req.request_ids)
     stream = EventStream()
     result = await _asyncio.to_thread(run_remediation, profile, req.request_ids, stream)
     return {
@@ -1275,10 +1705,12 @@ async def agent_approve(req: AgentApproveRequest):
 @app.post("/api/agent/reset")
 async def agent_reset(req: AgentScanRequest):
     """Wipe this identity so a demo can be re-run from a clean slate."""
+    if not (req.name or "").strip() and not (req.email or "").strip():
+        raise HTTPException(status_code=400,
+                            detail="A name or email is required to identify what to reset.")
     removed = _network.reset_subject(req.name, req.email)
     user_id = _memory.upsert_user(_profile_of(req))
-    for table in ("exposures", "requests", "agent_events", "identities", "runs"):
-        _memory._exec(f"DELETE FROM {table} WHERE user_id=?", (user_id,))
+    _memory.reset_user(user_id)
     return {"status": "reset", "user_id": user_id, "broker_records_cleared": removed}
 
 
@@ -1299,14 +1731,30 @@ async def _pump(websocket: WebSocket, fn, *args):
     thread = _threading.Thread(target=work, daemon=True)
     thread.start()
 
-    loop = _asyncio.get_running_loop()
+    # Drained by polling rather than loop.run_in_executor(None, stream.q.get).
+    # That parked a thread of the DEFAULT executor on a blocking get for the
+    # whole run — and asyncio.to_thread, which POST /api/agent/scan uses, draws
+    # from that same pool (max_workers = min(32, cpu+4)). Enough concurrent
+    # live runs and every REST scan queued behind sockets that were doing
+    # nothing but waiting. Polling holds no pool thread, and noticing a dead
+    # worker means a phase that dies without closing its stream no longer hangs
+    # the socket for ever.
     while True:
-        event = await loop.run_in_executor(None, stream.q.get)
+        try:
+            event = stream.q.get_nowait()
+        except _queue.Empty:
+            if not thread.is_alive():
+                break
+            await _asyncio.sleep(0.02)
+            continue
         if event is None:
             break
         await websocket.send_json(event)
 
-    await loop.run_in_executor(None, thread.join)
+    # close() happens just before the phase returns, so the result may not be
+    # assigned yet when the sentinel arrives.
+    while thread.is_alive():
+        await _asyncio.sleep(0.01)
     return holder.get("result"), holder.get("error")
 
 
@@ -1323,16 +1771,42 @@ async def websocket_agent(websocket: WebSocket):
     try:
         while True:
             data = await websocket.receive_json()
+            # A frame that is not an object, or carries "profile": null, used
+            # to raise AttributeError out of the handler and kill the socket
+            # with no explanation. Client input is not to be trusted to be the
+            # shape the happy path assumes.
+            if not isinstance(data, dict):
+                await websocket.send_json({"type": "error",
+                                           "message": "Expected a JSON object frame."})
+                continue
             action = data.get("action")
-            profile = data.get("profile", {})
+            profile = data.get("profile") or {}
+            if not isinstance(profile, dict):
+                await websocket.send_json({"type": "error",
+                                           "message": "'profile' must be a JSON object."})
+                continue
+            profile = dict(profile)
             profile.setdefault("country", "IN")
 
             if action == "scan":
+                if not any(str(profile.get(f) or "").strip() for f in _IDENTIFIER_FIELDS):
+                    await websocket.send_json({
+                        "type": "error",
+                        "message": ("At least one identifier is required — an email, phone, "
+                                    "name, declared account or known username.")})
+                    continue
                 result, err = await _pump(websocket, run_discovery, profile)
             elif action == "approve":
-                ids = data.get("request_ids", [])
-                if not ids:
+                ids = data.get("request_ids") or []
+                if not isinstance(ids, list) or not ids:
                     await websocket.send_json({"type": "error", "message": "No request_ids supplied."})
+                    continue
+                # Same gate as POST /api/agent/approve: a notice is only
+                # dispatched by the data principal it was drafted for.
+                try:
+                    _owned_request_ids(_memory.upsert_user(profile), ids)
+                except HTTPException as exc:
+                    await websocket.send_json({"type": "error", "message": exc.detail})
                     continue
                 result, err = await _pump(websocket, run_remediation, profile, ids)
             else:
@@ -1358,8 +1832,21 @@ async def websocket_agent(websocket: WebSocket):
             })
 
     except WebSocketDisconnect:
+        # A clean client-side close. Nothing to report back to a socket that
+        # is already gone.
         ws_manager.disconnect(websocket)
-    except Exception:
+    except Exception as exc:
+        # Anything else — a storage outage mid-run, a planner blowing up — is
+        # something the user needs told. This used to close the socket in
+        # silence, so the UI could not distinguish a crash from a dropped
+        # connection.
+        try:
+            await websocket.send_json({
+                "type": "error",
+                "message": f"Agent run failed: {type(exc).__name__}: {exc}",
+            })
+        except Exception:
+            pass
         ws_manager.disconnect(websocket)
 
 
@@ -1477,8 +1964,7 @@ async def agent_confirm(req: ConfirmRequest):
 
     if req.is_mine:
         _memory.set_exposure_status(req.exposure_id, "exposed")
-        _memory._exec("UPDATE exposures SET evidence_class=?, match_tier=? WHERE id=?",
-                      ("self_declared", "user_confirmed", req.exposure_id))
+        _memory.update_exposure(req.exposure_id, evidence_class="self_declared", match_tier="user_confirmed")
     else:
         _memory.set_exposure_status(req.exposure_id, "not_mine")
 

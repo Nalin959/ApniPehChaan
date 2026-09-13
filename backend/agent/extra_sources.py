@@ -181,14 +181,18 @@ like a bug on screen.
 import json
 import re
 import socket
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass, asdict, field
 from datetime import datetime, timezone
 
-USER_AGENT = "SovereignPrivacy-AI/2.0 (privacy self-service tool)"
+USER_AGENT = "ApniPehChaan/2.0 (privacy self-service tool)"
 TIMEOUT = 20
+
+# Seconds of backoff between crt.sh retries, multiplied by the attempt number.
+CRTSH_BACKOFF_S = 0.75
 
 # ProxyNova caps its response at 20 rows. Needed to tell "nothing matched" from
 # "the page filled up before we got to a match" — see _check_proxynova.
@@ -260,6 +264,28 @@ def _unavailable(check: str, target: str, url: str, status: int | None, why: str
         reproduce)
 
 
+def _declined(check: str, target: str, url: str, status: int | None, body: str,
+              reproduce: str) -> Finding | None:
+    """
+    Guard for every source that answers with a JSON body even when it is
+    refusing. `_fetch` deliberately keeps an HTTPError's body — several of these
+    APIs answer "not found" with a 404 and a useful payload — but that left the
+    status itself unread, so a 429 or a 502 whose body happened to parse fell
+    straight through to the "clear" branch. Measured: Hudson Rock answering
+    HTTP 429 {"message": "Too many requests"} was reported as CONFIRMED CLEAR,
+    quoting the rate-limit text as its proof.
+
+    Returns an `unavailable` Finding when the status is not a 200, and None
+    when the caller may go on and interpret the body.
+    """
+    if status == 200:
+        return None
+    return _unavailable(
+        check, target, url, status,
+        f"HTTP {status}: the source answered with an error rather than a result "
+        f"({(body or '')[:160]}).", reproduce)
+
+
 def _not_checked(check: str, note: str) -> Finding:
     return Finding(check, "(none supplied)", "", _now(), None, "not_checked", "", note, "")
 
@@ -304,6 +330,15 @@ def _hudson_rock(check: str, param: str, value: str, subject: str,
         # text "Cannot complete search for that domain."
         return _unavailable(check, value, url, status,
                             f"HTTP {status}: {body[:200]}", reproduce)
+
+    declined = _declined(check, value, url, status, body, reproduce)
+    if declined:
+        return declined
+
+    if not isinstance(data, dict):
+        return _unavailable(check, value, url, status,
+                            f"The source answered in a shape this check does not "
+                            f"recognise: {str(data)[:160]}", reproduce)
 
     stealers = data.get("stealers") or []
     if not stealers:
@@ -387,6 +422,14 @@ def check_employer_infostealer_exposure(domain: str) -> Finding:
                             f"HTTP {status}: {body[:200]} "
                             "(free email providers are not searchable by domain)", reproduce)
 
+    declined = _declined("infostealer_domain", domain, url, status, body, reproduce)
+    if declined:
+        return declined
+
+    if not isinstance(data, dict):
+        return _unavailable("infostealer_domain", domain, url, status,
+                            f"Unexpected response shape: {str(data)[:160]}", reproduce)
+
     total = data.get("total") or 0
     employees = data.get("employees") or 0
     users = data.get("users") or 0
@@ -425,6 +468,29 @@ def _phone_is_placeholder(digits: str) -> bool:
     return bool(_PLACEHOLDER_PHONE.match(digits))
 
 
+def _leakcheck_phone(raw: str) -> str:
+    r"""
+    One canonical form for an Indian mobile, whatever the user typed.
+
+    This was `re.sub(r"\D", "", identifier)`, so the SAME number asked three
+    different questions depending on formatting: "9876543210" queried
+    9876543210, "+91 98765 43210" queried 919876543210, and "09876543210"
+    queried 09876543210 — a string with a trunk prefix on the front that the
+    corpus does not index, whose "Not found" was then reported as CONFIRMED
+    CLEAR. The corpus is indexed country-code-first (verified in this module's
+    header: 919876543210 -> found:80), so a recognisable Indian mobile is
+    always asked about in that form. Anything else is passed through as typed.
+    """
+    digits = re.sub(r"\D", "", str(raw or ""))
+    for prefix in ("0091", "091", "91", "0", ""):
+        if prefix and not digits.startswith(prefix):
+            continue
+        rest = digits[len(prefix):]
+        if len(rest) == 10 and rest[0] in "6789":
+            return "91" + rest
+    return digits
+
+
 def check_leakcheck(identifier: str, kind: str = "auto") -> Finding:
     """
     Breach membership from LeakCheck's free public endpoint.
@@ -446,7 +512,7 @@ def check_leakcheck(identifier: str, kind: str = "auto") -> Finding:
         else:
             kind = "username"
 
-    query = re.sub(r"\D", "", identifier) if kind == "phone" else identifier
+    query = _leakcheck_phone(identifier) if kind == "phone" else identifier
     url = f"https://leakcheck.io/api/public?check={urllib.parse.quote(query)}"
     reproduce = f"curl -s '{url}'"
 
@@ -458,6 +524,13 @@ def check_leakcheck(identifier: str, kind: str = "auto") -> Finding:
     if data is None:
         return _unavailable("leakcheck_public", identifier, url, status,
                             f"HTTP {status}: unparseable response {body[:200]}", reproduce)
+
+    # A JSON array or scalar is not an answer this check can read, and calling
+    # .get() on it raised AttributeError straight out of the check.
+    if not isinstance(data, dict):
+        return _unavailable("leakcheck_public", identifier, url, status,
+                            f"The service answered in a shape this check does not "
+                            f"recognise: {str(data)[:160]}", reproduce)
 
     if not data.get("success"):
         error = str(data.get("error", "")).lower()
@@ -532,6 +605,14 @@ def check_proxynova_credentials(email: str) -> Finding:
         return _unavailable("proxynova_combolist", email, url, status,
                             f"HTTP {status}: unparseable response {body[:200]}", reproduce)
 
+    declined = _declined("proxynova_combolist", email, url, status, body, reproduce)
+    if declined:
+        return declined
+
+    if not isinstance(data, dict):
+        return _unavailable("proxynova_combolist", email, url, status,
+                            f"Unexpected response shape: {str(data)[:160]}", reproduce)
+
     lines = data.get("lines") or []
     raw_count = data.get("count") or 0
 
@@ -602,6 +683,18 @@ def check_wayback_archive(page_url: str) -> Finding:
         return _unavailable("wayback_archive", target, url, status,
                             f"HTTP {status}: unparseable response {body[:200]}", reproduce)
 
+    declined = _declined("wayback_archive", target, url, status, body, reproduce)
+    if declined:
+        return declined
+
+    # The CDX index answers with an array of rows. Anything else — an error
+    # object, a scalar — is not an answer, and slicing it raised straight out
+    # of the check (KeyError on rows[1:] for a dict body).
+    if not isinstance(rows, list):
+        return _unavailable("wayback_archive", target, url, status,
+                            f"The index answered in a shape this check does not "
+                            f"recognise: {str(rows)[:160]}", reproduce)
+
     # Row 0 is the column header, so captures only exist from row 1 onward.
     captures = rows[1:] if rows else []
     if not captures:
@@ -612,7 +705,11 @@ def check_wayback_archive(page_url: str) -> Finding:
             "exact URL. That means it was never crawled — NOT that the page never existed.",
             reproduce, metadata={"captures": 0})
 
-    stamps = [c[1] for c in captures if len(c) > 1]
+    stamps = [c[1] for c in captures if isinstance(c, list) and len(c) > 1]
+    if not stamps:
+        return _unavailable("wayback_archive", target, url, status,
+                            "The index returned capture rows with no timestamps in them.",
+                            reproduce)
     first, last = stamps[0], stamps[-1]
 
     def _fmt(t):
@@ -702,10 +799,21 @@ def _load_breach_catalogue() -> tuple[list[dict] | None, int | None, str]:
     status, body, err = _fetch(url)
     if err:
         return None, status, err
+    if status != 200:
+        return None, status, (f"HTTP {status}: the catalogue service answered with an "
+                              f"error rather than a catalogue ({(body or '')[:160]}).")
     data = _json(body)
-    if not data or "exposedBreaches" not in data:
+    if not isinstance(data, dict) or "exposedBreaches" not in data:
         return None, status, f"HTTP {status}: unexpected catalogue response"
-    _BREACH_CATALOGUE = data.get("exposedBreaches") or []
+    breaches = data.get("exposedBreaches") or []
+    # An empty catalogue is not a catalogue. Caching it made every later service
+    # check report "no entry for X among 0 catalogued breaches" under the words
+    # CONFIRMED CLEAR — for the rest of the process, even after the service
+    # recovered, because the cache is only ever filled once.
+    if not breaches:
+        return None, status, (f"HTTP {status}: the catalogue came back empty, which is "
+                              f"an outage rather than a catalogue with nothing in it.")
+    _BREACH_CATALOGUE = breaches
     return _BREACH_CATALOGUE, status, ""
 
 
@@ -797,6 +905,18 @@ def check_domain_registration_exposure(domain: str) -> Finding:
         return _unavailable("domain_registration", domain, url, status,
                             f"HTTP {status}: unparseable response {body[:200]}", reproduce)
 
+    # Anything other than a 200 (the 404 "not registered" case is answered
+    # above) is the registry declining. Reading an error body as a record with
+    # no contact fields in it reported "the domain is registered but every
+    # contact field is redacted" about a response that contained no record.
+    declined = _declined("domain_registration", domain, url, status, body, reproduce)
+    if declined:
+        return declined
+
+    if not isinstance(data, dict):
+        return _unavailable("domain_registration", domain, url, status,
+                            f"Unexpected response shape: {str(data)[:160]}", reproduce)
+
     # vCard entries are where any personal detail would sit. Most registrars
     # redact them now, so finding real values is the notable outcome.
     exposed: list[str] = []
@@ -851,7 +971,13 @@ def check_certificate_transparency(domain: str, attempts: int = 3) -> Finding:
     reproduce = f"curl -s '{url}'"
 
     status, body, err, data = None, "", None, None
-    for _ in range(attempts):
+    for attempt in range(attempts):
+        if attempt:
+            # crt.sh 502s under load. Retrying with no pause at all is three
+            # requests in a few milliseconds at a service that has just said it
+            # is overloaded, which makes the next answer less likely rather
+            # than more. Back off between attempts.
+            time.sleep(CRTSH_BACKOFF_S * attempt)
         status, body, err = _fetch(url)
         if err:
             continue
@@ -863,6 +989,15 @@ def check_certificate_transparency(domain: str, attempts: int = 3) -> Finding:
         return _unavailable("certificate_transparency", domain, url, status,
                             err or f"HTTP {status}: crt.sh returned a non-JSON body "
                                    f"({body[:120]}) on {attempts} attempts.", reproduce)
+
+    declined = _declined("certificate_transparency", domain, url, status, body, reproduce)
+    if declined:
+        return declined
+
+    if not isinstance(data, list):
+        return _unavailable("certificate_transparency", domain, url, status,
+                            f"crt.sh answered in a shape this check does not recognise: "
+                            f"{str(data)[:160]}", reproduce)
 
     if not data:
         return Finding(

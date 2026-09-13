@@ -1,4 +1,4 @@
-# SovereignPrivacy AI — Presentation & Demo Guide
+# ApniPehChaan — Presentation & Demo Guide
 
 ## Track: Digital Identity & Sovereign Privacy Protection
 > **Mission**: Build proactive personal agents that actively monitor web data leaks, handle automated right-to-be-forgotten legal requests, and protect individual privacy against invasive data-scraping networks.
@@ -20,8 +20,8 @@ beat of the script below.
 |---|---|
 | **1. Problem Understanding & Impact** | India's DPDP Act 2023 grants a statutory right to erasure (s.12) and grievance redressal (s.13). Exercising it means identifying which of hundreds of entities hold you, knowing which of them the right even reaches, and proving deletion afterwards. The tool's hardest design constraint comes from the problem: **a name identifies nobody**, so a privacy tool that guesses from names helps you demand deletion of a stranger's records. Every attribution rule in the build exists because of that. |
 | **2. Innovation & Creativity** | **Breach detection that is free.** HIBP's per-address lookup needs a paid key; XposedOrNot and Hudson Rock answer for free, so the product's central question works with no card on file. **Info-stealer detection** — a whole exposure class nothing else in the field surfaces, with remediation that is credential rotation, not a legal notice. **Search-result-as-lead**: the open-web search fetches every page and requires the identifier verbatim before reporting it. **Legal refusal engine**: distinguishes commercial processing from court records and statutory registers. |
-| **3. Agentic AI Implementation** | 21 tools over one registry; the planner is given only the tools its phase needs, and `submit_erasure_request` is absent from the discovery toolset entirely, so the agent *cannot* dispatch. Memory in SQLite means a re-scan detects a record that has **reappeared** rather than logging it as new. Any of three planner backends drives the identical tools; the badge says which is live. |
-| **4. Technical Implementation** | Four real defects found and fixed by measurement today — see **The engineering story** below. Every exposure carries an endpoint, a timestamp, an HTTP status and a `curl` you can run. **All 260 tests pass** (`./.venv/bin/python test_system.py`). |
+| **3. Agentic AI Implementation** | 24 tools over one registry; the planner is given only the tools its phase needs, and `submit_erasure_request` is absent from the discovery toolset entirely, so the agent *cannot* dispatch. Collaborative multi-agent swarm architecture (Forensics, Legal Counsel, Remediation) in `multi_agent_swarm.py`. Memory in SQLite & Supabase means a re-scan detects a record that has **reappeared** rather than logging it as new. Any of three planner backends drives the identical tools; the badge says which is live. |
+| **4. Technical Implementation** | Four real defects found and fixed by measurement — see **The engineering story** below. Every exposure carries an endpoint, a timestamp, an HTTP status and a `curl` you can run. **All 334 tests pass** (`./.venv/bin/python test_system.py`). |
 | **5. Solution Effectiveness & Usability** | The removal ladder picks the cheapest route that works: a delete link beats a 30-day statutory notice. Unattributed candidates are held out of the ledger, the risk score *and* the removal plan until you confirm them. When a check cannot run, it says **"could not check"** and never "clear". |
 | **6. Demo & Presentation** | The trace is live — every line appears when the agent reaches that step, with no `asyncio.sleep()` padding. Every proof panel carries a reproduce command a sceptical judge can paste into a terminal. |
 
@@ -269,7 +269,7 @@ Two were removed today after measurement:
 ## Likely questions
 
 **"Is the AI actually doing anything, or is this a script?"**
-21 tools in one registry. With a planner key, the model chooses each call in the judgement and
+24 tools in one registry. With a planner key, the model chooses each call in the judgement and
 remediation phases and its reasoning streams to the UI; with no key a deterministic pipeline
 drives the identical tools. The badge says which. `GET /api/agent/info` returns the live tool
 list and the evidence policy.
@@ -338,12 +338,14 @@ deterministic pipeline. Nothing fabricates a result to fill the gap.
   that matters: corroboration requires the identifier to actually appear on the page, so a
   mistyped address matches nothing and the failure mode is *fewer* attributions, never wrong
   ones.
-- **The broker network is a simulation, and it is off by default.** Real controllers take weeks
-  and require identity verification, so the removal *lifecycle* is only demonstrable against a
-  controlled environment. Everything it produces is tagged `sandbox`. There is no toggle in the
-  UI — it is reachable only by `POST /api/agent/scan` with `{"sandbox": true}`, so you cannot
-  turn it on by accident mid-demo. If you want to show the full removal loop, call the API
-  directly and rehearse it first.
+- **The simulated broker network has been removed, not just disabled.** Earlier builds could
+  demonstrate the removal *lifecycle* against a controlled environment tagged `sandbox`. That
+  path is gone: `build_context()` hardcodes `sandbox=False`, no endpoint reads a `sandbox`
+  field, and `search_data_brokers` returns no synthetic records under any input. The
+  consequence is honest but worth stating plainly — the full removal loop cannot be
+  demonstrated end to end in three minutes, because real controllers take weeks and require
+  identity verification. What you can show live is discovery, legal judgement, and a drafted
+  notice held at the approval gate.
 - **The PII benchmark is synthetic.** It measures the detector against known-correct inputs,
   not messy real-world text.
 - **No paid API is used anywhere.** Deliberate — but it means coverage is free-tier coverage,

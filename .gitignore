@@ -47,3 +47,8 @@ node_modules/
 dist/
 .vercel
 
+# Local agent tooling — machine-specific and regenerable (`npx skills add`).
+# .agents/rules/ stays tracked: those are deliberate project rules.
+.mcp.json
+.agents/skills/
+skills-lock.json

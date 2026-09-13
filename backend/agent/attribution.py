@@ -45,6 +45,62 @@ GENERIC_HANDLES = {
     "support", "office", "me", "demo", "guest", "root", "null", "none",
 }
 
+# The prefixes an Indian mobile may legitimately be written behind. Kept
+# identical to web_search.indian_mobile, because a number accepted here has to
+# be a number the page matcher below can recognise again.
+_TRUNK_PREFIXES = ("0", "91", "091", "0091")
+
+
+def _indian_mobile(raw: str) -> str:
+    """
+    The ten digits of an Indian mobile number, or "" when this is not one.
+
+    Taking the last ten digits of whatever was typed MANUFACTURES an
+    identifier. "011-2345 6789" became 1123456789, "1800 123 4567" became
+    8001234567 and "+1 202 555 0173" became 2025550173 — three numbers
+    belonging to somebody else, then used to corroborate a profile as this
+    user's. A false identifier is worse than a missing one, so anything that
+    cannot be identified as an Indian mobile is not kept at all.
+    """
+    digits = re.sub(r"\D", "", str(raw or ""))
+    for prefix in ("0091", "091", "91", "0", ""):
+        if prefix and not digits.startswith(prefix):
+            continue
+        rest = digits[len(prefix):]
+        if len(rest) == 10 and rest[0] in "6789":
+            return rest
+    return ""
+
+
+def _phone_on_page(page_text: str, ten: str) -> bool:
+    """
+    Is this exact ten-digit mobile actually WRITTEN on the page?
+
+    This used to compare against every digit on the page joined together, which
+    manufactures matches out of nothing: a page carrying "Order 98765" and
+    "Invoice 43210" — or a stylesheet with margin:98765px — concatenated into a
+    run containing 9876543210, and a stranger's profile was then attributed to
+    the user at the highest confidence tier. A longer run such as the
+    transaction id 12349876543210987 did it too.
+
+    So scripts, styles and markup are stripped first (their digits are pixel
+    values, hex ids and timestamps, never phone numbers), and each DIGIT RUN is
+    then compared on its own. A run matches only if it IS the number, or is the
+    number behind a country or trunk prefix. The 13-digit cap is what stops a
+    row of unrelated figures from merging into one run long enough to contain
+    these ten digits by accident. Same discipline as web_search.check_page.
+    """
+    body = re.sub(r"(?is)<(script|style)[^>]*>.*?</\1>", " ", page_text or "")
+    body = re.sub(r"<[^>]+>", " ", body)
+    for m in re.finditer(r"(?<![\d])\+?\d[\d\s\-().]{6,20}\d(?![\d])", body):
+        digits = re.sub(r"\D", "", m.group(0))
+        if len(digits) > 13:
+            continue
+        if digits == ten or (digits.endswith(ten)
+                             and digits[:-len(ten)] in _TRUNK_PREFIXES):
+            return True
+    return False
+
 
 @dataclass
 class Identifiers:
@@ -81,7 +137,7 @@ class Identifiers:
             return [x.strip() for x in re.split(r"[,\n;]+", str(v or "")) if x.strip()]
 
         emails = [e.lower() for e in split(p.get("email", "")) + split(p.get("alt_emails", ""))]
-        phones = [cls._digits(x)[-10:] for x in split(p.get("phone", "")) + split(p.get("alt_phones", ""))]
+        phones = [_indian_mobile(x) for x in split(p.get("phone", "")) + split(p.get("alt_phones", ""))]
         ident = cls(
             emails=[e for e in dict.fromkeys(emails) if "@" in e],
             phones=[x for x in dict.fromkeys(phones) if len(x) == 10],
@@ -97,9 +153,8 @@ class Identifiers:
         ver = verified or {}
         ident.verified_emails = [normalise for normalise in
                                  (e.strip().lower() for e in ver.get("emails", [])) if normalise]
-        ident.verified_phones = [v for v in
-                                 ("".join(c for c in x if c.isdigit())[-10:]
-                                  for x in ver.get("phones", [])) if len(v) == 10]
+        ident.verified_phones = [v for v in (_indian_mobile(x) for x in ver.get("phones", []))
+                                 if len(v) == 10]
 
         # Hash-only intake. A privacy tool must not hold a raw card or passport
         # number, and neither is any use for matching a public profile anyway —
@@ -216,8 +271,6 @@ def attribute_profile(username: str, page_text: str, ident: Identifiers,
             is_mine=False)
 
     # ── Corroborating signals found on the page itself ──────────────────────
-    digits_only = re.sub(r"[^0-9]", "", text)
-
     for e in ident.emails:
         if not e or e not in text:
             continue
@@ -230,7 +283,7 @@ def attribute_profile(username: str, page_text: str, ident: Identifiers,
             score += 0.25
 
     for ph in ident.phones:
-        if not ph or ph not in digits_only:
+        if not ph or not _phone_on_page(page_text, ph):
             continue
         if ph in ident.verified_phones:
             signals.append(f"page contains your VERIFIED phone number (…{ph[-4:]})")
@@ -247,7 +300,10 @@ def attribute_profile(username: str, page_text: str, ident: Identifiers,
 
     for site in ident.websites:
         host = re.sub(r"^https?://", "", site).strip("/")
-        if host and host in text:
+        # Anchored on a boundary: a bare "me.com" matched inside "acme.com",
+        # and that single false signal plus a shared name and a shared city was
+        # enough to attribute a stranger's profile to the user.
+        if host and re.search(r"(?<![a-z0-9.\-])" + re.escape(host) + r"(?![a-z0-9\-])", text):
             signals.append(f"page links to your site ({host})")
             score += 0.45
 

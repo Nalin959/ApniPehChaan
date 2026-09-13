@@ -1,5 +1,5 @@
 """
-memory.py — Durable agent memory for SovereignPrivacy AI.
+memory.py — Durable agent memory for ApniPehChaan.
 
 Everything the agent learns and does is written here, so that:
   • state survives a server restart (the previous build kept the audit chain
@@ -21,7 +21,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-DB_PATH = os.environ.get("SOVEREIGN_DB", os.path.join(PROJECT_ROOT, "data", "sovereign.db"))
+DB_PATH = os.environ.get("APNIPEHCHAAN_DB") or os.environ.get("SOVEREIGN_DB") or os.path.join(PROJECT_ROOT, "data", "sovereign.db")
 
 
 def utcnow() -> str:
@@ -144,7 +144,10 @@ class Memory:
 
     def __init__(self, path: str = DB_PATH):
         self.path = path
-        os.makedirs(os.path.dirname(path), exist_ok=True)
+        # dirname("sovereign.db") is "", and makedirs("") raises — a bare
+        # filename in APNIPEHCHAAN_DB crashed at import instead of opening the
+        # database in the working directory.
+        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
         self._lock = threading.RLock()
         self._conn = sqlite3.connect(path, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
@@ -176,7 +179,18 @@ class Memory:
     # ── users ────────────────────────────────────────────────────────────────
 
     def upsert_user(self, profile: dict) -> str:
-        """Return a stable user id keyed on email (or name when email is absent)."""
+        """Return a stable user id keyed on email (or name when email is absent).
+
+        The PAN is deliberately NOT persisted. AgentScanRequest documents PAN
+        and Aadhaar as "never stored or transmitted in the clear — hashed on
+        arrival and used only to match against local leak corpora", and the
+        tools do exactly that: they hold the value in the request profile,
+        search the leak corpora with it, and record only the FACT of a hit. But
+        upsert_user wrote the raw PAN — a national tax identifier — into
+        users.pan on every scan, so the promise was false at rest. Nothing
+        reads the column back, so there is nothing to preserve here; the column
+        itself is kept so an existing database still opens.
+        """
         key = (profile.get("email") or profile.get("name") or "anonymous").strip().lower()
         user_id = "usr_" + uuid.uuid5(uuid.NAMESPACE_DNS, key).hex[:12]
         existing = self._row("SELECT id FROM users WHERE id = ?", (user_id,))
@@ -184,13 +198,13 @@ class Memory:
             self._exec(
                 "UPDATE users SET name=?, email=?, phone=?, pan=?, city=?, country=? WHERE id=?",
                 (profile.get("name", ""), profile.get("email", ""), profile.get("phone", ""),
-                 profile.get("pan", ""), profile.get("city", ""), profile.get("country", "IN"), user_id),
+                 "", profile.get("city", ""), profile.get("country", "IN"), user_id),
             )
         else:
             self._exec(
                 "INSERT INTO users (id,name,email,phone,pan,city,country,created_at) VALUES (?,?,?,?,?,?,?,?)",
                 (user_id, profile.get("name", ""), profile.get("email", ""), profile.get("phone", ""),
-                 profile.get("pan", ""), profile.get("city", ""), profile.get("country", "IN"), utcnow()),
+                 "", profile.get("city", ""), profile.get("country", "IN"), utcnow()),
             )
         return user_id
 
@@ -433,16 +447,47 @@ class Memory:
             "overdue": len(self.overdue_requests(user_id)),
         }
 
+    def reset_user(self, user_id: str):
+        """Wipe all agent records for a given user from SQLite."""
+        for table in ("exposures", "requests", "agent_events", "identities", "runs"):
+            self._exec(f"DELETE FROM {table} WHERE user_id=?", (user_id,))
+
 
 _memory: Any = None
+_memory_lock = threading.Lock()
+
+# Set any of these to a truthy value to pin the process to the local SQLite
+# store even when SUPABASE_URL / SUPABASE_KEY are present in the environment.
+#
+# Why this has to exist: .env is loaded on import of backend.agent.env, so the
+# mere act of importing backend.app used to bind the process to the PRODUCTION
+# cloud database. Every local dev server, smoke test and benchmark therefore
+# read and WROTE production rows — including the DELETEs a benchmark issues to
+# clean up after itself. There was no way to opt out.
+FORCE_SQLITE_VARS = ("APNIPEHCHAAN_FORCE_SQLITE", "SOVEREIGN_FORCE_SQLITE",
+                     "APNIPEHCHAAN_LOCAL_DB")
+_FALSEY = {"", "0", "false", "no", "off"}
+
+
+def force_sqlite() -> bool:
+    """True when the environment pins this process to the local SQLite store."""
+    for var in FORCE_SQLITE_VARS:
+        if (os.environ.get(var) or "").strip().lower() not in _FALSEY:
+            return True
+    return False
 
 
 def get_memory() -> Any:
     global _memory
-    if _memory is None:
+    # Two threads racing here used to build two Memory objects — two sqlite3
+    # connections to the same file, and only one of them installed as the
+    # singleton.
+    with _memory_lock:
+        if _memory is not None:
+            return _memory
         supabase_url = os.environ.get("SUPABASE_URL")
         supabase_key = os.environ.get("SUPABASE_KEY") or os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
-        if supabase_url and supabase_key:
+        if supabase_url and supabase_key and not force_sqlite():
             try:
                 from backend.agent.supabase_memory import SupabaseMemory
                 _memory = SupabaseMemory(supabase_url, supabase_key)
@@ -451,6 +496,8 @@ def get_memory() -> Any:
                 print(f"[Supabase] Warning: Failed to connect to Supabase ({e}), falling back to SQLite.")
                 _memory = Memory()
         else:
+            if supabase_url and supabase_key:
+                print("[Memory] SQLite forced by environment — Supabase credentials ignored.")
             _memory = Memory()
-    return _memory
+        return _memory
 

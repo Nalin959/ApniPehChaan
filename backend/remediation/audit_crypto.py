@@ -121,7 +121,7 @@ class AuditTrail:
 
         genesis = AuditReceipt(
             action="AUDIT_TRAIL_INITIALIZED",
-            details={"agent": "SovereignPrivacy AI", "version": "1.0.0"},
+            details={"agent": "ApniPehChaan", "version": "1.0.0"},
             previous_hash="0" * 64,
         )
         self._receipts.append(genesis)

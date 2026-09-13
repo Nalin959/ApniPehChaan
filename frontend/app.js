@@ -1,5 +1,5 @@
 /**
- * SovereignPrivacy AI — Frontend Application Logic
+ * ApniPehChaan — Frontend Application Logic
  *
  * Manages navigation, WebSocket real-time scanning, API calls,
  * dynamic UI rendering, and all interactive features.
@@ -38,6 +38,14 @@ async function restoreLatestAgentState() {
         } else {
             renderAgentExposures({ exposures: [] });
         }
+    } catch(e) {}
+
+    // Hydrate Threat Surface Matrix
+    try {
+        fetch('/api/agent/threat-surface')
+            .then(r => r.json())
+            .then(renderThreatSurface)
+            .catch(() => {});
     } catch(e) {}
 }
 
@@ -122,6 +130,8 @@ function initNavigation() {
 }
 
 function navigateTo(section) {
+    if (section === 'scanner') section = 'agent';
+
     // Update nav
     document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
     const activeLink = document.querySelector(`.nav-link[data-section="${section}"]`);
@@ -216,6 +226,7 @@ function updateDashboardFromResults(results) {
 // ═══ Scan Form & WebSocket ══════════════════════════════════════════════════
 function initScanForm() {
     const form = document.getElementById('scan-form');
+    if (!form) return;
     form.addEventListener('submit', (e) => {
         e.preventDefault();
         startScan();
@@ -346,10 +357,14 @@ async function doRestScan(profile, addLog, setProgress) {
 
 function finishScan() {
     state.isScanning = false;
-    document.querySelector('.scan-btn-content').style.display = 'flex';
-    document.querySelector('.scan-btn-loading').style.display = 'none';
-    document.getElementById('btn-start-scan').disabled = false;
-    document.getElementById('radar-sweep').classList.remove('active');
+    const btnContent = document.querySelector('.scan-btn-content');
+    if (btnContent) btnContent.style.display = 'flex';
+    const btnLoading = document.querySelector('.scan-btn-loading');
+    if (btnLoading) btnLoading.style.display = 'none';
+    const btn = document.getElementById('btn-start-scan');
+    if (btn) btn.disabled = false;
+    const sweep = document.getElementById('radar-sweep');
+    if (sweep) sweep.classList.remove('active');
 }
 
 // ═══ Exposure Rendering ═════════════════════════════════════════════════════
@@ -636,6 +651,10 @@ window.confirmCandidateCard = async function(exposureId, isMine, btn) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ ...profile, exposure_id: exposureId, is_mine: isMine }),
         });
+        if (!resp.ok) {
+            const errBody = await resp.json().catch(() => ({}));
+            throw new Error(errBody.detail || `Server error (${resp.status})`);
+        }
         const data = await resp.json();
         if (card) {
             if (!isMine) {
@@ -688,51 +707,376 @@ function initExposureFilters() {
 }
 
 // ═══ Legal Remediation ══════════════════════════════════════════════════════
+let legalChatHistory = [];
+
 function initLegalForm() {
-    // Jurisdiction selector
+    // Mode switcher: Chatbot vs Manual Form
+    const modeChatBtn = document.getElementById('btn-mode-legal-chat');
+    const modeFormBtn = document.getElementById('btn-mode-legal-form');
+    const chatPane = document.getElementById('legal-chat-pane');
+    const formPane = document.getElementById('legal-form-pane');
+
+    if (modeChatBtn && modeFormBtn) {
+        modeChatBtn.addEventListener('click', () => {
+            modeChatBtn.classList.add('active');
+            modeFormBtn.classList.remove('active');
+            if (chatPane) chatPane.style.display = '';
+            if (formPane) formPane.style.display = 'none';
+        });
+        modeFormBtn.addEventListener('click', () => {
+            modeFormBtn.classList.add('active');
+            modeChatBtn.classList.remove('active');
+            if (chatPane) chatPane.style.display = 'none';
+            if (formPane) formPane.style.display = '';
+        });
+    }
+
+    function updateLegalChatContext() {
+        const comp = document.getElementById('legal-chat-company-input')?.value?.trim() ||
+                     document.getElementById('legal-company')?.value?.trim() || 'Data Fiduciary';
+        const compDisp = document.getElementById('legal-chat-company-display');
+        if (compDisp) compDisp.textContent = comp;
+
+        const chatInput = document.getElementById('legal-chat-company-input');
+        // Never rewrite the field the user is typing in: comp is trimmed, so
+        // assigning it back deleted the space they had just pressed and dropped
+        // the caret to the end. "Zomato Limited" came out as "ZomatoLimited".
+        if (chatInput && chatInput !== document.activeElement &&
+            comp && comp !== 'Data Fiduciary' && chatInput.value !== comp) {
+            chatInput.value = comp;
+        }
+
+        const statDisp = document.getElementById('legal-chat-statute-display');
+        if (statDisp) {
+            const j = state.selectedJurisdiction || 'dpdp';
+            const jMap = {
+                dpdp: 'DPDP Act 2023 s.12/13',
+                gdpr: 'GDPR Article 17',
+                ccpa: 'CCPA § 1798.105'
+            };
+            statDisp.textContent = jMap[j] || j.toUpperCase();
+        }
+    }
+
+    // generateNoticeForExposure() — which lives outside this closure — ends by
+    // calling updateLegalChatContext(). Without this export that bare call is a
+    // ReferenceError, thrown out of the "Generate Legal Notice" click handler on
+    // every exposure card. Exported the same way as setLegalTargetCompany below.
+    window.updateLegalChatContext = updateLegalChatContext;
+
+    // Direct synchronization function for ANY unknown or user-entered company
+    window.setLegalTargetCompany = function(name, email, address) {
+        const trimmed = (name || '').trim();
+        if (!trimmed) return;
+
+        const compEl = document.getElementById('legal-company');
+        const chatInput = document.getElementById('legal-chat-company-input');
+        const compDisp = document.getElementById('legal-chat-company-display');
+        const emailEl = document.getElementById('legal-company-email');
+        const addrEl = document.getElementById('legal-company-address');
+
+        // Skip the field the user is currently typing in. `trimmed` differs from
+        // what they typed the moment they press space, so writing it back deleted
+        // that space and moved the caret to the end — a multi-word fiduciary name
+        // could not be entered at all. The peer field still syncs.
+        const active = document.activeElement;
+        if (compEl && compEl !== active && compEl.value !== trimmed) compEl.value = trimmed;
+        if (chatInput && chatInput !== active && chatInput.value !== trimmed) chatInput.value = trimmed;
+        if (compDisp) compDisp.textContent = trimmed;
+
+        if (email && emailEl) {
+            emailEl.value = email;
+        }
+        if (address && addrEl) {
+            addrEl.value = address;
+        }
+
+        // Visual feedback pill
+        const pill = document.getElementById('legal-chat-target-pill');
+        if (pill) {
+            pill.textContent = '✓ Synced';
+            pill.style.opacity = '1';
+            clearTimeout(pill._timer);
+            pill._timer = setTimeout(() => {
+                if (pill) pill.style.opacity = '0.7';
+            }, 1800);
+        }
+
+        // Live preview sync: if a notice was already generated, dynamically replace previous company name
+        if (state.generatedNotice && state.generatedNotice.recipient) {
+            const prevCompany = state.generatedNotice.recipient.company_name;
+            state.generatedNotice.recipient.company_name = trimmed;
+
+            const preview = document.getElementById('notice-preview-content');
+            if (preview && prevCompany && prevCompany !== trimmed && preview.textContent) {
+                const re = new RegExp(prevCompany.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+                const updated = preview.textContent.replace(re, trimmed);
+                if (updated !== preview.textContent) {
+                    preview.textContent = updated;
+                    state.generatedNotice.notice_text = updated;
+                }
+            }
+        }
+
+        updateLegalChatContext();
+    };
+
+    // Jurisdiction selector (syncs across both chat pane and form pane)
     document.querySelectorAll('.jurisdiction-btn').forEach(btn => {
         btn.addEventListener('click', () => {
-            document.querySelectorAll('.jurisdiction-btn').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            state.selectedJurisdiction = btn.dataset.jurisdiction;
+            const jur = btn.dataset.jurisdiction;
+            state.selectedJurisdiction = jur;
+            document.querySelectorAll('.jurisdiction-btn').forEach(b => {
+                b.classList.toggle('active', b.dataset.jurisdiction === jur);
+            });
+            updateLegalChatContext();
         });
     });
 
-    // Form submission
-    document.getElementById('legal-form').addEventListener('submit', async (e) => {
+    // Two-way live company sync between chat header input and manual form input
+    const syncCompanyFromInput = (e) => {
+        const raw = e.target.value;
+        if (!raw.trim()) {
+            // The user emptied this field. setLegalTargetCompany() ignores an
+            // empty name, so without this the peer input kept the previous
+            // company — and generateNotice(), which prefers the chat input,
+            // silently addressed the statutory notice to the old fiduciary
+            // while the visible field the user had just cleared read blank.
+            const peerId = e.target.id === 'legal-chat-company-input'
+                ? 'legal-company' : 'legal-chat-company-input';
+            const peer = document.getElementById(peerId);
+            if (peer && peer.value) peer.value = '';
+            updateLegalChatContext();
+            return;
+        }
+        setLegalTargetCompany(raw);
+    };
+
+    const chatCompInput = document.getElementById('legal-chat-company-input');
+    if (chatCompInput) {
+        chatCompInput.addEventListener('input', syncCompanyFromInput);
+        chatCompInput.addEventListener('change', syncCompanyFromInput);
+    }
+
+    const manualCompInput = document.getElementById('legal-company');
+    if (manualCompInput) {
+        manualCompInput.addEventListener('input', syncCompanyFromInput);
+        manualCompInput.addEventListener('change', syncCompanyFromInput);
+    }
+
+    // Quick prompt chips in Chatbot
+    document.querySelectorAll('.legal-chat-chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+            const prompt = chip.dataset.prompt;
+            sendLegalChatMessage(prompt);
+        });
+    });
+
+    // Chat form submission & Enter-key handling
+    const chatForm = document.getElementById('legal-chat-form');
+    const chatInput = document.getElementById('legal-chat-input');
+    if (chatForm && chatInput) {
+        chatForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const text = chatInput.value.trim();
+            if (text) {
+                chatInput.value = '';
+                sendLegalChatMessage(text);
+            }
+        });
+        chatInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                chatForm.dispatchEvent(new Event('submit'));
+            }
+        });
+    }
+
+    // Manual Form submission
+    document.getElementById('legal-form')?.addEventListener('submit', async (e) => {
         e.preventDefault();
         await generateNotice();
     });
 
     // Copy button
-    document.getElementById('btn-copy-notice').addEventListener('click', () => {
-        if (state.generatedNotice) {
-            navigator.clipboard.writeText(state.generatedNotice.notice_text).then(() => {
+    document.getElementById('btn-copy-notice')?.addEventListener('click', () => {
+        const preview = document.getElementById('notice-preview-content');
+        const liveText = (preview.innerText || preview.textContent || '').trim();
+        if (liveText) {
+            navigator.clipboard.writeText(liveText).then(() => {
                 showToast('Notice copied to clipboard!', 'success');
             });
         }
     });
 
+    // Download button
+    const dlBtn = document.getElementById('btn-download-notice');
+    if (dlBtn) {
+        dlBtn.addEventListener('click', () => {
+            downloadNotice();
+        });
+    }
+
     // Dispatch button
-    document.getElementById('btn-dispatch-notice').addEventListener('click', async () => {
+    document.getElementById('btn-dispatch-notice')?.addEventListener('click', async () => {
         await dispatchNotice();
     });
+
+    updateLegalChatContext();
+}
+
+async function sendLegalChatMessage(text) {
+    if (!text || !text.trim()) return;
+    const msgContainer = document.getElementById('legal-chat-messages');
+    if (!msgContainer) return;
+
+    // Append user message
+    const userMsgEl = document.createElement('div');
+    userMsgEl.className = 'legal-chat-msg user';
+    userMsgEl.innerHTML = `<div class="legal-chat-bubble"><p>${agEsc(text)}</p></div>`;
+    msgContainer.appendChild(userMsgEl);
+    legalChatHistory.push({ role: 'user', content: text });
+
+    // Append typing indicator
+    const typingEl = document.createElement('div');
+    typingEl.className = 'legal-chat-msg bot';
+    typingEl.id = 'legal-chat-typing';
+    typingEl.innerHTML = `<div class="legal-chat-bubble"><span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span> <i>Drafting formal statutory notice with Gemini…</i></div>`;
+    msgContainer.appendChild(typingEl);
+    msgContainer.scrollTop = msgContainer.scrollHeight;
+
+    const userProfile = getSavedProfile();
+    const activeCompany = document.getElementById('legal-chat-company-input')?.value?.trim() ||
+                          document.getElementById('legal-company')?.value?.trim() || '';
+    const payload = {
+        message: text,
+        history: legalChatHistory.slice(-6),
+        jurisdiction: state.selectedJurisdiction || 'dpdp',
+        company_name: activeCompany,
+        company_email: document.getElementById('legal-company-email')?.value || '',
+        company_address: document.getElementById('legal-company-address')?.value || '',
+        user_name: userProfile.name || '',
+        user_email: userProfile.email || '',
+        user_phone: userProfile.phone || '',
+        detected_pii: document.getElementById('legal-pii-summary')?.value || '',
+        current_notice: state.generatedNotice?.notice_text || ''
+    };
+
+    try {
+        const resp = await fetch('/api/legal/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const data = await resp.json();
+        typingEl.remove();
+
+        // Update model badge
+        if (data.model) {
+            const badge = document.getElementById('legal-chat-model-badge');
+            if (badge) {
+                const mLower = data.model.toLowerCase();
+                if (mLower.includes('gemini')) {
+                    badge.textContent = `✨ ${data.model} Active`;
+                } else if (mLower.includes('groq')) {
+                    badge.textContent = `⚡ Groq Backup (${data.model})`;
+                } else {
+                    badge.textContent = `✨ ${data.model}`;
+                }
+            }
+        }
+
+        // Sync returned company name dynamically
+        if (data.company_name) {
+            setLegalTargetCompany(data.company_name, data.company_email, data.company_address);
+        }
+
+        // Append bot message
+        const botMsgEl = document.createElement('div');
+        botMsgEl.className = 'legal-chat-msg bot';
+
+        let html = `<div class="legal-chat-bubble">${renderMarkdown(data.reply || '')}`;
+        if (data.has_notice && data.notice_text) {
+            html += `
+                <div class="legal-chat-actions">
+                    <button type="button" class="legal-chat-action-btn" id="btn-apply-chat-notice">
+                        <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+                        Applied to Notice Preview
+                    </button>
+                    <button type="button" class="legal-chat-action-btn" id="btn-copy-chat-notice">
+                        <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14"><path d="M8 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z"/><path d="M6 3a2 2 0 00-2 2v11a2 2 0 002 2h8a2 2 0 002-2V5a2 2 0 00-2-2 3 3 0 01-3 3H9a3 3 0 01-3-3z"/></svg>
+                        Copy Notice
+                    </button>
+                </div>
+            `;
+        }
+        html += `</div>`;
+        botMsgEl.innerHTML = html;
+        msgContainer.appendChild(botMsgEl);
+        msgContainer.scrollTop = msgContainer.scrollHeight;
+
+        legalChatHistory.push({ role: 'assistant', content: data.reply || '' });
+
+        // Automatically update Notice Preview if notice was formulated
+        if (data.has_notice && data.notice_text) {
+            const finalCompany = data.company_name || activeCompany || 'Data Fiduciary';
+            setLegalTargetCompany(finalCompany, data.company_email, data.company_address);
+
+            state.generatedNotice = {
+                status: 'generated',
+                reference_id: data.reference_id,
+                jurisdiction: data.jurisdiction,
+                jurisdiction_name: data.jurisdiction.toUpperCase(),
+                jurisdiction_short: data.jurisdiction.toUpperCase(),
+                notice_text: data.notice_text,
+                ai_generated: true,
+                ai_model: data.model,
+                response_deadline: data.response_deadline,
+                response_deadline_days: data.response_deadline_days,
+                receipt_hash: data.receipt_hash,
+                sender: { name: userProfile.name, email: userProfile.email },
+                recipient: { company_name: finalCompany }
+            };
+            renderNoticePreview(state.generatedNotice);
+            showToast('Statutory notice updated in preview!', 'success');
+
+            botMsgEl.querySelector('#btn-apply-chat-notice')?.addEventListener('click', () => {
+                renderNoticePreview(state.generatedNotice);
+                showToast('Notice refreshed in editor preview.', 'info');
+            });
+            botMsgEl.querySelector('#btn-copy-chat-notice')?.addEventListener('click', () => {
+                navigator.clipboard.writeText(data.notice_text).then(() => {
+                    showToast('Notice copied to clipboard!', 'success');
+                });
+            });
+        }
+    } catch(err) {
+        typingEl.remove();
+        const errEl = document.createElement('div');
+        errEl.className = 'legal-chat-msg bot';
+        errEl.innerHTML = `<div class="legal-chat-bubble"><p style="color: #ef4444;">Connection error: ${agEsc(err.message)}</p></div>`;
+        msgContainer.appendChild(errEl);
+    }
 }
 
 async function generateNotice() {
     // Auto-fill user data from scan if available
     const userProfile = getSavedProfile();
 
+    const aiTailored = document.getElementById('legal-ai-toggle')?.checked ?? true;
+    const targetComp = document.getElementById('legal-chat-company-input')?.value?.trim() ||
+                       document.getElementById('legal-company')?.value?.trim() || '';
     const payload = {
         jurisdiction: state.selectedJurisdiction,
         user_name: userProfile.name || '',
         user_email: userProfile.email || '',
         user_phone: userProfile.phone || '',
         additional_ids: userProfile.pan ? `PAN: ${userProfile.pan}` : '',
-        company_name: document.getElementById('legal-company').value,
-        company_email: document.getElementById('legal-company-email').value,
-        company_address: document.getElementById('legal-company-address').value,
-        detected_pii_summary: document.getElementById('legal-pii-summary').value,
+        company_name: targetComp,
+        company_email: document.getElementById('legal-company-email')?.value || '',
+        company_address: document.getElementById('legal-company-address')?.value || '',
+        detected_pii_summary: document.getElementById('legal-pii-summary')?.value || '',
+        ai_tailored: aiTailored,
     };
 
     try {
@@ -745,6 +1089,9 @@ async function generateNotice() {
 
         if (data.status === 'generated') {
             state.generatedNotice = data;
+            if (payload.company_name) {
+                setLegalTargetCompany(payload.company_name, payload.company_email, payload.company_address);
+            }
             renderNoticePreview(data);
             showToast(`${data.jurisdiction_short} notice generated!`, 'success');
         } else {
@@ -894,6 +1241,11 @@ const KNOWN_FIDUCIARIES = {
 function getFiduciaryContact(nameOrId) {
     if (!nameOrId) return {};
     const clean = nameOrId.toLowerCase().replace(/[^a-z0-9]/g, '');
+    // A source name with no alphanumerics at all ("—", "***") reduces to "", and
+    // `key.includes("")` is true for every key — so the first entry in the table
+    // was returned as a confident match and the erasure notice would have been
+    // addressed to a fiduciary that had nothing to do with the finding.
+    if (!clean) return {};
     for (const [key, spec] of Object.entries(KNOWN_FIDUCIARIES)) {
         if (clean.includes(key) || key.includes(clean)) return Object.assign({}, spec);
     }
@@ -913,35 +1265,37 @@ function getFiduciaryContact(nameOrId) {
         }
     }
     return {
-        company_name: `${nameOrId} Data Fiduciary`,
-        dpo_email: `privacy@${clean}.com`,
-        address: `Corporate Grievance Office, ${nameOrId} Registered Headquarters`,
-        self_serve_url: `https://${clean}.com/privacy`,
+        company_name: nameOrId,
+        dpo_email: '',
+        address: '',
+        self_serve_url: '',
         jurisdiction: 'dpdp'
     };
 }
 
 function generateNoticeForExposure(companyName, companyEmail, exposureId) {
     navigateTo('legal');
-    const contact = getFiduciaryContact(companyName);
+    const contact = typeof getFiduciaryContact === 'function' ? getFiduciaryContact(companyName) : {};
+    const finalComp = companyName || contact?.company_name || '';
+    const finalEmail = companyEmail || contact?.dpo_email || '';
+    const finalAddr = contact?.address || '';
 
-    const compEl = document.getElementById('legal-company');
-    if (compEl) compEl.value = contact.company_name || companyName || '';
+    setLegalTargetCompany(finalComp, finalEmail, finalAddr);
 
-    const emailEl = document.getElementById('legal-company-email');
-    if (emailEl) emailEl.value = contact.dpo_email || companyEmail || '';
-
-    const addrEl = document.getElementById('legal-company-address');
-    if (addrEl) addrEl.value = contact.address || '';
-
-    if (contact.jurisdiction) {
+    if (contact?.jurisdiction) {
         const jurisEl = document.getElementById('legal-jurisdiction');
         if (jurisEl) jurisEl.value = contact.jurisdiction;
+        state.selectedJurisdiction = contact.jurisdiction;
+        document.querySelectorAll('.jurisdiction-btn').forEach(b => {
+            b.classList.toggle('active', b.dataset.jurisdiction === contact.jurisdiction);
+        });
     }
 
-    const piiSummary = buildComprehensivePIISummary(companyName, exposureId);
+    const piiSummary = buildComprehensivePIISummary(finalComp, exposureId);
     const piiEl = document.getElementById('legal-pii-summary');
     if (piiEl) piiEl.value = piiSummary;
+
+    updateLegalChatContext();
 }
 
 function buildComprehensivePIISummary(companyName, exposureId) {
@@ -981,9 +1335,27 @@ function renderNoticePreview(data) {
     const preview = document.getElementById('notice-preview-content');
     preview.textContent = data.notice_text;
 
+    // Make the notice text editable so user can tweak before dispatch
+    preview.contentEditable = 'true';
+    preview.spellcheck = false;
+    preview.setAttribute('data-editable', 'true');
+
     // Show action buttons
     document.getElementById('btn-copy-notice').style.display = '';
+    const dlNoticeBtn = document.getElementById('btn-download-notice');
+    if (dlNoticeBtn) dlNoticeBtn.style.display = '';
     document.getElementById('btn-dispatch-notice').style.display = '';
+
+    // Show AI badge if notice was generated via LLM
+    const aiBadge = document.getElementById('notice-ai-badge');
+    if (aiBadge) {
+        if (data.ai_generated) {
+            aiBadge.style.display = 'inline-flex';
+            aiBadge.textContent = `✨ AI-Drafted (${data.ai_model || 'Gemini'})`;
+        } else {
+            aiBadge.style.display = 'none';
+        }
+    }
 
     // Show receipt
     const receipt = document.getElementById('notice-receipt');
@@ -994,14 +1366,59 @@ function renderNoticePreview(data) {
         `${data.response_deadline_days} days (${new Date(data.response_deadline).toLocaleDateString()})`;
 }
 
+function downloadNotice() {
+    const preview = document.getElementById('notice-preview-content');
+    const liveText = (preview?.innerText || preview?.textContent || '').trim();
+    if (!liveText) {
+        showToast('No notice text to download.', 'warning');
+        return;
+    }
+    const data = state.generatedNotice || {};
+    const ref = data.reference_id || 'STATUTORY_NOTICE';
+    const rawCompany = data.recipient?.company_name || document.getElementById('legal-company')?.value || 'Controller';
+    const company = rawCompany.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const filename = `Notice_${company}_${ref}.txt`;
+
+    const blob = new Blob([liveText], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast(`Notice downloaded as ${filename}`, 'success');
+}
+
 async function dispatchNotice() {
     if (!state.generatedNotice) return;
 
     const data = state.generatedNotice;
+
+    // Get the (possibly edited) notice text from the editable preview
+    const preview = document.getElementById('notice-preview-content');
+    const noticeBody = (preview.innerText || preview.textContent || '').trim();
+
+    // Recipient email from the form field
+    const recipientEmail = (document.getElementById('legal-company-email').value || '').trim();
+    const companyName = data.recipient?.company_name || document.getElementById('legal-company').value || 'Data Controller';
+
+    // Build subject line
+    const subject = `Data Erasure / Privacy Notice – ${companyName} [Ref: ${data.reference_id || ''}]`;
+
+    // Open the default mail client via mailto: link
+    const mailtoUrl = `mailto:${encodeURIComponent(recipientEmail)}` +
+        `?subject=${encodeURIComponent(subject)}` +
+        `&body=${encodeURIComponent(noticeBody)}`;
+
+    window.open(mailtoUrl, '_blank');
+
+    // Also persist dispatch to backend for compliance tracking
     const payload = {
         jurisdiction: data.jurisdiction,
-        company_name: data.recipient.company_name,
-        company_email: document.getElementById('legal-company-email').value,
+        company_name: companyName,
+        company_email: recipientEmail,
         user_name: data.sender.name,
         user_email: data.sender.email,
         notice_reference: data.reference_id,
@@ -1017,13 +1434,14 @@ async function dispatchNotice() {
         const result = await resp.json();
 
         if (result.status === 'dispatched') {
-            showToast(result.message, 'success');
+            showToast(result.message + ' — Mail app opened.', 'success');
             navigateTo('compliance');
         } else {
-            showToast('Dispatch failed', 'error');
+            showToast('Notice opened in mail app. Backend dispatch failed — track manually.', 'warning');
         }
     } catch (e) {
-        showToast('Error: ' + e.message, 'error');
+        // mailto already opened, so the user can still send — just warn about tracking
+        showToast('Mail app opened. Backend tracking error: ' + e.message, 'warning');
     }
 }
 
@@ -1053,8 +1471,13 @@ function renderComplianceRequests(requests) {
             req.progress_pct > 70 ? 'var(--accent-warning)' : 'var(--accent-primary)';
 
         const milestonesHtml = (req.milestones || []).map((ms, i) => {
-            const isCompleted = ms.status === 'completed';
-            const isNext = !isCompleted && i === (req.milestones || []).findIndex(m => m.status !== 'completed');
+            // The tracker only ever sets status 'completed' on Day 0, so keying the
+            // timeline off it left Day 7/14/30 permanently un-reached even on a
+            // 20-day-old request. statutory_tracker now computes `reached` against
+            // the real clock; fall back to status for older payloads.
+            const msReached = m => m.reached === true || m.status === 'completed';
+            const isCompleted = msReached(ms);
+            const isNext = !isCompleted && i === (req.milestones || []).findIndex(m => !msReached(m));
             return `
                 <div class="timeline-item ${isCompleted ? 'completed' : ''} ${isNext ? 'active' : ''}">
                     <span class="timeline-label">${escapeHtml(ms.label)}</span>
@@ -1420,10 +1843,10 @@ function formatNumber(n) {
 
 function getSavedProfile() {
     return {
-        name: document.getElementById('input-name')?.value || '',
-        email: document.getElementById('input-email')?.value || '',
-        phone: document.getElementById('input-phone')?.value || '',
-        pan: document.getElementById('input-pan')?.value || '',
+        name: document.getElementById('ag-name')?.value || document.getElementById('input-name')?.value || '',
+        email: document.getElementById('ag-email')?.value || document.getElementById('input-email')?.value || '',
+        phone: document.getElementById('ag-phone')?.value || document.getElementById('input-phone')?.value || '',
+        pan: document.getElementById('ag-pan')?.value || document.getElementById('input-pan')?.value || '',
     };
 }
 
@@ -1466,17 +1889,20 @@ function agProfile() {
     return {
         name: agEl('ag-name').value.trim(),
         email: agEl('ag-email').value.trim(),
-        phone: agEl('ag-phone').value.trim(),
+        phone: getMultiValues('ag-phone').join(', '),
         city: agEl('ag-city').value.trim(),
         country: agEl('ag-country').value,
         declared_accounts: (agEl('ag-declared')?.value || '').trim(),
-        password: (agEl('ag-password')?.value || ''),
+        // `password` stays for the existing single-value contract; `passwords`
+        // carries every one the user added.
+        passwords: getMultiValues('ag-password'),
+        password: (getMultiValues('ag-password')[0] || ''),
         known_usernames: (agEl('ag-usernames')?.value || '').trim(),
         alt_emails: (agEl('ag-altemails')?.value || '').trim(),
-        alt_phones: (agEl('ag-altphones')?.value || '').trim(),
+        alt_phones: getMultiValues('ag-altphones').join(', '),
         date_of_birth: (agEl('ag-dob')?.value || '').trim(),
-        upi_id: (agEl('ag-upi')?.value || '').trim(),
-        websites: (agEl('ag-websites')?.value || '').trim(),
+        upi_id: getMultiValues('ag-upi').join(', '),
+        websites: getMultiValues('ag-websites').join(', '),
         search_guessed_handles: agEl('ag-guess') ? agEl('ag-guess').checked : true,
         aadhaar: (agEl('ag-aadhaar')?.value || '').trim(),
         pan: (agEl('ag-pan')?.value || '').trim(),
@@ -1506,13 +1932,84 @@ function traceAdd(agent, message, status) {
                     (status === 'awaiting_approval' ? ' approval' : '');
     const a = document.createElement('span');
     a.className = 'trace-agent a-' + (agent || 'orchestrator');
-    a.textContent = agent || 'agent';
+    const AGENT_LABELS = {
+        forensics: '🕵️ Forensics',
+        legal_counsel: '⚖️ Legal',
+        remediation: '🛡️ Remediation',
+        swarm_coordinator: '🤖 Lead',
+        orchestrator: '⚡ Swarm',
+        identity: '🪪 Identity',
+        discovery: '🔍 Discovery',
+        risk: '📊 Risk',
+        action: '📝 Action',
+        followup: '⏱️ Followup',
+        verification: '✅ Verify'
+    };
+    a.textContent = AGENT_LABELS[agent] || agent || 'agent';
     const m = document.createElement('span');
     m.className = 'trace-msg';
     m.textContent = message;
     row.append(a, m);
     box.appendChild(row);
     box.scrollTop = box.scrollHeight;
+}
+
+function renderThreatSurface(data) {
+    const targets = [
+        {
+            container: document.getElementById('threat-surface-container'),
+            grid: document.getElementById('threat-vectors-grid'),
+            gradeEl: document.getElementById('threat-surface-grade'),
+        },
+        {
+            container: document.getElementById('dashboard-threat-surface'),
+            grid: document.getElementById('dashboard-threat-grid'),
+            gradeEl: document.getElementById('dashboard-threat-grade'),
+        },
+    ];
+
+    if (!data) {
+        targets.forEach(t => { if (t.container) t.container.hidden = true; });
+        return;
+    }
+
+    const vectors = data.threat_vectors || data.vectors || [];
+    if (!vectors.length) {
+        targets.forEach(t => { if (t.container) t.container.hidden = true; });
+        return;
+    }
+
+    const grade = (data.overall_surface_grade || 'MODERATE').toUpperCase();
+
+    targets.forEach(t => {
+        if (!t.container || !t.grid) return;
+
+        if (t.gradeEl) {
+            t.gradeEl.textContent = grade;
+            t.gradeEl.className = 'threat-surface-grade ' + grade;
+        }
+
+        t.grid.innerHTML = '';
+        vectors.forEach(v => {
+            const card = document.createElement('div');
+            card.className = 'threat-vector-card';
+            const sev = (v.severity || 'medium').toLowerCase();
+            const sources = (v.affected_sources || []).join(', ');
+
+            card.innerHTML = `
+                <div class="threat-vector-top">
+                    <div class="threat-vector-name">${agEsc(v.vector || 'Compound Threat Vector')}</div>
+                    <span class="threat-vector-sev ${sev}">${sev}</span>
+                </div>
+                ${sources ? `<div class="threat-vector-sources">Correlated Sources: <span>${agEsc(sources)}</span></div>` : ''}
+                <div class="threat-vector-model">${agEsc(v.adversary_playbook || v.threat_model || 'Adversary leverages correlated credentials and contact telemetry across services.')}</div>
+                <div class="threat-vector-fix"><strong>Shield Action:</strong> ${agEsc(v.blue_team_mitigation || v.mitigation || 'Rotate credentials immediately and configure hardware 2FA.')}</div>
+            `;
+            t.grid.appendChild(card);
+        });
+
+        t.container.hidden = false;
+    });
 }
 
 function traceReasoning(text) {
@@ -1546,7 +2043,21 @@ function agentConnect() {
         ws.onopen = () => { Agent.ws = ws; resolve(ws); };
         ws.onerror = () => reject(new Error('WebSocket failed'));
         ws.onmessage = (ev) => agentOnMessage(JSON.parse(ev.data));
-        ws.onclose = () => { Agent.ws = null; };
+        ws.onclose = () => {
+            Agent.ws = null;
+            if (!Agent.busy) return;
+            // The socket died mid-phase. onerror cannot reject a promise that
+            // already resolved at onopen, and neither phase_complete nor an
+            // error frame can arrive on a closed socket — so nothing else was
+            // ever going to clear the busy flag, and the button sat on
+            // "Working… 42s · 9 steps" for ever with no explanation.
+            traceAdd('orchestrator',
+                'Live agent connection closed before the run finished. Nothing was dispatched — deploy again to retry.',
+                'error');
+            const statusText = document.getElementById('radar-status-text');
+            if (statusText) statusText.textContent = 'Connection lost — agent run interrupted';
+            agentSetBusy(false);
+        };
     });
 }
 
@@ -1554,9 +2065,43 @@ function agentOnMessage(msg) {
     if (msg.type === 'agent_event') {
         Agent.steps = (Agent.steps || 0) + 1;
         traceAdd(msg.agent, msg.message, msg.status);
+
+        // Update integrated threat radar & scan progress
+        const progressFill = document.getElementById('scan-progress-fill');
+        const statusText = document.getElementById('radar-status-text');
+        const scanLog = document.getElementById('scan-log');
+        if (progressFill) {
+            let pct = Math.min(95, 15 + Agent.steps * 6);
+            if (msg.agent === 'forensics') pct = Math.max(pct, 40);
+            else if (msg.agent === 'legal' || msg.agent === 'legal_counsel') pct = Math.max(pct, 70);
+            else if (msg.agent === 'remediation' || msg.agent === 'action') pct = Math.max(pct, 88);
+            progressFill.style.width = `${pct}%`;
+        }
+        if (statusText && msg.message) {
+            statusText.textContent = `[${msg.agent || 'swarm'}] ${msg.message.slice(0, 58)}${msg.message.length > 58 ? '…' : ''}`;
+        }
+        if (scanLog && msg.message) {
+            scanLog.innerHTML = `<div class="log-entry ${msg.status === 'error' ? 'log-danger' : 'log-success'}"><span style="color:var(--accent-primary);font-weight:600">[${agEsc(msg.agent || 'agent')}]</span> ${agEsc(msg.message)}</div>`;
+        }
+
+        if (msg.tool_output && (msg.tool_name === 'analyze_threat_surface' || msg.agent === 'forensics')) {
+            const tm = msg.tool_output.threat_surface || msg.tool_output;
+            if (tm && (tm.threat_vectors || tm.overall_surface_grade)) {
+                renderThreatSurface(tm);
+            }
+        }
     } else if (msg.type === 'agent_reasoning') {
         traceReasoning(msg.text);
     } else if (msg.type === 'phase_complete') {
+        const progressFill = document.getElementById('scan-progress-fill');
+        if (progressFill) progressFill.style.width = '100%';
+        const badge = document.getElementById('radar-status-badge');
+        if (badge) { badge.textContent = 'COMPLETED'; badge.classList.remove('active'); }
+        const statusText = document.getElementById('radar-status-text');
+        if (statusText) statusText.textContent = 'Threat Sweep Complete · Findings Attributed';
+        const scanLog = document.getElementById('scan-log');
+        if (scanLog) scanLog.innerHTML = '<div class="log-entry log-success">✓ Deep discovery sweep completed. Review correlated attack vectors &amp; statutory notices below.</div>';
+
         agentRender(msg);
         syncAgentToExposuresAndDashboard(msg);
         agentSetBusy(false);
@@ -1574,11 +2119,17 @@ function agentSetBusy(busy) {
     if (approve) approve.disabled = busy;
     agEl('trace-live').hidden = !busy;
 
-    // A static "Agent working…" for two minutes is indistinguishable from a
-    // hang. An LLM planner spends a round trip per decision, so a full run
-    // legitimately takes 1-3 minutes — the button has to show that it is
-    // progressing, not just that it is busy.
+    const radarSweep = document.getElementById('radar-sweep');
+    const badge = document.getElementById('radar-status-badge');
+    const statusText = document.getElementById('radar-status-text');
+    const progressFill = document.getElementById('scan-progress-fill');
+
     if (busy) {
+        if (radarSweep) radarSweep.classList.add('active');
+        if (badge) { badge.textContent = 'SWARM ACTIVE'; badge.classList.add('active'); }
+        if (statusText) statusText.textContent = 'Threat Radar & Multi-Agent Swarm Active';
+        if (progressFill) progressFill.style.width = '15%';
+
         Agent.startedAt = Date.now();
         Agent.steps = 0;
         const tick = () => {
@@ -1592,6 +2143,8 @@ function agentSetBusy(busy) {
     } else {
         clearInterval(Agent.timer);
         agEl('ag-run').textContent = 'Deploy Privacy Agent';
+        if (radarSweep) radarSweep.classList.remove('active');
+        if (badge && badge.textContent !== 'COMPLETED') { badge.textContent = 'STANDBY'; badge.classList.remove('active'); }
     }
 }
 
@@ -1624,6 +2177,14 @@ function agentRender(msg) {
     ].map(([l, v]) => `<div class="risk-stat"><div class="risk-stat-v">${agEsc(v)}</div><div class="risk-stat-l">${agEsc(l)}</div></div>`).join('');
 
     agEl('agent-summary').innerHTML = renderMarkdown(msg.summary || '');
+
+    // Fetch and render Threat Surface Matrix
+    if (msg.user_id) {
+        fetch('/api/agent/threat-surface/' + encodeURIComponent(msg.user_id))
+            .then(r => r.json())
+            .then(renderThreatSurface)
+            .catch(() => {});
+    }
 
     // Approval gate
     Agent.drafted = st.requests.filter(r => r.status === 'awaiting_approval');
@@ -1767,6 +2328,14 @@ function syncAgentToExposuresAndDashboard(msg) {
     if (window.RightsAdvisor) {
         window.RightsAdvisor.updateContextStats();
     }
+
+    // Sync Threat Surface Matrix across Dashboard & Agent
+    const userId = msg.user_id || (st && st.user_id);
+    const threatUrl = userId ? `/api/agent/threat-surface/${encodeURIComponent(userId)}` : '/api/agent/threat-surface';
+    fetch(threatUrl)
+        .then(r => r.json())
+        .then(renderThreatSurface)
+        .catch(() => {});
 }
 
 function updateDashboardFromAgent(st, riskScore) {
@@ -1978,11 +2547,14 @@ function initProfileSync() {
     ];
 
     // Load from localStorage if present
-    const saved = localStorage.getItem('sovereign_profile');
+    const saved = localStorage.getItem('apnipehchaan_profile') || localStorage.getItem('sovereign_profile');
     if (saved) {
         try {
             const p = JSON.parse(saved);
             Object.entries(p).forEach(([k, val]) => {
+                // Credentials are never written here, but an older build's
+                // leftover entry must not be restored into a password field.
+                if (MASKED_MULTI_GROUPS.has(k)) return;
                 const el = document.getElementById(k);
                 if (el && val && !el.value) el.value = val;
             });
@@ -2006,7 +2578,7 @@ function initProfileSync() {
                     const f = document.getElementById(fid);
                     if (f) profileObj[fid] = f.value;
                 });
-                localStorage.setItem('sovereign_profile', JSON.stringify(profileObj));
+                localStorage.setItem('apnipehchaan_profile', JSON.stringify(profileObj));
             });
         });
     });
@@ -2052,12 +2624,16 @@ async function agentRun() {
     agEl('ledger-panel').hidden = true;
     const pp = agEl('plan-panel'); if (pp) pp.hidden = true;
     const cp = agEl('candidates-panel'); if (cp) cp.hidden = true;
+
+    const logEl = document.getElementById('scan-log');
+    if (logEl) logEl.innerHTML = '<div class="log-entry log-success">Deploying autonomous swarm… Initiating breach intelligence &amp; dark web sweep.</div>';
+
     agentSetBusy(true);
     try {
         const ws = await agentConnect();
         ws.send(JSON.stringify({ action: 'scan', profile }));
     } catch (e) {
-        traceAdd('orchestrator', 'Connecting via Sovereign Cloud Execution API…', 'running');
+        traceAdd('orchestrator', 'Connecting via ApniPehChaan Cloud Execution API…', 'running');
         try {
             const resp = await fetch('/api/agent/scan', {
                 method: 'POST',
@@ -2073,6 +2649,15 @@ async function agentRun() {
                 Agent.steps = (Agent.steps || 0) + 1;
                 traceAdd(ev.agent, ev.message, ev.status);
             }
+            const progressFill = document.getElementById('scan-progress-fill');
+            if (progressFill) progressFill.style.width = '100%';
+            const badge = document.getElementById('radar-status-badge');
+            if (badge) { badge.textContent = 'COMPLETED'; badge.classList.remove('active'); }
+            const statusText = document.getElementById('radar-status-text');
+            if (statusText) statusText.textContent = 'Threat Sweep Complete · Findings Attributed';
+            const sLog = document.getElementById('scan-log');
+            if (sLog) sLog.innerHTML = '<div class="log-entry log-success">✓ Deep discovery sweep completed. Review correlated attack vectors &amp; statutory notices below.</div>';
+
             const msg = { action: 'scan', ...data };
             agentRender(msg);
             syncAgentToExposuresAndDashboard(msg);
@@ -2093,7 +2678,7 @@ async function agentApprove() {
         const ws = await agentConnect();
         ws.send(JSON.stringify({ action: 'approve', profile: Agent.profile, request_ids: ids }));
     } catch (e) {
-        traceAdd('orchestrator', 'Dispatching notices via Sovereign Cloud Execution API…', 'running');
+        traceAdd('orchestrator', 'Dispatching notices via ApniPehChaan Cloud Execution API…', 'running');
         try {
             const resp = await fetch('/api/agent/approve', {
                 method: 'POST',
@@ -2130,10 +2715,51 @@ async function agentReset() {
             body: JSON.stringify(profile),
         });
         traceClear();
+        clearMultiInputs();
         agEl('agent-outcome').hidden = true;
         agEl('agent-summary').innerHTML = '';
         agEl('approval-panel').hidden = true;
         agEl('ledger-panel').hidden = true;
+        const rp = agEl('plan-panel'); if (rp) rp.hidden = true;
+        const rc = agEl('candidates-panel'); if (rc) rc.hidden = true;
+
+        // The server has wiped this identity, so nothing derived from it may be
+        // left on screen. state.agentState in particular is what
+        // navigateTo('exposures') re-renders from, so leaving it set repainted
+        // the Exposures tab and the Command Center with the exact findings that
+        // had just been deleted — the reset looked like it had not happened.
+        state.agentState = null;
+        state.agentSummary = null;
+        state.agentRisk = null;
+        state.scanResults = null;
+        Agent.userId = null;
+        Agent.riskBefore = null;
+        Agent.drafted = [];
+        renderAgentExposures({ exposures: [] });
+        renderThreatSurface(null);
+
+        const scoreEl = document.getElementById('risk-score-value');
+        if (scoreEl) scoreEl.textContent = '—';
+        ['breach-count', 'broker-count', 'paste-count', 'infostealer-count'].forEach(cid => {
+            const el = document.getElementById(cid);
+            if (el) el.textContent = '0';
+        });
+        const lvlBadge = document.getElementById('risk-level-badge');
+        if (lvlBadge) { lvlBadge.textContent = 'Not Scanned'; lvlBadge.style.background = ''; lvlBadge.style.color = ''; }
+        const alarmCard = document.getElementById('stat-infostealer');
+        if (alarmCard) alarmCard.classList.remove('stat-alarm');
+        const riskCard = document.getElementById('stat-risk-score');
+        if (riskCard) riskCard.style.borderColor = '';
+        const recsCard = document.getElementById('recommendations-card');
+        if (recsCard) recsCard.style.display = 'none';
+        if (window.RightsAdvisor) window.RightsAdvisor.updateContextStats();
+
+        const prog = document.getElementById('scan-progress-fill'); if (prog) prog.style.width = '0%';
+        const sweep = document.getElementById('radar-sweep'); if (sweep) sweep.classList.remove('active');
+        const badge = document.getElementById('radar-status-badge'); if (badge) { badge.textContent = 'STANDBY'; badge.classList.remove('active'); }
+        const statusText = document.getElementById('radar-status-text'); if (statusText) statusText.textContent = 'Autonomous Privacy Engine Ready';
+        const logEl = document.getElementById('scan-log'); if (logEl) logEl.innerHTML = '<div class="log-entry log-idle">Awaiting agent deployment... Configure your identity and click &ldquo;Deploy Privacy Agent&rdquo;.</div>';
+
         traceAdd('orchestrator', 'Identity reset. The demo can be run again from a clean slate.', 'ok');
     } catch (e) {
         traceAdd('orchestrator', 'Reset failed: ' + e.message, 'error');
@@ -2156,6 +2782,8 @@ document.addEventListener('DOMContentLoaded', () => {
     agEl('ag-run').addEventListener('click', agentRun);
     agEl('ag-approve').addEventListener('click', agentApprove);
     agEl('ag-reset').addEventListener('click', agentReset);
+    initMultiInputs();
+    initPasswordToggle();
 });
 
 /* ── Candidates: matched a handle, nothing ties them to you ───────────────── */
@@ -2200,6 +2828,175 @@ function renderCandidates(st) {
     });
 }
 
+/* ── Multi-Value Input Helpers (Phone, UPI, Websites) ────────────────── */
+
+/**
+ * Stores multi-values per group. Key = input id prefix (e.g. 'ag-phone'),
+ * value = array of added strings.
+ */
+const _multiValues = {};
+
+// Groups whose tags must never render their value on screen. The password
+// field has an eye toggle precisely so a screen recording cannot capture a
+// credential; a plaintext tag beside it would defeat that.
+const MASKED_MULTI_GROUPS = new Set(['ag-password']);
+
+function initMultiInputs() {
+    const groups = ['ag-phone', 'ag-altphones', 'ag-upi', 'ag-websites', 'ag-password'];
+
+    groups.forEach(groupId => {
+        _multiValues[groupId] = [];
+        const input = document.getElementById(groupId);
+        const addBtn = document.querySelector(`.multi-add-btn[data-group="${groupId}"]`);
+
+        if (!input) return;
+
+        // Add on button click
+        if (addBtn) {
+            addBtn.addEventListener('click', () => {
+                const val = input.value.trim();
+                if (val) {
+                    addMultiTag(groupId, val);
+                    input.value = '';
+                    input.focus();
+                }
+            });
+        }
+
+        // Add on Enter key or comma
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ',') {
+                e.preventDefault();
+                const val = input.value.trim();
+                if (val) {
+                    addMultiTag(groupId, val);
+                    input.value = '';
+                }
+            }
+        });
+
+        // Add on paste (e.g. pasted comma-separated list)
+        input.addEventListener('paste', () => {
+            setTimeout(() => {
+                const val = input.value.trim();
+                if (val.includes(',') || val.includes('\n')) {
+                    addMultiTag(groupId, val);
+                    input.value = '';
+                }
+            }, 20);
+        });
+    });
+}
+
+function addMultiTag(groupId, value) {
+    if (!value) return;
+    if (!_multiValues[groupId]) _multiValues[groupId] = [];
+    // A comma is a legal password character, so only non-secret groups are
+    // split on separators. A password is taken exactly as typed.
+    const parts = MASKED_MULTI_GROUPS.has(groupId)
+        ? [value]
+        : value.split(/[,;\n]+/).map(s => s.trim()).filter(Boolean);
+    const tagsContainer = document.getElementById(groupId + '-tags');
+
+    parts.forEach(part => {
+        if (_multiValues[groupId].includes(part)) return;
+        _multiValues[groupId].push(part);
+
+        if (!tagsContainer) return;
+
+        const tag = document.createElement('span');
+        tag.className = 'multi-tag';
+        tag.dataset.value = part;
+
+        const text = document.createElement('span');
+        if (MASKED_MULTI_GROUPS.has(groupId)) {
+            text.textContent = '\u2022'.repeat(Math.min(Math.max(part.length, 6), 12));
+            text.title = 'Hidden on purpose';
+        } else {
+            text.textContent = part;
+        }
+
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'multi-tag-remove';
+        removeBtn.textContent = '×';
+        removeBtn.title = 'Remove';
+        removeBtn.addEventListener('click', () => {
+            removeMultiTag(groupId, part, tag);
+        });
+
+        tag.append(text, removeBtn);
+        tagsContainer.appendChild(tag);
+    });
+}
+
+function removeMultiTag(groupId, value, tagEl) {
+    if (!_multiValues[groupId]) return;
+    const idx = _multiValues[groupId].indexOf(value);
+    if (idx !== -1) _multiValues[groupId].splice(idx, 1);
+    if (tagEl) {
+        tagEl.style.transition = 'all 0.2s ease';
+        tagEl.style.opacity = '0';
+        tagEl.style.transform = 'scale(0.8)';
+        setTimeout(() => tagEl.remove(), 200);
+    }
+}
+
+/**
+ * Collect all values for a multi-input group: the already-added tags
+ * plus whatever is currently typed in the input field.
+ */
+function getMultiValues(groupId) {
+    const vals = [...(_multiValues[groupId] || [])];
+    const input = document.getElementById(groupId);
+    if (input) {
+        const current = MASKED_MULTI_GROUPS.has(groupId) ? input.value : input.value.trim();
+        if (current) {
+            const parts = MASKED_MULTI_GROUPS.has(groupId)
+                ? [current]
+                : current.split(/[,;\n]+/).map(s => s.trim()).filter(Boolean);
+            parts.forEach(p => {
+                if (!vals.includes(p)) vals.push(p);
+            });
+        }
+    }
+    return vals;
+}
+
+function clearMultiInputs() {
+    ['ag-phone', 'ag-altphones', 'ag-upi', 'ag-websites', 'ag-password'].forEach(groupId => {
+        _multiValues[groupId] = [];
+        const container = document.getElementById(groupId + '-tags');
+        if (container) container.innerHTML = '';
+        const input = document.getElementById(groupId);
+        if (input) input.value = '';
+    });
+}
+
+/* ── Password Visibility Toggle ──────────────────────────────────────── */
+
+function initPasswordToggle() {
+    const toggle = document.getElementById('ag-password-toggle');
+    const input = document.getElementById('ag-password');
+    if (!toggle || !input) return;
+
+    toggle.addEventListener('click', () => {
+        const isPassword = input.type === 'password';
+        input.type = isPassword ? 'text' : 'password';
+        toggle.classList.toggle('active', isPassword);
+        toggle.title = isPassword ? 'Hide password' : 'Show password';
+
+        // Swap eye icons
+        const eyeOpen = toggle.querySelector('.eye-open');
+        const eyeClosed = toggle.querySelector('.eye-closed');
+        if (eyeOpen && eyeClosed) {
+            eyeOpen.style.display = isPassword ? 'none' : '';
+            eyeClosed.style.display = isPassword ? '' : 'none';
+        }
+    });
+}
+
+
 async function confirmCandidate(exposureId, isMine, btn) {
     const row = agEl('cand-' + exposureId);
     try {
@@ -2207,6 +3004,10 @@ async function confirmCandidate(exposureId, isMine, btn) {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ ...agProfile(), exposure_id: exposureId, is_mine: isMine }),
         });
+        if (!resp.ok) {
+            const errBody = await resp.json().catch(() => ({}));
+            throw new Error(errBody.detail || `Server error (${resp.status})`);
+        }
         const data = await resp.json();
         if (row) {
             row.querySelectorAll('.cand-btn').forEach(x => { x.disabled = true; x.classList.add('done'); });
@@ -2242,8 +3043,11 @@ async function confirmCandidate(exposureId, isMine, btn) {
         if (data && data.state) {
             syncAgentToExposuresAndDashboard({ state: data.state });
         }
+        showToast(isMine ? 'Confirmed as yours' : 'Marked as not yours', 'success');
     } catch (e) {
-        if (row) row.querySelector('.cand-why').textContent = 'Could not save that. Try again.';
+        console.error('Confirm candidate error:', e);
+        if (row) row.querySelector('.cand-why').textContent = 'Could not save: ' + (e.message || 'network error. Try again.');
+        showToast('Could not save: ' + (e.message || 'Unknown error'), 'error');
     }
 }
 
@@ -2303,12 +3107,15 @@ const RightsAdvisor = {
             const data = await resp.json();
             const tag = document.getElementById('advisor-model-tag');
             if (tag) {
-                if (data.planner === 'openai_compat') {
-                    tag.innerHTML = `<span class="status-dot online"></span> Groq · GPT-OSS Active`;
+                const mod = (data.model || '').toLowerCase();
+                if (mod.includes('gemini') || data.llm_active) {
+                    tag.innerHTML = `<span class="status-dot online"></span> ✨ Gemini Active (Groq Backup)`;
+                } else if (mod.includes('groq')) {
+                    tag.innerHTML = `<span class="status-dot online"></span> ⚡ Groq Active (Gemini Backup)`;
                 } else if (data.planner === 'anthropic') {
                     tag.innerHTML = `<span class="status-dot online"></span> Claude 3.5 Active`;
                 } else {
-                    tag.innerHTML = `<span class="status-dot online"></span> AI Sovereign Engine`;
+                    tag.innerHTML = `<span class="status-dot online"></span> Deterministic Engine`;
                 }
             }
         } catch(e) {}
@@ -2367,6 +3174,8 @@ const RightsAdvisor = {
                 { label: "🔍 Explain Attribution", prompt: "How does the agent attribute accounts without false positives?" },
                 { label: "👥 What are Candidates?", prompt: "Why are some handles parked as unconfirmed candidates?" },
                 { label: "🛡️ Verification Proof", prompt: "How does the agent prove that a removal actually occurred?" },
+                { label: "🎯 Threat Vector Analysis", prompt: "What is the difference between verified breaches and data brokers?" },
+                { label: "🔑 Password Exposure", prompt: "How does k-anonymous password checking protect my credentials?" },
             ],
             scanner: [
                 { label: "🎯 Threat Vector Analysis", prompt: "What is the difference between verified breaches and data brokers?" },
@@ -2452,6 +3261,18 @@ const RightsAdvisor = {
 
             const data = await resp.json();
             typingEl.remove();
+
+            if (data.model) {
+                const tag = document.getElementById('advisor-model-tag');
+                if (tag) {
+                    const mLower = data.model.toLowerCase();
+                    if (mLower.includes('gemini')) {
+                        tag.innerHTML = `<span class="status-dot online"></span> ✨ Gemini Active (Groq Backup)`;
+                    } else if (mLower.includes('groq')) {
+                        tag.innerHTML = `<span class="status-dot online"></span> ⚡ Groq Backup Active`;
+                    }
+                }
+            }
 
             if (data.reply) {
                 this.history.push({ role: 'assistant', content: data.reply });

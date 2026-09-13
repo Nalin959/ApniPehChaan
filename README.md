@@ -1,4 +1,4 @@
-# SovereignPrivacy AI 🛡️
+# ApniPehChaan 🛡️
 ### Autonomous Digital Identity & Sovereign Privacy Protection Agent
 > *Find where your personal data actually is, prove it, and exercise your right to erasure under India's DPDP Act 2023, EU GDPR, and US CCPA/CPRA.*
 > Built for the 24-Hour Hackathon.
@@ -131,12 +131,12 @@ Twenty-two capabilities are exposed as tools over one registry
 
 | Planner | When it runs | What it does |
 |---|---|---|
-| **Google Gemini** | `GEMINI_API_KEY` set | Gemini (`gemini-3.6-flash`, `gemini-2.5-flash`, `gemini-1.5-pro`) with autonomous multi-turn tool calling and thought signature preservation (`SOVEREIGN_PLANNER=gemini`) |
-| **Anthropic** | `ANTHROPIC_API_KEY` set | Claude (`claude-opus-5` by default, override with `SOVEREIGN_MODEL`) chooses each call and explains why |
+| **Google Gemini** | `GEMINI_API_KEY` set | Gemini (`gemini-3.6-flash`, `gemini-2.5-flash`, `gemini-1.5-pro`) with autonomous multi-turn tool calling and thought signature preservation (`APNIPEHCHAAN_PLANNER=gemini`) |
+| **Anthropic** | `ANTHROPIC_API_KEY` set | Claude (`claude-opus-5` by default, override with `APNIPEHCHAAN_MODEL`) chooses each call and explains why |
 | **OpenAI-compatible** | any of `GROQ_API_KEY`, `CEREBRAS_API_KEY`, `GITHUB_TOKEN`, `MISTRAL_API_KEY`, `OPENROUTER_API_KEY`, `TOGETHER_API_KEY`, `OLLAMA_API_KEY` | One adapter covers all seven providers (`backend/agent/openai_compat_planner.py`) |
 | **Deterministic** | no key, or the LLM path errored | A fixed pipeline over the *identical* tools. The product works end to end; only the reasoning is canned |
 
-`SOVEREIGN_PLANNER` pins one when several keys are present. The UI states which is live. If the
+`APNIPEHCHAAN_PLANNER` (or legacy `SOVEREIGN_PLANNER`) pins one when several keys are present. The UI states which is live. If the
 LLM path errors mid-run it falls back to the deterministic pipeline rather than failing the
 demo, and says why in one actionable line ("the key was rejected (401)", "that key lacks access
 to this model").
@@ -621,7 +621,7 @@ cheerfully draft a DPDP notice against an Indian court record, since "draft the 
 obvious next step and the rule forbidding it is three paragraphs up the system prompt.
 
 ```bash
-SOVEREIGN_PLANNER=groq ./.venv/bin/python benchmark_planner.py
+APNIPEHCHAAN_PLANNER=groq ./.venv/bin/python benchmark_planner.py
 ```
 
 ---

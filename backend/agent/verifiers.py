@@ -51,7 +51,7 @@ import urllib.request
 from dataclasses import dataclass, asdict
 from datetime import datetime, timezone
 
-USER_AGENT = "SovereignPrivacy-AI/2.0 (privacy self-service tool)"
+USER_AGENT = "ApniPehChaan/2.0 (privacy self-service tool)"
 TIMEOUT = 15
 
 
@@ -124,12 +124,22 @@ def check_password_pwned(password: str) -> Evidence:
             break
 
     reproduce = f"curl -s https://api.pwnedpasswords.com/range/{prefix} | grep -i {suffix[:12]}"
+    # The hash must not travel back out in the record either. `proof` is quoted
+    # into the run log by tools.verify_password_exposure and persisted with it,
+    # and prefix + full suffix is the COMPLETE, unsalted SHA-1 of the user's
+    # password — for a password that just tested positive in a breach corpus,
+    # i.e. one guaranteed to be in every wordlist, that is a recoverable copy of
+    # the secret sitting in the tool's own logs. k-anonymity protects the wire;
+    # it does not protect what is written down afterwards. The breach count is
+    # the evidence; the hash is not needed to state it, and the reproduce
+    # command above already carries the fragment needed to re-run the check.
 
     if count:
         return Evidence(
             "hibp_pwned_passwords", f"SHA-1 prefix {prefix} (k-anonymous)", url, _now(),
             status, "hit",
-            f"Hash suffix {suffix} returned with a breach count of {count:,}.",
+            f"The hash for this password was returned by the range endpoint with a breach "
+            f"count of {count:,}.",
             f"CONFIRMED: this exact password appears {count:,} times in known breach corpora. "
             f"It does not tell you which of your accounts used it — it tells you the password "
             f"itself is burned and must not be reused anywhere.",
@@ -138,7 +148,8 @@ def check_password_pwned(password: str) -> Evidence:
     return Evidence(
         "hibp_pwned_passwords", f"SHA-1 prefix {prefix} (k-anonymous)", url, _now(),
         status, "clear",
-        f"Hash suffix {suffix} was not present among {len(body.splitlines())} returned hashes.",
+        f"The hash for this password was not present among the "
+        f"{len(body.splitlines())} hashes sharing its 5-character prefix.",
         "This password does not appear in the Pwned Passwords corpus. That is not proof it is "
         "strong, only that it has not turned up in a catalogued breach.",
         reproduce)
