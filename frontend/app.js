@@ -130,6 +130,8 @@ function initNavigation() {
 }
 
 function navigateTo(section) {
+    if (section === 'scanner') section = 'agent';
+
     // Update nav
     document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
     const activeLink = document.querySelector(`.nav-link[data-section="${section}"]`);
@@ -224,6 +226,7 @@ function updateDashboardFromResults(results) {
 // ═══ Scan Form & WebSocket ══════════════════════════════════════════════════
 function initScanForm() {
     const form = document.getElementById('scan-form');
+    if (!form) return;
     form.addEventListener('submit', (e) => {
         e.preventDefault();
         startScan();
@@ -354,10 +357,14 @@ async function doRestScan(profile, addLog, setProgress) {
 
 function finishScan() {
     state.isScanning = false;
-    document.querySelector('.scan-btn-content').style.display = 'flex';
-    document.querySelector('.scan-btn-loading').style.display = 'none';
-    document.getElementById('btn-start-scan').disabled = false;
-    document.getElementById('radar-sweep').classList.remove('active');
+    const btnContent = document.querySelector('.scan-btn-content');
+    if (btnContent) btnContent.style.display = 'flex';
+    const btnLoading = document.querySelector('.scan-btn-loading');
+    if (btnLoading) btnLoading.style.display = 'none';
+    const btn = document.getElementById('btn-start-scan');
+    if (btn) btn.disabled = false;
+    const sweep = document.getElementById('radar-sweep');
+    if (sweep) sweep.classList.remove('active');
 }
 
 // ═══ Exposure Rendering ═════════════════════════════════════════════════════
@@ -1801,10 +1808,10 @@ function formatNumber(n) {
 
 function getSavedProfile() {
     return {
-        name: document.getElementById('input-name')?.value || '',
-        email: document.getElementById('input-email')?.value || '',
-        phone: document.getElementById('input-phone')?.value || '',
-        pan: document.getElementById('input-pan')?.value || '',
+        name: document.getElementById('ag-name')?.value || document.getElementById('input-name')?.value || '',
+        email: document.getElementById('ag-email')?.value || document.getElementById('input-email')?.value || '',
+        phone: document.getElementById('ag-phone')?.value || document.getElementById('input-phone')?.value || '',
+        pan: document.getElementById('ag-pan')?.value || document.getElementById('input-pan')?.value || '',
     };
 }
 
@@ -2006,6 +2013,25 @@ function agentOnMessage(msg) {
     if (msg.type === 'agent_event') {
         Agent.steps = (Agent.steps || 0) + 1;
         traceAdd(msg.agent, msg.message, msg.status);
+
+        // Update integrated threat radar & scan progress
+        const progressFill = document.getElementById('scan-progress-fill');
+        const statusText = document.getElementById('radar-status-text');
+        const scanLog = document.getElementById('scan-log');
+        if (progressFill) {
+            let pct = Math.min(95, 15 + Agent.steps * 6);
+            if (msg.agent === 'forensics') pct = Math.max(pct, 40);
+            else if (msg.agent === 'legal' || msg.agent === 'legal_counsel') pct = Math.max(pct, 70);
+            else if (msg.agent === 'remediation' || msg.agent === 'action') pct = Math.max(pct, 88);
+            progressFill.style.width = `${pct}%`;
+        }
+        if (statusText && msg.message) {
+            statusText.textContent = `[${msg.agent || 'swarm'}] ${msg.message.slice(0, 58)}${msg.message.length > 58 ? '…' : ''}`;
+        }
+        if (scanLog && msg.message) {
+            scanLog.innerHTML = `<div class="log-entry ${msg.status === 'error' ? 'log-danger' : 'log-success'}"><span style="color:var(--accent-primary);font-weight:600">[${agEsc(msg.agent || 'agent')}]</span> ${agEsc(msg.message)}</div>`;
+        }
+
         if (msg.tool_output && (msg.tool_name === 'analyze_threat_surface' || msg.agent === 'forensics')) {
             const tm = msg.tool_output.threat_surface || msg.tool_output;
             if (tm && (tm.threat_vectors || tm.overall_surface_grade)) {
@@ -2015,6 +2041,15 @@ function agentOnMessage(msg) {
     } else if (msg.type === 'agent_reasoning') {
         traceReasoning(msg.text);
     } else if (msg.type === 'phase_complete') {
+        const progressFill = document.getElementById('scan-progress-fill');
+        if (progressFill) progressFill.style.width = '100%';
+        const badge = document.getElementById('radar-status-badge');
+        if (badge) { badge.textContent = 'COMPLETED'; badge.classList.remove('active'); }
+        const statusText = document.getElementById('radar-status-text');
+        if (statusText) statusText.textContent = 'Threat Sweep Complete · Findings Attributed';
+        const scanLog = document.getElementById('scan-log');
+        if (scanLog) scanLog.innerHTML = '<div class="log-entry log-success">✓ Deep discovery sweep completed. Review correlated attack vectors &amp; statutory notices below.</div>';
+
         agentRender(msg);
         syncAgentToExposuresAndDashboard(msg);
         agentSetBusy(false);
@@ -2032,7 +2067,17 @@ function agentSetBusy(busy) {
     if (approve) approve.disabled = busy;
     agEl('trace-live').hidden = !busy;
 
+    const radarSweep = document.getElementById('radar-sweep');
+    const badge = document.getElementById('radar-status-badge');
+    const statusText = document.getElementById('radar-status-text');
+    const progressFill = document.getElementById('scan-progress-fill');
+
     if (busy) {
+        if (radarSweep) radarSweep.classList.add('active');
+        if (badge) { badge.textContent = 'SWARM ACTIVE'; badge.classList.add('active'); }
+        if (statusText) statusText.textContent = 'Threat Radar & Multi-Agent Swarm Active';
+        if (progressFill) progressFill.style.width = '15%';
+
         Agent.startedAt = Date.now();
         Agent.steps = 0;
         const tick = () => {
@@ -2046,6 +2091,8 @@ function agentSetBusy(busy) {
     } else {
         clearInterval(Agent.timer);
         agEl('ag-run').textContent = 'Deploy Privacy Agent';
+        if (radarSweep) radarSweep.classList.remove('active');
+        if (badge && badge.textContent !== 'COMPLETED') { badge.textContent = 'STANDBY'; badge.classList.remove('active'); }
     }
 }
 
@@ -2522,6 +2569,10 @@ async function agentRun() {
     agEl('ledger-panel').hidden = true;
     const pp = agEl('plan-panel'); if (pp) pp.hidden = true;
     const cp = agEl('candidates-panel'); if (cp) cp.hidden = true;
+
+    const logEl = document.getElementById('scan-log');
+    if (logEl) logEl.innerHTML = '<div class="log-entry log-success">Deploying autonomous swarm… Initiating breach intelligence &amp; dark web sweep.</div>';
+
     agentSetBusy(true);
     try {
         const ws = await agentConnect();
@@ -2543,6 +2594,15 @@ async function agentRun() {
                 Agent.steps = (Agent.steps || 0) + 1;
                 traceAdd(ev.agent, ev.message, ev.status);
             }
+            const progressFill = document.getElementById('scan-progress-fill');
+            if (progressFill) progressFill.style.width = '100%';
+            const badge = document.getElementById('radar-status-badge');
+            if (badge) { badge.textContent = 'COMPLETED'; badge.classList.remove('active'); }
+            const statusText = document.getElementById('radar-status-text');
+            if (statusText) statusText.textContent = 'Threat Sweep Complete · Findings Attributed';
+            const sLog = document.getElementById('scan-log');
+            if (sLog) sLog.innerHTML = '<div class="log-entry log-success">✓ Deep discovery sweep completed. Review correlated attack vectors &amp; statutory notices below.</div>';
+
             const msg = { action: 'scan', ...data };
             agentRender(msg);
             syncAgentToExposuresAndDashboard(msg);
@@ -2605,6 +2665,13 @@ async function agentReset() {
         agEl('agent-summary').innerHTML = '';
         agEl('approval-panel').hidden = true;
         agEl('ledger-panel').hidden = true;
+
+        const prog = document.getElementById('scan-progress-fill'); if (prog) prog.style.width = '0%';
+        const sweep = document.getElementById('radar-sweep'); if (sweep) sweep.classList.remove('active');
+        const badge = document.getElementById('radar-status-badge'); if (badge) { badge.textContent = 'STANDBY'; badge.classList.remove('active'); }
+        const statusText = document.getElementById('radar-status-text'); if (statusText) statusText.textContent = 'Autonomous Privacy Engine Ready';
+        const logEl = document.getElementById('scan-log'); if (logEl) logEl.innerHTML = '<div class="log-entry log-idle">Awaiting agent deployment... Configure your identity and click &ldquo;Deploy Privacy Agent&rdquo;.</div>';
+
         traceAdd('orchestrator', 'Identity reset. The demo can be run again from a clean slate.', 'ok');
     } catch (e) {
         traceAdd('orchestrator', 'Reset failed: ' + e.message, 'error');
@@ -3003,6 +3070,8 @@ const RightsAdvisor = {
                 { label: "🔍 Explain Attribution", prompt: "How does the agent attribute accounts without false positives?" },
                 { label: "👥 What are Candidates?", prompt: "Why are some handles parked as unconfirmed candidates?" },
                 { label: "🛡️ Verification Proof", prompt: "How does the agent prove that a removal actually occurred?" },
+                { label: "🎯 Threat Vector Analysis", prompt: "What is the difference between verified breaches and data brokers?" },
+                { label: "🔑 Password Exposure", prompt: "How does k-anonymous password checking protect my credentials?" },
             ],
             scanner: [
                 { label: "🎯 Threat Vector Analysis", prompt: "What is the difference between verified breaches and data brokers?" },
