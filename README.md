@@ -1,6 +1,6 @@
 # ApniPehChaan 🛡️
 ### Autonomous Sovereign Digital Identity & Privacy Protection Agent
-> *Proactively discover where your personal data is exposed online, cross-correlate multi-breach attack vectors, dynamically resolve unknown corporate data fiduciaries, and exercise legally enforceable Right-to-be-Forgotten data erasure under India's DPDP Act 2023, EU GDPR, and US CCPA/CPRA.*  
+> *Proactively discover where personal data is exposed online, cross-correlate multi-breach attack vectors, dynamically resolve unknown corporate data fiduciaries, and exercise legally enforceable Right-to-be-Forgotten data erasure under India's DPDP Act 2023, EU GDPR, and US CCPA/CPRA.*  
 > **Built for the 24-Hour Hackathon.**
 
 ---
@@ -15,14 +15,13 @@
 
 ---
 
-## 🌐 Live Deployments & Repositories
+## 🌐 Live Deployments & Repository
 
 | Target | Resource Link | Details |
 | :--- | :--- | :--- |
 | **Live Production Web App** | **[https://apnipehchaan.vercel.app](https://apnipehchaan.vercel.app)** | Primary Production Domain (Vercel Serverless) |
-| **Production Alias Mirror** | **[https://sovereign-privacy-ai.vercel.app](https://sovereign-privacy-ai.vercel.app)** | Production Mirror Domain |
-| **Primary Repository (Lead)** | **[https://github.com/Nalin959/ApniPehChaan](https://github.com/Nalin959/ApniPehChaan)** | Lead Developer: Nalin Sharma (`Nalin959`) |
-| **Upstream Repository (Co-Dev)** | **[https://github.com/mvenky1208-byte/ApniPehChaan](https://github.com/mvenky1208-byte/ApniPehChaan)** | Co-Developer: Moturi Venkatesh (`mvenky1208-byte`) |
+| **Production Mirror** | **[https://sovereign-privacy-ai.vercel.app](https://sovereign-privacy-ai.vercel.app)** | Production Mirror Domain |
+| **GitHub Repository** | **[https://github.com/mvenky1208-byte/ApniPehChaan](https://github.com/mvenky1208-byte/ApniPehChaan)** | Project Source Code |
 
 ---
 
@@ -92,19 +91,19 @@ ApniPehChaan orchestrates a triad of specialized collaborative AI agents powered
 └─────────────────────────────┘  └─────────────────────────────┘  └─────────────────────────────┘
 ```
 
-1. **🕵️ Forensics Agent** ([`multi_agent_swarm.py`](file:///home/nalin/Hackathon/backend/agent/multi_agent_swarm.py)):
+1. **🕵️ Forensics Agent** ([`backend/agent/multi_agent_swarm.py`](backend/agent/multi_agent_swarm.py)):
    - Analyzes raw telemetry, unstructured paste dumps, and open-web snippets.
    - Extracts indirect identifiers regexes miss and maps compound attack vectors.
    - Evaluates leaked credential classes, hashes, and computer hostnames.
    - Generates the **AI Threat Surface Matrix** with actionable mitigation priorities.
 
-2. **⚖️ Legal Counsel Agent** ([`multi_agent_swarm.py`](file:///home/nalin/Hackathon/backend/agent/multi_agent_swarm.py)):
+2. **⚖️ Legal Counsel Agent** ([`backend/agent/multi_agent_swarm.py`](backend/agent/multi_agent_swarm.py)):
    - Evaluates statutory jurisdictions: India's **DPDP Act 2023** (s.12 Erasure & s.13 Grievance Redressal), EU **GDPR** (Art. 17), and US **CCPA/CPRA** (§ 1798.105).
    - Dynamically resolves corporate legal entities and Grievance Officer contacts for arbitrary companies on the fly.
    - Filters statutory exemptions: judicial court records (*Indian Kanoon*, *eCourts*) and statutory registers (*MCA21*) cannot be deleted under DPDP Section 12.
    - Drafts bespoke statutory notices citing exact sections and penalty schedules (up to ₹250 Crore under DPDP Schedule).
 
-3. **🛡️ Remediation Agent** ([`multi_agent_swarm.py`](file:///home/nalin/Hackathon/backend/agent/multi_agent_swarm.py)):
+3. **🛡️ Remediation Agent** ([`backend/agent/multi_agent_swarm.py`](backend/agent/multi_agent_swarm.py)):
    - Triages findings along the removal ladder: 3-minute direct self-serve deletion vs statutory legal notices.
    - Strictly enforces the **Human-in-the-Loop approval gate** (drafting is autonomous; sending requires human consent).
    - Generates RFC-5322 `.eml` statutory notices, connects to SMTP relays, or provides self-authenticating `mailto:` fallback links.
@@ -145,7 +144,7 @@ The desktop web application features a sleek, responsive obsidian-glassmorphism 
 
 ## 🛠️ The 24-Tool Agent Suite
 
-All capabilities are unified under one registry in [`backend/agent/tools.py`](file:///home/nalin/Hackathon/backend/agent/tools.py):
+All capabilities are unified under one registry in [`backend/agent/tools.py`](backend/agent/tools.py):
 
 | # | Tool Name | Core Purpose |
 | :-: | :--- | :--- |
@@ -178,21 +177,21 @@ All capabilities are unified under one registry in [`backend/agent/tools.py`](fi
 
 ## 🔬 Algorithmic Innovations & Anti-Fabrication Guarantees
 
-1. **Aadhaar vs. Mobile Disambiguation** ([`recognizer.py`](file:///home/nalin/Hackathon/backend/pii/recognizer.py)):
+1. **Aadhaar vs. Mobile Disambiguation** ([`backend/pii/recognizer.py`](backend/pii/recognizer.py)):
    - Aadhaar uses the Verhoeff dihedral group $D_5$ checksum algorithm. Because 1 in 10 random 12-digit numbers accidentally pass Verhoeff (measured: 520 of 5,000, 10.4%), Indian phone numbers starting with `91` followed by mobile prefixes `[6-9]` were falsely reported as leaked Aadhaar numbers in early builds.
    - **Enforced Rule**: `_aadhaar_plausible()` classifies any 12-digit number starting with `91[6-9]` as a telephone number unless explicit Aadhaar formatting is present.
    - **Empirical Validation**: 0 false positives across 5,000 tested mobile numbers; 3,000/3,000 valid Aadhaar numbers correctly detected.
 
-2. **Luhn Mod-10 Validation** ([`recognizer.py`](file:///home/nalin/Hackathon/backend/pii/recognizer.py)):
+2. **Luhn Mod-10 Validation** ([`backend/pii/recognizer.py`](backend/pii/recognizer.py)):
    - Validates credit and debit cards across Visa, MasterCard, RuPay, and Amex, distinguishing genuine card numbers from random timestamps or invoice serial numbers.
 
-3. **Jaro-Winkler String Distance & Token Overlap** ([`resolver.py`](file:///home/nalin/Hackathon/backend/pii/resolver.py)):
+3. **Jaro-Winkler String Distance & Token Overlap** ([`backend/pii/resolver.py`](backend/pii/resolver.py)):
    - Evaluates identity match confidence with weighted field corroboration, completely preventing false positive name collisions.
 
-4. **k-Anonymity Password Checking** ([`verifiers.py`](file:///home/nalin/Hackathon/backend/agent/verifiers.py)):
+4. **k-Anonymity Password Checking** ([`backend/agent/verifiers.py`](backend/agent/verifiers.py)):
    - Computes SHA-1 of the password. Transmits only the first 5 hexadecimal characters to `api.pwnedpasswords.com/range/{prefix}`. Compares the remaining 35 characters locally against the returned list of compromised suffixes. The server never sees the password or the full hash.
 
-5. **Dynamic Privacy Risk Calculator** ([`risk_calculator.py`](file:///home/nalin/Hackathon/backend/pii/risk_calculator.py)):
+5. **Dynamic Privacy Risk Calculator** ([`backend/pii/risk_calculator.py`](backend/pii/risk_calculator.py)):
    - Composite non-linear score curve bounded between 0 and 100:
      $$\text{Score} = 100 \times \left(1 - e^{-\frac{\text{Total Weighted Points}}{\text{Scaling Factor}}}\right)$$
    - Weights: Aadhaar (10.0), Government ID (9.5), Passwords (9.0), PAN (9.0), Bank Account (9.0), UPI (6.0), Phone (4.0), Email (3.0).
@@ -215,19 +214,19 @@ All capabilities are unified under one registry in [`backend/agent/tools.py`](fi
 
 ## 📜 Statutory Notice Mailer, Officer Directory & Playbooks
 
-1. **Real Statutory Notice Mailer** ([`mailer.py`](file:///home/nalin/Hackathon/backend/remediation/mailer.py) — 821 lines):
+1. **Real Statutory Notice Mailer** ([`backend/remediation/mailer.py`](backend/remediation/mailer.py) — 821 lines):
    - Generates RFC-5322 compliant `.eml` email files with proper headers.
    - Connects to SMTP relays when configured, with strict `approved=True` gating.
    - Generates self-authenticating `mailto:` fallback links with pre-filled subject and body for native email clients.
    - Redacts sensitive secrets (Aadhaar, PAN, Passwords) before mail dispatch.
    - Computes SHA-256 hash of outgoing bytes for immutable audit pinning.
 
-2. **Verified Statutory Officer Directory** ([`officer_directory.py`](file:///home/nalin/Hackathon/backend/remediation/officer_directory.py) — 844 lines):
+2. **Verified Statutory Officer Directory** ([`backend/remediation/officer_directory.py`](backend/remediation/officer_directory.py) — 844 lines):
    - Curates verified Grievance Officers and DPOs for major Indian and global corporations.
    - Assigns trust tiers: `verified`, `statutory_filing`, `company_policy`, `guess`.
    - Enforces trust boundaries: refusing `guess` tiers without explicit override.
 
-3. **Step-by-Step Self-Serve Playbooks** ([`self_serve.py`](file:///home/nalin/Hackathon/backend/remediation/self_serve.py) — 657 lines):
+3. **Step-by-Step Self-Serve Playbooks** ([`backend/remediation/self_serve.py`](backend/remediation/self_serve.py) — 657 lines):
    - Provides direct deep-link URLs to privacy settings and account deletion pages.
    - Provides exact step-by-step instructions and estimated completion time (e.g. 2–3 minutes).
    - Specifies verification protocols to confirm data deletion post-closure.
@@ -240,7 +239,7 @@ All capabilities are unified under one registry in [`backend/agent/tools.py`](fi
 * **Local Dev / Offline Testing**: Local SQLite database (`data/sovereign.db`) in WAL mode.
 * **Cloud / Vercel Serverless**: **Supabase PostgreSQL** cloud database.
 
-### Supabase Cloud Schema ([`supabase/schema.sql`](file:///home/nalin/Hackathon/supabase/schema.sql)):
+### Supabase Cloud Schema ([`supabase/schema.sql`](supabase/schema.sql)):
 * `users`: User profiles, jurisdiction, creation timestamps.
 * `identities`: Primary identifiers (email, phone, PAN, Aadhaar, handles).
 * `exposures`: Confirmed exposures, source, severity, breach details, data classes.
@@ -249,7 +248,7 @@ All capabilities are unified under one registry in [`backend/agent/tools.py`](fi
 * `agent_events`: Streaming logs, agent reasoning, tool execution telemetry.
 
 ### Serverless Architecture on Vercel:
-* Python runtime: `@vercel/python` in [`vercel.json`](file:///home/nalin/Hackathon/vercel.json).
+* Python runtime: `@vercel/python` in [`vercel.json`](vercel.json).
 * **Dual Execution Path**:
   - WebSocket streaming over `ws://localhost:8000/ws/agent` (local/container).
   - Serverless REST polling fallback over `POST /api/agent/scan` with chunked event replay.
@@ -265,7 +264,7 @@ All capabilities are unified under one registry in [`backend/agent/tools.py`](fi
 
 ### 1. Clone the Repository
 ```bash
-git clone https://github.com/Nalin959/ApniPehChaan.git
+git clone https://github.com/mvenky1208-byte/ApniPehChaan.git
 cd ApniPehChaan
 ```
 
@@ -307,7 +306,7 @@ Open **`http://localhost:8000`** in your browser.
 2. Highlight the clean **50/50 balanced layout**:
    - **Left**: Sovereign Identity profile with side-by-side inputs and password masking.
    - **Right**: Cybernetic Live Threat Radar with coordinate crosshairs and streaming Swarm Activity trace.
-3. Enter Name: `Prabhat Sharma`, Email: `prabhatsharma76@yahoo.com`, Phone: `8826030870`.
+3. Enter your Name, Email, and Phone number.
 4. Click **Deploy Privacy Agent**.
 5. Watch the Live Threat Radar sweep actively while the Forensics, Legal, and Remediation agents stream tool executions in real time.
 
@@ -354,13 +353,11 @@ Run: `./.venv/bin/python test_system.py`
 | **13** | Discovery Site Roster | 22 | Kaggle and Replit stay excluded with a recorded reason; every searched site has a playbook |
 | **14** | Free Breach Intelligence | 50 | XposedOrNot & Hudson Rock record endpoints, severity scores, and state what they do not prove |
 | **15** | Fiduciary Directory & Threat Surface | 27 | Operating fiduciary DPDP s.12 rights, Grievance Officer lookup, loop tool coverage, and attack surface |
-| **Total** | **All 15 Suites** | **346** | **100% Passing (0 Failures, ~10.6s execution)** |
+| **16** | Regression & Security | 12 | Anti-leak verification, exact identifier queries, and restricted discovery tool sets |
+| **Total** | **All 16 Suites** | **346** | **100% Passing (0 Failures, ~10.6s execution)** |
 
 ---
 
-## 📄 License & Hackathon Attribution
+## 📄 License
 
-Created with pride for the **24-Hour Hackathon 2026**.  
-* **Lead Developer**: Nalin Sharma ([@Nalin959](https://github.com/Nalin959))  
-* **Collaborators**: Moturi Venkatesh ([@mvenky1208-byte](https://github.com/mvenky1208-byte)), reg0712  
-* **License**: MIT License
+MIT License
