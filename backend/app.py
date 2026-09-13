@@ -1,5 +1,5 @@
 """
-app.py — SovereignPrivacy AI: FastAPI Backend Server.
+app.py — ApniPehChaan: FastAPI Backend Server.
 
 Main server providing REST API endpoints and WebSocket for real-time
 scan feed. Orchestrates all scanner, PII, and remediation modules.
@@ -85,7 +85,7 @@ FRONTEND_DIR = os.path.join(PROJECT_ROOT, "frontend")
 async def lifespan(app: FastAPI):
     # Startup
     print("=" * 60)
-    print("  SovereignPrivacy AI — Server Starting")
+    print("  ApniPehChaan — Server Starting")
     print("=" * 60)
     print(f"  Breaches loaded:   {hibp_scanner.get_breach_count()}")
     print(f"  Data brokers:      {broker_scanner.get_broker_count()}")
@@ -103,11 +103,11 @@ async def lifespan(app: FastAPI):
     print("=" * 60)
     yield
     # Shutdown
-    print("SovereignPrivacy AI — Server Stopped")
+    print("ApniPehChaan — Server Stopped")
 
 
 app = FastAPI(
-    title="SovereignPrivacy AI",
+    title="ApniPehChaan",
     description="Digital Identity & Sovereign Privacy Protection Agent",
     version="1.0.0",
     lifespan=lifespan,
@@ -189,7 +189,7 @@ async def serve_frontend():
     if os.path.isfile(index_path):
         with open(index_path, "r") as f:
             return HTMLResponse(content=f.read())
-    return HTMLResponse(content="<h1>SovereignPrivacy AI</h1><p>Frontend not found. Place files in /frontend/</p>")
+    return HTMLResponse(content="<h1>ApniPehChaan</h1><p>Frontend not found. Place files in /frontend/</p>")
 
 
 # ─── Routes: System Info ──────────────────────────────────────────────────────
@@ -199,7 +199,7 @@ async def system_status():
     """Return system health and dataset statistics."""
     return {
         "status": "operational",
-        "agent": "SovereignPrivacy AI",
+        "agent": "ApniPehChaan",
         "version": "1.0.0",
         "timestamp": datetime.now().isoformat(),
         "datasets": {
@@ -495,6 +495,7 @@ async def legal_chat(req: LegalChatRequest):
     """
     Interactive Legal Counsel Chatbot for Statutory Notice Studio.
     Grounds legal drafting, amends notices, cites penalty schedules, and drafts formal notices.
+    Works dynamically for any unknown or user-specified company.
     """
     user_msg = (req.message or "").strip()
     if not user_msg:
@@ -515,10 +516,35 @@ async def legal_chat(req: LegalChatRequest):
     user_name = req.user_name.strip() or "Data Principal"
     user_email = req.user_email.strip() or "[User Email on Record]"
     user_phone = req.user_phone.strip() or "[User Phone on Record]"
-    company_name = req.company_name.strip() or "[Target Data Fiduciary / Company]"
-    company_email = req.company_email.strip() or "[Privacy / Grievance Officer Email]"
+    
+    company_name = req.company_name.strip()
+    company_email = req.company_email.strip()
+    company_address = req.company_address.strip()
 
-    system_prompt = f"""You are the Senior Statutory Legal Counsel and Automated Notice Drafting Specialist at SovereignPrivacy AI.
+    # Dynamic company detection: extract ANY unknown or named company from user prompt
+    patterns = [
+        r"(?:change|switch|update|set)\s*(?:the)?\s*(?:target|company|fiduciary|entity)?\s*(?:name)?\s*(?:to|as)\s+([A-Za-z0-9\s\.\,\&\|\-\'\"]+)",
+        r"(?:target|company|fiduciary)\s*[:=]\s*([A-Za-z0-9\s\.\,\&\|\-\'\"]+)",
+        r"(?:draft|write|create|send|issue|generate)?\s*(?:a|an)?\s*(?:statutory)?\s*(?:notice|demand|letter)\s*(?:for|to|against|regarding)\s+([A-Za-z0-9\s\.\,\&\|\-\'\"]+?)(?:\s+(?:under|citing|demanding|with|for|in|based|\.|\n|$)|$)",
+        r"(?:notice|demand|erasure)\s*(?:for|to|against)\s+([A-Za-z0-9\s\.\,\&\|\-\'\"]+?)(?:\s+(?:under|citing|demanding|with|for|in|based|\.|\n|$)|$)",
+    ]
+    for pat in patterns:
+        m = re.search(pat, user_msg, re.IGNORECASE)
+        if m:
+            cand = m.group(1).strip(" \"'.,:;")
+            cand_lower = cand.lower()
+            stop_words = {"the company", "them", "data fiduciary", "this company", "notice", "me", "dpdp", "gdpr", "ccpa", "more legal terms", "legal terms", "penalties", "7 days", "immediate", "erasure"}
+            if cand and cand_lower not in stop_words and len(cand) >= 2:
+                company_name = cand
+                break
+
+    if not company_name or company_name == "[Target Data Fiduciary / Company]":
+        company_name = "Data Fiduciary"
+
+    company_email = company_email if company_email and company_email != "[Privacy / Grievance Officer Email]" else ""
+    company_address = company_address or ""
+
+    system_prompt = f"""You are the Senior Statutory Legal Counsel and Automated Notice Drafting Specialist at ApniPehChaan.
 You assist users in understanding data protection legislation and drafting legally airtight, binding data erasure and privacy compliance notices.
 
 PRIMARY STATUTORY FRAMEWORKS:
@@ -542,6 +568,16 @@ CURRENT CONTEXT:
 - Detected PII / Scope of Erasure: {req.detected_pii or 'Compromised personal data including contact information and identifiers'}
 - Current Notice in Editor: {f'Present ({len(req.current_notice)} characters)' if req.current_notice else 'None'}
 
+COMPANY DISCOVERY & INTEL:
+- Companies will often be arbitrary or unknown entities. Do not rely on fixed hardcoded rosters.
+- As the Statutory Counsel Agent, determine the entity's exact corporate name, appropriate Grievance Officer / DPO email (e.g. grievance@domain, privacy@domain, or dpo@domain), and registered office address.
+- At the very start of your reply, ALWAYS output a metadata block:
+<<<TARGET_META>>>
+COMPANY_NAME: [Official Corporate Entity Name]
+COMPANY_EMAIL: [Grievance / DPO Email]
+COMPANY_ADDRESS: [Corporate Headquarters / Grievance Redressal Office]
+<<<END_TARGET_META>>>
+
 RULES:
 1. If the user asks to DRAFT, AMEND, TIGHTEN, REWRITE, ADD CLAUSES, or SHORTEN DEADLINES for the notice:
    - Provide a concise legal briefing (1-2 short paragraphs) in Markdown explaining the statutory strategy applied.
@@ -552,7 +588,7 @@ RULES:
 2. If the user asks a STATUTORY QUESTION or seeks legal counsel:
    - Answer directly and authoritatively in clear Markdown.
    - Cite specific statutory sections, rights, and regulatory penalty amounts.
-   - Explain how they can enforce compliance through SovereignPrivacy AI.
+   - Explain how they can enforce compliance through ApniPehChaan.
 3. Maintain an authoritative, commanding legal tone protecting the fundamental privacy rights of the data principal.
 """
 
@@ -579,7 +615,7 @@ RULES:
                 user_email=user_email,
                 user_phone=user_phone,
                 company_name=company_name,
-                company_address=req.company_address,
+                company_address=company_address,
                 detected_pii_summary=req.detected_pii,
                 ai_tailored=False,
             )
@@ -594,6 +630,8 @@ RULES:
                 "response_deadline": gen.get("response_deadline"),
                 "jurisdiction": req.jurisdiction,
                 "company_name": company_name,
+                "company_email": company_email,
+                "company_address": company_address,
                 "model": "deterministic_counsel_engine",
                 "suggested_prompts": [
                     "Add ₹250 Cr DPDP penalty warning",
@@ -605,6 +643,9 @@ RULES:
             return {
                 "reply": f"Under **{statute_cite}**, data fiduciaries must comply with erasure requests within **{default_deadline} days**. Failure to comply can be escalated to the **{escalation_body}** with statutory penalties up to ₹250 Crores under Schedule 1 of the DPDP Act 2023.",
                 "has_notice": False,
+                "company_name": company_name,
+                "company_email": company_email,
+                "company_address": company_address,
                 "model": "deterministic_counsel_engine",
                 "suggested_prompts": [
                     f"Draft statutory notice for {company_name}",
@@ -612,6 +653,26 @@ RULES:
                     "How do I file a complaint with DPBI?"
                 ]
             }
+
+    # Extract dynamic company metadata resolved by the AI agent
+    meta_match = re.search(r"<<<TARGET_META>>>\s*(.*?)\s*<<<END_TARGET_META>>>", llm_res, re.DOTALL)
+    if meta_match:
+        meta_block = meta_match.group(1)
+        llm_res = (llm_res[:meta_match.start()] + "\n" + llm_res[meta_match.end():]).strip()
+        for line in meta_block.splitlines():
+            line = line.strip()
+            if line.startswith("COMPANY_NAME:"):
+                val = line.split(":", 1)[1].strip()
+                if val and not val.startswith("[") and val.lower() != "data fiduciary":
+                    company_name = val
+            elif line.startswith("COMPANY_EMAIL:"):
+                val = line.split(":", 1)[1].strip()
+                if val and "@" in val and not val.startswith("["):
+                    company_email = val
+            elif line.startswith("COMPANY_ADDRESS:"):
+                val = line.split(":", 1)[1].strip()
+                if val and not val.startswith("["):
+                    company_address = val
 
     # Check for notice delimiters in LLM response
     has_notice = False
@@ -649,6 +710,8 @@ RULES:
         "response_deadline": deadline_date,
         "jurisdiction": req.jurisdiction,
         "company_name": company_name,
+        "company_email": company_email,
+        "company_address": company_address,
         "model": model_used,
         "suggested_prompts": [
             "Add ₹250 Cr DPDP penalty warning" if req.jurisdiction == "dpdp" else "Cite GDPR Article 83 maximum fines",
@@ -1203,7 +1266,7 @@ def _expert_privacy_reply(user_msg: str, tab: str, risk_score: float | None, exp
     if any(w in msg for w in ("truecaller", "naukri", "shaadi", "justdial", "self-serve", "self serve")):
         return (
             "### Self-Serve Removals vs Statutory Notices\n\n"
-            "A core rule of SovereignPrivacy AI: **A legal notice is the escalation, not the opening move.**\n\n"
+            "A core rule of ApniPehChaan: **A legal notice is the escalation, not the opening move.**\n\n"
             "- **Truecaller**: Direct unlisting form at `truecaller.com/unlisting` takes ~3 minutes and removes your number from public search.\n"
             "- **Naukri / Job Portals**: Profile deletion is directly available in Account Settings.\n"
             "- **Public Social Profiles**: Direct account deactivation or deletion avoids 30 days of waiting for a legal notice.\n\n"
@@ -1212,7 +1275,7 @@ def _expert_privacy_reply(user_msg: str, tab: str, risk_score: float | None, exp
     if any(w in msg for w in ("candidate", "username", "handle", "torvalds", "collision", "not mine")):
         return (
             "### Identity Attribution & Handle Collisions\n\n"
-            "Unlike simple scanners that assume any matching username belongs to you, SovereignPrivacy AI uses **strict attribution**:\n\n"
+            "Unlike simple scanners that assume any matching username belongs to you, ApniPehChaan uses **strict attribution**:\n\n"
             "- **Name collisions**: Usernames that match common names (like `@torvalds` or `@rahulsharma`) are shared by thousands across the web.\n"
             "- **Unconfirmed Candidates**: When an account is found with your searched handle, our agent parks it as an **unconfirmed candidate**.\n"
             "- **Your Control**: It is NOT counted in your risk score or removal plan until you click **'Yes, mine'**.\n"
@@ -1230,7 +1293,7 @@ def _expert_privacy_reply(user_msg: str, tab: str, risk_score: float | None, exp
         )
 
     return (
-        f"### SovereignPrivacy Rights Advisor\n\n"
+        f"### ApniPehChaan Rights Advisor\n\n"
         f"I am monitoring your privacy posture on the **{tab.replace('-', ' ').title()}** tab. "
         f"Currently, {exposure_count} exposures have been tracked.\n\n"
         f"**Actions you can take right now:**\n"
@@ -1245,7 +1308,7 @@ def _expert_privacy_reply(user_msg: str, tab: str, risk_score: float | None, exp
 @app.get("/api/agent/threat-surface/{user_id}")
 async def agent_threat_surface(user_id: str):
     """Retrieve AI-correlated threat surface intelligence for a user."""
-    profile = _memory.get_profile(user_id) or {}
+    profile = _memory.get_user(user_id) or {}
     exposures = [e for e in _memory.get_exposures(user_id) if e.get("status") != "not_mine"]
     from backend.agent.multi_agent_swarm import ForensicsAgent
     from backend.agent.tools import ToolContext, build_tools
@@ -1339,7 +1402,7 @@ async def agent_chat(req: AgentChatRequest):
         exposure_count = grounded_count
 
     system_prompt = (
-        "You are the SovereignPrivacy Rights Advisor — an expert privacy and statutory-rights assistant. "
+        "You are the ApniPehChaan Rights Advisor — an expert privacy and statutory-rights assistant. "
         "You help users identify personal data exposures, understand data privacy legislation (India DPDP Act 2023, EU GDPR, US CCPA), "
         "and assert their statutory rights to erasure, correction, and opt-out.\n\n"
         f"CURRENT SESSION CONTEXT:\n"
@@ -1421,7 +1484,7 @@ async def agent_chat(req: AgentChatRequest):
                   "This reply is not grounded in your scan results.*")
     return {
         "reply": reply,
-        "model": "SovereignPrivacy knowledge base (no AI model available)",
+        "model": "ApniPehChaan knowledge base (no AI model available)",
         "llm_unavailable": bool(llm_errors),
         "llm_errors": llm_errors,
         "suggested_actions": _get_chat_suggestions(tab, user_msg)

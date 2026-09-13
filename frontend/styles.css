@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   SovereignPrivacy AI — Design System
+   ApniPehChaan — Design System
    Obsidian Glassmorphism + Cyber Glow
    ═══════════════════════════════════════════════════════════════════════════ */
 
@@ -2513,18 +2513,94 @@ body {
     align-items: center;
     justify-content: space-between;
     flex-wrap: wrap;
-    gap: 8px;
-    padding: 8px 12px;
-    background: rgba(99, 102, 241, 0.08);
-    border: 1px solid rgba(99, 102, 241, 0.2);
+    gap: 12px;
+    padding: 8px 14px;
+    background: rgba(99, 102, 241, 0.07);
+    border: 1px solid rgba(99, 102, 241, 0.22);
     border-radius: var(--radius-sm);
     margin-bottom: 12px;
     font-size: 0.78rem;
     color: var(--text-secondary);
 }
 
-.legal-chat-context-bar b {
+.legal-chat-target-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 250px;
+}
+
+.legal-chat-target-label {
+    font-weight: 700;
+    color: var(--text-muted);
+    font-size: 0.74rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+}
+
+.legal-chat-target-input-box {
+    display: flex;
+    align-items: center;
+    position: relative;
+    flex: 1;
+    max-width: 380px;
+}
+
+.legal-chat-company-input {
+    width: 100%;
+    padding: 5px 68px 5px 10px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--accent-primary, #6366f1);
+    background: rgba(15, 23, 42, 0.65);
+    border: 1px solid rgba(99, 102, 241, 0.35);
+    border-radius: var(--radius-sm);
+    outline: none;
+    transition: all 0.2s ease;
+    font-family: inherit;
+}
+
+.legal-chat-company-input:focus {
+    border-color: var(--accent-primary, #6366f1);
+    background: rgba(15, 23, 42, 0.9);
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.25);
+    color: #ffffff;
+}
+
+.legal-chat-target-sync-pill {
+    position: absolute;
+    right: 6px;
+    font-size: 0.66rem;
+    font-weight: 600;
+    color: #10b981;
+    background: rgba(16, 185, 129, 0.12);
+    border: 1px solid rgba(16, 185, 129, 0.25);
+    padding: 1px 6px;
+    border-radius: 10px;
+    pointer-events: none;
+    transition: all 0.2s ease;
+}
+
+.legal-chat-statute-container {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+}
+
+.legal-chat-statute-label {
+    color: var(--text-muted);
+    font-size: 0.74rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.legal-chat-statute-container b {
     color: var(--accent-primary);
+    font-weight: 600;
 }
 
 .legal-chat-chips {

@@ -1,5 +1,5 @@
 /**
- * SovereignPrivacy AI — Frontend Application Logic
+ * ApniPehChaan — Frontend Application Logic
  *
  * Manages navigation, WebSocket real-time scanning, API calls,
  * dynamic UI rendering, and all interactive features.
@@ -725,9 +725,15 @@ function initLegalForm() {
     }
 
     function updateLegalChatContext() {
-        const comp = document.getElementById('legal-company')?.value || 'Data Fiduciary';
+        const comp = document.getElementById('legal-chat-company-input')?.value?.trim() ||
+                     document.getElementById('legal-company')?.value?.trim() || 'Data Fiduciary';
         const compDisp = document.getElementById('legal-chat-company-display');
         if (compDisp) compDisp.textContent = comp;
+
+        const chatInput = document.getElementById('legal-chat-company-input');
+        if (chatInput && comp && comp !== 'Data Fiduciary' && chatInput.value !== comp) {
+            chatInput.value = comp;
+        }
 
         const statDisp = document.getElementById('legal-chat-statute-display');
         if (statDisp) {
@@ -741,6 +747,58 @@ function initLegalForm() {
         }
     }
 
+    // Direct synchronization function for ANY unknown or user-entered company
+    window.setLegalTargetCompany = function(name, email, address) {
+        const trimmed = (name || '').trim();
+        if (!trimmed) return;
+
+        const compEl = document.getElementById('legal-company');
+        const chatInput = document.getElementById('legal-chat-company-input');
+        const compDisp = document.getElementById('legal-chat-company-display');
+        const emailEl = document.getElementById('legal-company-email');
+        const addrEl = document.getElementById('legal-company-address');
+
+        if (compEl && compEl.value !== trimmed) compEl.value = trimmed;
+        if (chatInput && chatInput.value !== trimmed) chatInput.value = trimmed;
+        if (compDisp) compDisp.textContent = trimmed;
+
+        if (email && emailEl) {
+            emailEl.value = email;
+        }
+        if (address && addrEl) {
+            addrEl.value = address;
+        }
+
+        // Visual feedback pill
+        const pill = document.getElementById('legal-chat-target-pill');
+        if (pill) {
+            pill.textContent = '✓ Synced';
+            pill.style.opacity = '1';
+            clearTimeout(pill._timer);
+            pill._timer = setTimeout(() => {
+                if (pill) pill.style.opacity = '0.7';
+            }, 1800);
+        }
+
+        // Live preview sync: if a notice was already generated, dynamically replace previous company name
+        if (state.generatedNotice && state.generatedNotice.recipient) {
+            const prevCompany = state.generatedNotice.recipient.company_name;
+            state.generatedNotice.recipient.company_name = trimmed;
+
+            const preview = document.getElementById('notice-preview-content');
+            if (preview && prevCompany && prevCompany !== trimmed && preview.textContent) {
+                const re = new RegExp(prevCompany.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+                const updated = preview.textContent.replace(re, trimmed);
+                if (updated !== preview.textContent) {
+                    preview.textContent = updated;
+                    state.generatedNotice.notice_text = updated;
+                }
+            }
+        }
+
+        updateLegalChatContext();
+    };
+
     // Jurisdiction selector (syncs across both chat pane and form pane)
     document.querySelectorAll('.jurisdiction-btn').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -753,7 +811,26 @@ function initLegalForm() {
         });
     });
 
-    document.getElementById('legal-company')?.addEventListener('input', updateLegalChatContext);
+    // Two-way live company sync between chat header input and manual form input
+    const chatCompInput = document.getElementById('legal-chat-company-input');
+    if (chatCompInput) {
+        chatCompInput.addEventListener('input', (e) => {
+            setLegalTargetCompany(e.target.value);
+        });
+        chatCompInput.addEventListener('change', (e) => {
+            setLegalTargetCompany(e.target.value);
+        });
+    }
+
+    const manualCompInput = document.getElementById('legal-company');
+    if (manualCompInput) {
+        manualCompInput.addEventListener('input', (e) => {
+            setLegalTargetCompany(e.target.value);
+        });
+        manualCompInput.addEventListener('change', (e) => {
+            setLegalTargetCompany(e.target.value);
+        });
+    }
 
     // Quick prompt chips in Chatbot
     document.querySelectorAll('.legal-chat-chip').forEach(chip => {
@@ -837,11 +914,13 @@ async function sendLegalChatMessage(text) {
     msgContainer.scrollTop = msgContainer.scrollHeight;
 
     const userProfile = getSavedProfile();
+    const activeCompany = document.getElementById('legal-chat-company-input')?.value?.trim() ||
+                          document.getElementById('legal-company')?.value?.trim() || '';
     const payload = {
         message: text,
         history: legalChatHistory.slice(-6),
         jurisdiction: state.selectedJurisdiction || 'dpdp',
-        company_name: document.getElementById('legal-company')?.value || '',
+        company_name: activeCompany,
         company_email: document.getElementById('legal-company-email')?.value || '',
         company_address: document.getElementById('legal-company-address')?.value || '',
         user_name: userProfile.name || '',
@@ -875,6 +954,11 @@ async function sendLegalChatMessage(text) {
             }
         }
 
+        // Sync returned company name dynamically
+        if (data.company_name) {
+            setLegalTargetCompany(data.company_name, data.company_email, data.company_address);
+        }
+
         // Append bot message
         const botMsgEl = document.createElement('div');
         botMsgEl.className = 'legal-chat-msg bot';
@@ -903,6 +987,9 @@ async function sendLegalChatMessage(text) {
 
         // Automatically update Notice Preview if notice was formulated
         if (data.has_notice && data.notice_text) {
+            const finalCompany = data.company_name || activeCompany || 'Data Fiduciary';
+            setLegalTargetCompany(finalCompany, data.company_email, data.company_address);
+
             state.generatedNotice = {
                 status: 'generated',
                 reference_id: data.reference_id,
@@ -916,7 +1003,7 @@ async function sendLegalChatMessage(text) {
                 response_deadline_days: data.response_deadline_days,
                 receipt_hash: data.receipt_hash,
                 sender: { name: userProfile.name, email: userProfile.email },
-                recipient: { company_name: data.company_name || document.getElementById('legal-company')?.value || 'Data Fiduciary' }
+                recipient: { company_name: finalCompany }
             };
             renderNoticePreview(state.generatedNotice);
             showToast('Statutory notice updated in preview!', 'success');
@@ -945,16 +1032,18 @@ async function generateNotice() {
     const userProfile = getSavedProfile();
 
     const aiTailored = document.getElementById('legal-ai-toggle')?.checked ?? true;
+    const targetComp = document.getElementById('legal-chat-company-input')?.value?.trim() ||
+                       document.getElementById('legal-company')?.value?.trim() || '';
     const payload = {
         jurisdiction: state.selectedJurisdiction,
         user_name: userProfile.name || '',
         user_email: userProfile.email || '',
         user_phone: userProfile.phone || '',
         additional_ids: userProfile.pan ? `PAN: ${userProfile.pan}` : '',
-        company_name: document.getElementById('legal-company').value,
-        company_email: document.getElementById('legal-company-email').value,
-        company_address: document.getElementById('legal-company-address').value,
-        detected_pii_summary: document.getElementById('legal-pii-summary').value,
+        company_name: targetComp,
+        company_email: document.getElementById('legal-company-email')?.value || '',
+        company_address: document.getElementById('legal-company-address')?.value || '',
+        detected_pii_summary: document.getElementById('legal-pii-summary')?.value || '',
         ai_tailored: aiTailored,
     };
 
@@ -968,6 +1057,9 @@ async function generateNotice() {
 
         if (data.status === 'generated') {
             state.generatedNotice = data;
+            if (payload.company_name) {
+                setLegalTargetCompany(payload.company_name, payload.company_email, payload.company_address);
+            }
             renderNoticePreview(data);
             showToast(`${data.jurisdiction_short} notice generated!`, 'success');
         } else {
@@ -1136,35 +1228,37 @@ function getFiduciaryContact(nameOrId) {
         }
     }
     return {
-        company_name: `${nameOrId} Data Fiduciary`,
-        dpo_email: `privacy@${clean}.com`,
-        address: `Corporate Grievance Office, ${nameOrId} Registered Headquarters`,
-        self_serve_url: `https://${clean}.com/privacy`,
+        company_name: nameOrId,
+        dpo_email: '',
+        address: '',
+        self_serve_url: '',
         jurisdiction: 'dpdp'
     };
 }
 
 function generateNoticeForExposure(companyName, companyEmail, exposureId) {
     navigateTo('legal');
-    const contact = getFiduciaryContact(companyName);
+    const contact = typeof getFiduciaryContact === 'function' ? getFiduciaryContact(companyName) : {};
+    const finalComp = companyName || contact?.company_name || '';
+    const finalEmail = companyEmail || contact?.dpo_email || '';
+    const finalAddr = contact?.address || '';
 
-    const compEl = document.getElementById('legal-company');
-    if (compEl) compEl.value = contact.company_name || companyName || '';
+    setLegalTargetCompany(finalComp, finalEmail, finalAddr);
 
-    const emailEl = document.getElementById('legal-company-email');
-    if (emailEl) emailEl.value = contact.dpo_email || companyEmail || '';
-
-    const addrEl = document.getElementById('legal-company-address');
-    if (addrEl) addrEl.value = contact.address || '';
-
-    if (contact.jurisdiction) {
+    if (contact?.jurisdiction) {
         const jurisEl = document.getElementById('legal-jurisdiction');
         if (jurisEl) jurisEl.value = contact.jurisdiction;
+        state.selectedJurisdiction = contact.jurisdiction;
+        document.querySelectorAll('.jurisdiction-btn').forEach(b => {
+            b.classList.toggle('active', b.dataset.jurisdiction === contact.jurisdiction);
+        });
     }
 
-    const piiSummary = buildComprehensivePIISummary(companyName, exposureId);
+    const piiSummary = buildComprehensivePIISummary(finalComp, exposureId);
     const piiEl = document.getElementById('legal-pii-summary');
     if (piiEl) piiEl.value = piiSummary;
+
+    updateLegalChatContext();
 }
 
 function buildComprehensivePIISummary(companyName, exposureId) {
@@ -2354,7 +2448,7 @@ function initProfileSync() {
     ];
 
     // Load from localStorage if present
-    const saved = localStorage.getItem('sovereign_profile');
+    const saved = localStorage.getItem('apnipehchaan_profile') || localStorage.getItem('sovereign_profile');
     if (saved) {
         try {
             const p = JSON.parse(saved);
@@ -2382,7 +2476,7 @@ function initProfileSync() {
                     const f = document.getElementById(fid);
                     if (f) profileObj[fid] = f.value;
                 });
-                localStorage.setItem('sovereign_profile', JSON.stringify(profileObj));
+                localStorage.setItem('apnipehchaan_profile', JSON.stringify(profileObj));
             });
         });
     });
@@ -2433,7 +2527,7 @@ async function agentRun() {
         const ws = await agentConnect();
         ws.send(JSON.stringify({ action: 'scan', profile }));
     } catch (e) {
-        traceAdd('orchestrator', 'Connecting via Sovereign Cloud Execution API…', 'running');
+        traceAdd('orchestrator', 'Connecting via ApniPehChaan Cloud Execution API…', 'running');
         try {
             const resp = await fetch('/api/agent/scan', {
                 method: 'POST',
@@ -2469,7 +2563,7 @@ async function agentApprove() {
         const ws = await agentConnect();
         ws.send(JSON.stringify({ action: 'approve', profile: Agent.profile, request_ids: ids }));
     } catch (e) {
-        traceAdd('orchestrator', 'Dispatching notices via Sovereign Cloud Execution API…', 'running');
+        traceAdd('orchestrator', 'Dispatching notices via ApniPehChaan Cloud Execution API…', 'running');
         try {
             const resp = await fetch('/api/agent/approve', {
                 method: 'POST',

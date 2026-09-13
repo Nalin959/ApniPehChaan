@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="SovereignPrivacy AI — Digital Identity Protection Agent. Monitor breaches, detect exposed PII, and auto-generate statutory erasure notices under DPDP Act 2023, GDPR, and CCPA.">
-    <title>SovereignPrivacy AI — Digital Identity Protection</title>
+    <meta name="description" content="ApniPehChaan — Digital Identity Protection Agent. Monitor breaches, detect exposed PII, and auto-generate statutory erasure notices under DPDP Act 2023, GDPR, and CCPA.">
+    <title>ApniPehChaan — Digital Identity Protection</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
@@ -117,7 +117,7 @@
                 <svg viewBox="0 0 40 40" fill="none"><circle cx="20" cy="20" r="18" stroke="url(#brandGrad)" stroke-width="2.5"/><path d="M20 8v24M12 14l8-6 8 6M12 26l8 6 8-6" stroke="url(#brandGrad)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><defs><linearGradient id="brandGrad" x1="0" y1="0" x2="40" y2="40"><stop stop-color="#6366f1"/><stop offset="1" stop-color="#06b6d4"/></linearGradient></defs></svg>
             </div>
             <div class="brand-text">
-                <span class="brand-name">SovereignPrivacy</span>
+                <span class="brand-name">ApniPehChaan</span>
                 <span class="brand-badge">AI</span>
             </div>
         </div>
@@ -509,7 +509,7 @@
                 <div class="glass-card identity-vault" id="identity-vault">
                     <h3 class="card-title">
                         <svg viewBox="0 0 20 20" fill="currentColor" class="title-icon"><path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd"/></svg>
-                        Sovereign Identity Vault
+                        ApniPehChaan Identity Vault
                     </h3>
                     <p class="vault-note">All data is processed locally. Identifiers are hashed before any external query.</p>
                     <form id="scan-form" class="vault-form">
@@ -661,8 +661,21 @@
 
                         <!-- Active target context -->
                         <div class="legal-chat-context-bar" id="legal-chat-context-bar">
-                            <span>Target: <b id="legal-chat-company-display">Data Fiduciary</b></span>
-                            <span>Statute: <b id="legal-chat-statute-display">DPDP Act 2023 s.12/13</b></span>
+                            <div class="legal-chat-target-container">
+                                <label for="legal-chat-company-input" class="legal-chat-target-label">Target Company:</label>
+                                <div class="legal-chat-target-input-box">
+                                    <input type="text" id="legal-chat-company-input" class="legal-chat-company-input" 
+                                           placeholder="Enter target company name..." 
+                                           autocomplete="off" spellcheck="false"
+                                           title="Type or edit target company name">
+                                    <span class="legal-chat-target-sync-pill" id="legal-chat-target-pill">✓ Synced</span>
+                                </div>
+                                <span id="legal-chat-company-display" style="display: none;">Data Fiduciary</span>
+                            </div>
+                            <div class="legal-chat-statute-container">
+                                <span class="legal-chat-statute-label">Statute:</span>
+                                <b id="legal-chat-statute-display">DPDP Act 2023 s.12/13</b>
+                            </div>
                         </div>
 
                         <!-- Quick prompt chips -->
@@ -830,7 +843,7 @@
     <!-- ═══ Sitewide AI Privacy Copilot Widget ═══════════════════════════════════════ -->
     <div id="ai-advisor-container">
         <!-- Floating Trigger Button -->
-        <button id="ai-advisor-trigger" class="ai-advisor-trigger" title="Open SovereignPrivacy AI Copilot">
+        <button id="ai-advisor-trigger" class="ai-advisor-trigger" title="Open ApniPehChaan AI Copilot">
             <div class="ai-advisor-icon">
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M12 2a10 10 0 0 1 10 10c0 5.523-4.477 10-10 10a9.96 9.96 0 0 1-4.587-1.11L3 22l1.11-4.413A9.96 9.96 0 0 1 2 12C2 6.477 6.477 2 12 2z"/>
@@ -847,7 +860,7 @@
                 <div class="advisor-header-info">
                     <div class="advisor-avatar">🛡️</div>
                     <div>
-                        <div class="advisor-title">SovereignPrivacy AI Copilot</div>
+                        <div class="advisor-title">ApniPehChaan AI Copilot</div>
                         <div class="advisor-status" id="advisor-model-tag">
                             <span class="status-dot online"></span> Gemini Flash · Swarm Copilot
                         </div>
@@ -870,7 +883,7 @@
             <div class="advisor-messages" id="advisor-messages">
                 <div class="advisor-msg bot">
                     <div class="advisor-msg-bubble">
-                        👋 Hello! I'm your <b>SovereignPrivacy AI Copilot</b>. Grounded in your real-time scan ledger, active statutory erasure notices, and multi-agent swarm telemetry. Ask me anything about your threat vectors, statutory rights under India's DPDP Act 2023 / GDPR, or how to eliminate your exposed data.
+                        👋 Hello! I'm your <b>ApniPehChaan AI Copilot</b>. Grounded in your real-time scan ledger, active statutory erasure notices, and multi-agent swarm telemetry. Ask me anything about your threat vectors, statutory rights under India's DPDP Act 2023 / GDPR, or how to eliminate your exposed data.
                     </div>
                     <span class="advisor-msg-time">Ready</span>
                 </div>
