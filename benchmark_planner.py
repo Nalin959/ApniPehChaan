@@ -104,7 +104,7 @@ def main():
     mode, model = planner_mode(), planner_model()
     if mode == "deterministic":
         print("No planner key configured — nothing to benchmark.")
-        print("Put GEMINI_API_KEY (or GROQ_API_KEY, etc.) in .env first.")
+        print("Put GROQ_API_KEY (or GEMINI_API_KEY, etc.) in .env first.")
         return 1
 
     print("=" * 64)

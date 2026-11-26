@@ -98,7 +98,7 @@ async def lifespan(app: FastAPI):
     _mode = _pm()
     print(f"  Planner:           {_mode}"
           + (f" ({_pmod()})" if _pmod() else
-             "  (set ANTHROPIC_API_KEY or GEMINI_API_KEY in .env)"))
+             "  (set GROQ_API_KEY, GEMINI_API_KEY or ANTHROPIC_API_KEY in .env)"))
     print(f"  Breach checks:     {_env['breach_checks']}"
           + ("" if _env["breach_checks"] == "ENABLED" else "  (set HIBP_API_KEY in .env)"))
     print("=" * 60)
@@ -1287,7 +1287,7 @@ async def agent_info():
         "anthropic": "Claude is planning each step and choosing tools.",
         "openai_compat": "The configured model is planning each step and choosing tools.",
         "deterministic": ("No planner key configured — running the deterministic pipeline "
-                          "over the identical tools. Set ANTHROPIC_API_KEY or GEMINI_API_KEY "
+                          "over the identical tools. Set GROQ_API_KEY, GEMINI_API_KEY or ANTHROPIC_API_KEY "
                           "in .env to enable live planning."),
     }
     return {
@@ -1588,7 +1588,7 @@ async def agent_chat(req: AgentChatRequest):
         + grounding
     )
 
-    # 1. Primary: Gemini (with Groq as automatic backup)
+    # 1. Primary: Groq (with Gemini as automatic backup)
     from backend.agent.openai_compat_planner import get_llm_completion
     llm_errors: list[str] = []
 
@@ -1610,7 +1610,7 @@ async def agent_chat(req: AgentChatRequest):
         messages=chat_messages,
         max_tokens=800,
         temperature=0.3,
-        preferred_provider="gemini",
+        preferred_provider="groq",
     )
     if reply:
         return {
