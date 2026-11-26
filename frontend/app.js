@@ -1023,7 +1023,7 @@ async function sendLegalChatMessage(text) {
     const typingEl = document.createElement('div');
     typingEl.className = 'legal-chat-msg bot';
     typingEl.id = 'legal-chat-typing';
-    typingEl.innerHTML = `<div class="legal-chat-bubble"><span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span> <i>Drafting formal statutory notice with Gemini…</i></div>`;
+    typingEl.innerHTML = `<div class="legal-chat-bubble"><span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span> <i>Drafting formal statutory notice with Groq…</i></div>`;
     msgContainer.appendChild(typingEl);
     msgContainer.scrollTop = msgContainer.scrollHeight;
 
@@ -1058,10 +1058,10 @@ async function sendLegalChatMessage(text) {
             const badge = document.getElementById('legal-chat-model-badge');
             if (badge) {
                 const mLower = data.model.toLowerCase();
-                if (mLower.includes('gemini')) {
-                    badge.textContent = `✨ ${data.model} Active`;
-                } else if (mLower.includes('groq')) {
-                    badge.textContent = `⚡ Groq Backup (${data.model})`;
+                if (mLower.includes('groq')) {
+                    badge.textContent = `⚡ ${data.model} Active`;
+                } else if (mLower.includes('gemini')) {
+                    badge.textContent = `✨ Gemini Backup (${data.model})`;
                 } else {
                     badge.textContent = `✨ ${data.model}`;
                 }
@@ -1433,7 +1433,7 @@ function renderNoticePreview(data) {
     if (aiBadge) {
         if (data.ai_generated) {
             aiBadge.style.display = 'inline-flex';
-            aiBadge.textContent = `✨ AI-Drafted (${data.ai_model || 'Gemini'})`;
+            aiBadge.textContent = `✨ AI-Drafted (${data.ai_model || 'Groq'})`;
         } else {
             aiBadge.style.display = 'none';
         }
@@ -3128,12 +3128,14 @@ const RightsAdvisor = {
             const tag = document.getElementById('advisor-model-tag');
             if (tag) {
                 const mod = (data.model || '').toLowerCase();
-                if (mod.includes('gemini') || data.llm_active) {
-                    tag.innerHTML = `<span class="status-dot online"></span> ✨ Gemini Active (Groq Backup)`;
-                } else if (mod.includes('groq')) {
+                if (mod.includes('groq')) {
                     tag.innerHTML = `<span class="status-dot online"></span> ⚡ Groq Active (Gemini Backup)`;
+                } else if (mod.includes('gemini')) {
+                    tag.innerHTML = `<span class="status-dot online"></span> ✨ Gemini Active (Groq Backup)`;
                 } else if (data.planner === 'anthropic') {
                     tag.innerHTML = `<span class="status-dot online"></span> Claude 3.5 Active`;
+                } else if (data.llm_active && data.model) {
+                    tag.innerHTML = `<span class="status-dot online"></span> ${data.model} Active`;
                 } else {
                     tag.innerHTML = `<span class="status-dot online"></span> Deterministic Engine`;
                 }
@@ -3286,10 +3288,10 @@ const RightsAdvisor = {
                 const tag = document.getElementById('advisor-model-tag');
                 if (tag) {
                     const mLower = data.model.toLowerCase();
-                    if (mLower.includes('gemini')) {
-                        tag.innerHTML = `<span class="status-dot online"></span> ✨ Gemini Active (Groq Backup)`;
-                    } else if (mLower.includes('groq')) {
-                        tag.innerHTML = `<span class="status-dot online"></span> ⚡ Groq Backup Active`;
+                    if (mLower.includes('groq')) {
+                        tag.innerHTML = `<span class="status-dot online"></span> ⚡ Groq Active (Gemini Backup)`;
+                    } else if (mLower.includes('gemini')) {
+                        tag.innerHTML = `<span class="status-dot online"></span> ✨ Gemini Backup Active`;
                     }
                 }
             }

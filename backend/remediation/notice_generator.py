@@ -82,7 +82,7 @@ class NoticeGenerator:
         deadline_str: str,
         exposure_context: str = "",
     ) -> tuple[str | None, str | None]:
-        """Generate a bespoke statutory erasure notice using an LLM (Gemini/Groq)."""
+        """Generate a bespoke statutory erasure notice using an LLM (Groq/Gemini)."""
         try:
             from backend.agent.openai_compat_planner import get_llm_completion
         except Exception:
@@ -180,7 +180,7 @@ Generate only the complete, ready-to-send formal legal notice in clean Markdown 
         exposure_context: str = "",
     ) -> dict:
         """
-        Generate a statutory legal notice (AI-tailored with Gemini or template fallback).
+        Generate a statutory legal notice (AI-tailored with Groq or template fallback).
 
         Args:
             jurisdiction: "dpdp", "gdpr", or "ccpa"
@@ -191,7 +191,7 @@ Generate only the complete, ready-to-send formal legal notice in clean Markdown 
             company_name: Target company / data fiduciary
             company_address: Company address
             detected_pii_summary: Summary of detected PII exposure
-            ai_tailored: Whether to use Gemini/LLM to draft a bespoke statutory notice
+            ai_tailored: Whether to use Groq/LLM to draft a bespoke statutory notice
             exposure_context: Specific breach or incident background
 
         Returns:

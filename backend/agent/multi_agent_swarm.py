@@ -85,7 +85,7 @@ class ForensicsAgent:
         return report
 
     def _analyze_threat_intelligence(self, profile: dict, exposures: list[dict]) -> dict:
-        """Analyze multi-breach combinations using Gemini / Groq threat intelligence."""
+        """Analyze multi-breach combinations using Groq / Gemini threat intelligence."""
         base_threat = self.tools.get("analyze_threat_surface")
         base_res = base_threat() if base_threat else {"threat_vectors": []}
 

@@ -49,7 +49,7 @@
 
 3. **Dynamic Data Fiduciary Discovery (Zero Pre-Saved Cheating)**:
    - Eliminated all static company dictionaries and fake fallback emails (`privacy@<slug>.com`).
-   - Powered by Google Gemini (with seamless Groq backup), the **Legal Counsel Agent** dynamically investigates any arbitrary operating entity (e.g. *Zomato, Canva, Cred, Zepto, Swiggy*), extracting the formal registered corporate name, official statutory Grievance Officer / DPO email, registered headquarters, and applicable legal remedies.
+   - Powered by Groq (with seamless Google Gemini backup), the **Legal Counsel Agent** dynamically investigates any arbitrary operating entity (e.g. *Zomato, Canva, Cred, Zepto, Swiggy*), extracting the formal registered corporate name, official statutory Grievance Officer / DPO email, registered headquarters, and applicable legal remedies.
 
 4. **Cross-Exposure AI Threat Surface Matrix**:
    - Correlates multi-breach exposures into compound attack vectors: **Credential Stuffing** (passwords reused across breached services), **Spear-Phishing** (exposed personal details + workplace domain), and **SIM Swap Vulnerability** (phone number exposed alongside government ID).
@@ -65,7 +65,7 @@
 
 ## 🤖 Collaborative Multi-Agent Swarm Architecture
 
-ApniPehChaan orchestrates a triad of specialized collaborative AI agents powered by **Google Gemini** (with **Groq** backup):
+ApniPehChaan orchestrates a triad of specialized collaborative AI agents powered by **Groq** (with **Google Gemini** backup):
 
 ```
                                ┌─────────────────────────────┐
@@ -278,7 +278,7 @@ pip install -r requirements.txt
 Create `.env` (optional — works 100% keyless in deterministic mode):
 ```bash
 cp .env.example .env
-# Add your GEMINI_API_KEY or GROQ_API_KEY for autonomous LLM reasoning
+# Add your GROQ_API_KEY (and optionally GEMINI_API_KEY as a backup) for autonomous LLM reasoning
 ```
 
 ### 3. Run the Test Suite

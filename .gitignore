@@ -32,6 +32,8 @@ data/sovereign.db-shm
 
 # API keys — never commit
 .env
+.env.*
+!.env.example
 
 # Session transcripts — contain pasted API keys/tokens, never commit
 SESSION_EXPORT.txt
